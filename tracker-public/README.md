@@ -19,9 +19,16 @@ passes through anyone else's account.
 - **Chase timer.** Every live row tracks days since you last touched it. Seven
   days flags amber, fourteen flags red. Editing anything resets that row's
   clock — so the tracker measures follow-up, not submission count.
-- **Inline editing.** Company, role, location, replies, next steps and notes
-  are all click-to-edit. An empty cell opens an empty box; a cell with text in
-  it opens with the caret already at the end, so you carry on where you left off.
+- **Inline editing.** Company, role, location, replies and notes are all
+  click-to-edit. An empty cell opens an empty box; a cell with text in it opens
+  with the caret already at the end, so you carry on where you left off.
+- **Next steps is a checklist.** Click the cell and a tickable box appears with
+  the caret beside it; every Return adds another. Tick one and its text greys
+  out with a line through it, untick and it comes back. Boxes tick straight from
+  the table without opening anything. It is stored as a markdown task list in
+  the same text column, so there is no migration and the value stays readable in
+  the Supabase table editor — anything you wrote as prose beforehand simply
+  becomes the first unticked step.
 - **Group by, off by default.** A **Group by** dropdown splits the pipeline by
   location, company, role or status; it rests on **None**, so an ungrouped list
   is the obvious default rather than one option among several. Whatever you have
