@@ -25,7 +25,7 @@
 </script>
 <style>
   :root { --page-bg:#f9f6ee; --page-ink:#545454; --page-lift:#fffdf7; --page-line:#ded7c5; }
-  :root[data-theme="dark"] { --page-bg:#14130f; --page-ink:#e6e0d2; --page-lift:#232019; --page-line:#3a352b; }
+  :root[data-theme="dark"] { --page-bg:#0f172a; --page-ink:#e2e8f0; --page-lift:#1e293b; --page-line:#334155; }
   html, body { background: var(--page-bg); margin: 0; }
 </style>
 </head>
@@ -121,6 +121,26 @@ function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   try {
     window.localStorage.setItem(THEME_KEY, theme);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+/* Whether the funnel is expanded. Remembered, because it is a standing
+   preference about screen space rather than a per-visit choice. */
+const FUNNEL_KEY = "tracker.funnel";
+
+const loadFunnelOpen = () => {
+  try {
+    return window.localStorage.getItem(FUNNEL_KEY) !== "hidden";
+  } catch (e) {
+    return true;
+  }
+};
+
+function saveFunnelOpen(open) {
+  try {
+    window.localStorage.setItem(FUNNEL_KEY, open ? "shown" : "hidden");
   } catch (e) {
     /* ignore */
   }
@@ -337,42 +357,36 @@ function aggregate(row) {
 /* The funnel proper. "To apply" is not in it (nothing has been sent yet) and
    "Closed" is an outcome rather than a step. */
 const FUNNEL = ["applied", "replied", "interview", "offer"];
-const ORDER = STAGES.map((s) => s.key);
 
 const firstReached = (row, stage) => {
   const hit = row.history.find((h) => h.to === stage);
   return hit ? new Date(hit.at).getTime() : null;
 };
 
-/* Two sources of evidence, unioned. stage_history is exact but only covers
-   moves made since it existed; a row's current position implies every earlier
-   stage. Closed is the exception — it can be reached from anywhere, so it
-   implies nothing beyond having been applied for. */
-function reached(row, stage) {
-  if (row.history.some((h) => h.to === stage)) return true;
-  const implied = row.status === "closed" ? "applied" : row.status;
-  return ORDER.indexOf(implied) >= ORDER.indexOf(stage);
-}
-
+/* Counts are live occupancy: where each application sits right now, straight
+   off the current rows. Moving a row out of a stage decrements that stage and
+   increments the next, so cycling a row through the pipeline cannot leave
+   anything behind it. */
 function funnelStats(rows) {
   const steps = FUNNEL.map((key) => ({
     key,
     label: stageOf(key).label,
-    count: rows.filter((r) => reached(r, key)).length,
+    count: rows.filter((r) => r.status === key).length,
   }));
 
   steps.forEach((step, i) => {
+    step.share = rows.length ? step.count / rows.length : null;
     if (i === 0) {
-      step.rate = null;
       step.meanDays = null;
       step.sampled = 0;
       return;
     }
-    const prev = steps[i - 1];
-    step.rate = prev.count ? step.count / prev.count : null;
 
-    /* Only rows with both timestamps recorded can contribute a duration, so
-       the sample is reported alongside the mean rather than hidden. */
+    /* Durations still come from stage_history, which is the only place the
+       timing of a move is recorded. Only rows carrying both timestamps can
+       contribute, so the sample size is reported next to the mean rather
+       than hidden behind it. */
+    const prev = steps[i - 1];
     const gaps = [];
     rows.forEach((r) => {
       const from = firstReached(r, prev.key);
@@ -442,27 +456,34 @@ const CSS = `
   background:var(--bg); color:var(--ink);
 }
 
-/* Dark mode. Warm charcoals rather than blue-blacks, so the paper-stock
-   character of the light theme survives the flip. */
+/* Dark mode. A neutral slate rather than a darkened cream: the light theme's
+   own steps (bg → surface → lift, and the three border weights) are mirrored
+   rank for rank, so the depth hierarchy reads the same in both. Semantic hues
+   keep their meaning but gain saturation and lightness to carry on slate. */
 [data-theme="dark"] .tk-page {
-  --bg:#14130f; --surface:#1c1a15; --lift:#232019; --hover:#26231b; --active:#302b20;
-  --line:#3a352b; --line-soft:#2f2b23; --line-strong:#4a4436;
-  --ink:#e6e0d2; --accent:#d0a94f;
-  --warn:#4a3c1c; --warn-line:#8a6f2c; --cold:#4a2a24; --cold-line:#8a5147;
-  --shadow:rgba(0,0,0,.55);
+  --bg:#0f172a; --surface:#1a2334; --lift:#1e293b; --hover:#24304a; --active:#2c3a55;
+  --line:#334155; --line-soft:#273349; --line-strong:#47566d;
+  --ink:#e2e8f0; --accent:#e0b354;
+  --warn:#4d3c12; --warn-line:#d4a03c; --cold:#46232a; --cold-line:#c47b76;
+  --shadow:rgba(0,0,0,.6);
 
-  --st-to-apply-fill:#2a271f;  --st-to-apply-line:#443f33;  --st-to-apply-mark:#8d836c;
-  --st-applied-fill:#1c3327;   --st-applied-line:#3d6b4f;   --st-applied-mark:#6aa886;
-  --st-replied-fill:#1b2c3a;   --st-replied-line:#3c6180;   --st-replied-mark:#74a3c8;
-  --st-interview-fill:#382d13; --st-interview-line:#6f5820; --st-interview-mark:#c9a247;
-  --st-offer-fill:#2d2440;     --st-offer-line:#574475;     --st-offer-mark:#a78ec9;
-  --st-closed-fill:#29271f;    --st-closed-line:#46423a;    --st-closed-mark:#8b867a;
+  --st-to-apply-fill:#232b3a;  --st-to-apply-line:#3a465c;  --st-to-apply-mark:#8fa0bb;
+  --st-applied-fill:#14332a;   --st-applied-line:#2f6b53;   --st-applied-mark:#5cbf94;
+  --st-replied-fill:#132b3f;   --st-replied-line:#2d5f86;   --st-replied-mark:#62aee0;
+  --st-interview-fill:#3a2f10; --st-interview-line:#7d6522; --st-interview-mark:#e0b354;
+  --st-offer-fill:#2b2149;     --st-offer-line:#55427f;     --st-offer-mark:#b294e8;
+  --st-closed-fill:#1f2531;    --st-closed-line:#364052;    --st-closed-mark:#7f8a9c;
 
   /* The ramp's anchor flips against a dark surface: deepest funnel step is
-     now the brightest, not the darkest. */
-  --fn-1:#7a6224; --fn-2:#a88534; --fn-3:#cfa64d; --fn-4:#eed489;
+     now the brightest, not the darkest. Revalidated against the slate. */
+  --fn-1:#8a6f28; --fn-2:#b8933c; --fn-3:#dcb257; --fn-4:#f2dc95;
 }
 .tk-page *, .tk-page *::placeholder { color:var(--ink); }
+/* Beats the blanket rule above on specificity, so example text reads as a
+   suggestion rather than as content already entered. */
+.tk-page input::placeholder, .tk-page textarea::placeholder {
+  color:var(--ink); opacity:.55; font-style:italic;
+}
 .tk-surface { background:var(--surface); }
 .tk-card { background:var(--surface); border:1px solid var(--line); }
 .tk-line-b { border-bottom:1px solid var(--line); }
@@ -539,7 +560,7 @@ const CSS = `
 /* Funnel bars. Thin marks, rounded only at the data end, anchored to a common
    left baseline so the widths are comparable. */
 .tk-track { background:var(--line-soft); border-radius:4px; }
-.tk-bar { height:14px; border-radius:0 4px 4px 0; min-width:3px; }
+.tk-bar { height:14px; border-radius:0 4px 4px 0; }
 
 @media print {
   /* Force the light palette regardless of theme — this rule sits after the
@@ -1298,13 +1319,13 @@ function DetailPanel({ row, onEdit }) {
               <Field
                 label="Salary"
                 value={row.salary}
-                placeholder="£65,000"
+                placeholder="e.g. £60k"
                 onChange={(v) => onEdit(row.id, "salary", v)}
               />
               <Field
                 label="Equity"
                 value={row.equity}
-                placeholder="0.15%"
+                placeholder="e.g. 0.5%"
                 onChange={(v) => onEdit(row.id, "equity", v)}
               />
             </div>
@@ -1345,82 +1366,110 @@ function Stat({ label, value, sub }) {
 
 const oneDp = (n) => (Math.round(n * 10) / 10).toString();
 
-function Funnel({ rows }) {
+function Funnel({ rows, open, onToggle }) {
   const steps = funnelStats(rows);
-  const top = steps[0].count;
-
-  /* The single most useful sentence the data can produce, when there is
-     enough of it to be worth saying. Taken straight from the two counts
-     rather than by chaining the step reciprocals. */
-  const interviews = steps[2].count;
-  const headline =
-    top >= 3 && interviews > 0
-      ? `About ${oneDp(top / interviews)} applications per interview.`
-      : null;
+  /* Occupancy is not monotonic — a stage can hold more rows than the one
+     before it — so bars scale against the busiest stage, not the first. */
+  const peak = steps.reduce((m, s) => Math.max(m, s.count), 0);
+  const inFunnel = steps.reduce((n, s) => n + s.count, 0);
 
   return (
     <div className="tk-card rounded-lg p-4">
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-        <p className={LABEL}>Funnel</p>
-        {headline && <p className="font-mono text-[11px] tk-secondary">{headline}</p>}
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <button
+          onClick={onToggle}
+          aria-expanded={open}
+          className="tk-focus flex items-center gap-2 rounded font-mono text-[11px] uppercase tracking-wider tk-secondary"
+        >
+          <span aria-hidden="true" className="tk-tertiary text-[9px]">
+            {open ? "▼" : "▶"}
+          </span>
+          Funnel
+        </button>
+        {open ? (
+          <p className="font-mono text-[11px] tk-tertiary">
+            Live count of where each application sits now
+          </p>
+        ) : (
+          <p className="font-mono text-[11px] tk-secondary">
+            {inFunnel} live in the funnel ·{" "}
+            {steps
+              .filter((s) => s.count)
+              .map((s) => `${s.label.toLowerCase()} ${s.count}`)
+              .join(" · ") || "none yet"}
+          </p>
+        )}
       </div>
 
-      <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {steps.map((s) => (
-          <Stat
-            key={s.key}
-            label={s.label}
-            value={s.count}
-            sub={s.rate == null ? "start of funnel" : `${Math.round(s.rate * 100)}% of previous`}
-          />
-        ))}
-      </div>
+      {open && (
+        <>
+          <div className="mb-5 mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {steps.map((s) => (
+              <Stat
+                key={s.key}
+                label={s.label}
+                value={s.count}
+                sub={
+                  s.share == null
+                    ? "nothing tracked"
+                    : `${Math.round(s.share * 100)}% of tracked`
+                }
+              />
+            ))}
+          </div>
 
-      {top === 0 ? (
-        <p className="text-sm tk-tertiary">
-          Nothing has been applied for yet. Move a row to Applied and the funnel
-          starts measuring.
-        </p>
-      ) : (
-        <div className="space-y-1">
-          {steps.map((s, i) => (
-            <React.Fragment key={s.key}>
-              {i > 0 && (
-                <p className="pl-[7.75rem] font-mono text-[10px] uppercase tracking-wider tk-tertiary">
-                  ↓ {s.rate == null ? "—" : `${Math.round(s.rate * 100)}%`}
-                  {s.meanDays != null && (
-                    <span title={`Mean of ${s.sampled} recorded transition${s.sampled === 1 ? "" : "s"}`}>
-                      {" · "}
-                      {oneDp(s.meanDays)} days avg
-                      <span className="tk-tertiary"> (n={s.sampled})</span>
-                    </span>
+          {peak === 0 ? (
+            <p className="text-sm tk-tertiary">
+              Nothing is in the funnel yet. Move a row to Applied and it appears
+              here.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {steps.map((s, i) => (
+                <React.Fragment key={s.key}>
+                  {i > 0 && (
+                    <p className="pl-[7.75rem] font-mono text-[10px] uppercase tracking-wider tk-tertiary">
+                      {s.meanDays == null ? (
+                        <span title="No transitions recorded yet for this step">
+                          ↓ timing pending
+                        </span>
+                      ) : (
+                        <span
+                          title={`Mean of ${s.sampled} recorded transition${
+                            s.sampled === 1 ? "" : "s"
+                          } from ${steps[i - 1].label} to ${s.label}`}
+                        >
+                          ↓ {oneDp(s.meanDays)} days avg (n={s.sampled})
+                        </span>
+                      )}
+                    </p>
                   )}
-                  {s.meanDays == null && (
-                    <span title="No transitions recorded yet for this step">
-                      {" · timing pending"}
+                  <div className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-wider tk-secondary">
+                      {s.label}
                     </span>
-                  )}
-                </p>
-              )}
-              <div className="flex items-center gap-3">
-                <span className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-wider tk-secondary">
-                  {s.label}
-                </span>
-                <div className="tk-track h-3.5 flex-1">
-                  <div
-                    className="tk-bar"
-                    style={{
-                      width: `${top ? Math.max((s.count / top) * 100, s.count ? 1.5 : 0) : 0}%`,
-                      background: `var(--fn-${i + 1})`,
-                    }}
-                    title={`${s.label}: ${s.count} of ${top} applied`}
-                  />
-                </div>
-                <span className="w-8 shrink-0 text-right font-mono text-sm">{s.count}</span>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
+                    <div className="tk-track h-3.5 flex-1">
+                      <div
+                        className="tk-bar"
+                        style={{
+                          width: `${(s.count / peak) * 100}%`,
+                          /* A stage holding nothing draws nothing; a stage
+                             holding little still draws something. */
+                          minWidth: s.count ? "3px" : "0",
+                          background: `var(--fn-${i + 1})`,
+                        }}
+                        title={`${s.label}: ${s.count} of ${rows.length} tracked`}
+                      />
+                    </div>
+                    <span className="w-8 shrink-0 text-right font-mono text-sm">
+                      {s.count}
+                    </span>
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1839,6 +1888,7 @@ function Tracker({ session }) {
   const [sort, setSort] = useState("");
   const [minScore, setMinScore] = useState("");
   const [expanded, setExpanded] = useState(null);
+  const [funnelOpen, setFunnelOpen] = useState(loadFunnelOpen);
   const [sync, setSync] = useState("offline");
   const [loading, setLoading] = useState(true);
   const [opError, setOpError] = useState("");
@@ -1977,10 +2027,12 @@ function Tracker({ session }) {
     const row = all.find((r) => r.id === id);
     if (!row) return;
     const status = advance(row.status);
-    /* Every move is appended, so the funnel can measure real durations rather
-       than infer them. Capped so a row clicked round the loop all afternoon
-       cannot grow without bound. */
-    const history = [...row.history, { to: status, at: new Date().toISOString() }].slice(-200);
+    /* Moves are appended so durations can be measured rather than inferred.
+       Wrapping past Closed back to "To apply" starts the journey again, so the
+       old trail is dropped instead of being carried into the next run's
+       timings. Capped either way. */
+    const trail = status === "to-apply" ? [] : row.history;
+    const history = [...trail, { to: status, at: new Date().toISOString() }].slice(-200);
     patch(id, { status, stage_history: history }, { status, history });
   };
 
@@ -2195,7 +2247,16 @@ function Tracker({ session }) {
       </div>
 
       <div className="mb-6">
-        <Funnel rows={rows} />
+        <Funnel
+          rows={rows}
+          open={funnelOpen}
+          onToggle={() =>
+            setFunnelOpen((v) => {
+              saveFunnelOpen(!v);
+              return !v;
+            })
+          }
+        />
       </div>
 
       <div className="tk-noprint mb-6">

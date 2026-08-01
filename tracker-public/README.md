@@ -36,10 +36,13 @@ passes through anyone else's account.
 - **Dark mode.** A toggle in the header, remembered per browser. It follows your
   system preference until you override it, and applies before the first paint so
   a reload never flashes light.
-- **Funnel analytics.** A dashboard across the top counts how many applications
-  reached each stage, the conversion between them, and the mean days each step
-  actually took — measured from recorded transitions, not estimated. It also
-  says the number that matters: how many applications you send per interview.
+- **Funnel analytics.** A dashboard across the top shows how many applications
+  are sitting at each stage right now, each stage's share of everything you
+  track, and the mean days each step actually took — the timings measured from
+  recorded transitions, not estimated, and labelled with the sample they came
+  from. Counts are live: moving a row out of a stage decrements it and
+  increments the next. Collapse the whole panel to a one-line summary when you
+  want the screen for the table; the choice is remembered.
 - **Company scoring.** Rate each company 1-5 on salary, growth, culture and
   location. The table shows the aggregate, and sorts or filters by it. Rating
   only some facets is fine — the mean uses whichever you have filled in.
