@@ -145,6 +145,39 @@ const SETUP_SQL = `create table if not exists public.applications (
 alter table public.applications
   alter column user_id set default auth.uid();
 
+alter table public.applications
+  add column if not exists salary         text     not null default '',
+  add column if not exists equity         text     not null default '',
+  add column if not exists start_date     date,
+  add column if not exists benefits_score smallint not null default 0,
+  add column if not exists score_salary   smallint not null default 0,
+  add column if not exists score_growth   smallint not null default 0,
+  add column if not exists score_culture  smallint not null default 0,
+  add column if not exists score_location smallint not null default 0,
+  add column if not exists stage_history  jsonb    not null default '[]'::jsonb;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'applications_score_range'
+  ) then
+    alter table public.applications
+      add constraint applications_score_range check (
+        benefits_score between 0 and 5
+        and score_salary   between 0 and 5
+        and score_growth   between 0 and 5
+        and score_culture  between 0 and 5
+        and score_location between 0 and 5
+      );
+  end if;
+end $$;
+
+update public.applications
+   set stage_history = jsonb_build_array(
+         jsonb_build_object('to', status, 'at', activity)
+       )
+ where stage_history = '[]'::jsonb;
+
 create index if not exists applications_user_idx
   on public.applications (user_id, sort_order);
 
@@ -172,6 +205,48 @@ begin
     alter publication supabase_realtime add table public.applications;
   end if;
 end $$;`;
+
+/* Just the columns added after the first release. Shown on screen when a query
+   fails because the table predates them, so the fix is one copy away. */
+const MIGRATION_SQL = `alter table public.applications
+  add column if not exists salary         text     not null default '',
+  add column if not exists equity         text     not null default '',
+  add column if not exists start_date     date,
+  add column if not exists benefits_score smallint not null default 0,
+  add column if not exists score_salary   smallint not null default 0,
+  add column if not exists score_growth   smallint not null default 0,
+  add column if not exists score_culture  smallint not null default 0,
+  add column if not exists score_location smallint not null default 0,
+  add column if not exists stage_history  jsonb    not null default '[]'::jsonb;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'applications_score_range'
+  ) then
+    alter table public.applications
+      add constraint applications_score_range check (
+        benefits_score between 0 and 5
+        and score_salary   between 0 and 5
+        and score_growth   between 0 and 5
+        and score_culture  between 0 and 5
+        and score_location between 0 and 5
+      );
+  end if;
+end $$;
+
+update public.applications
+   set stage_history = jsonb_build_array(
+         jsonb_build_object('to', status, 'at', activity)
+       )
+ where stage_history = '[]'::jsonb;`;
+
+/* Postgres 42703 / PostgREST PGRST204 both mean "that column is not there". */
+const isMissingColumn = (error) =>
+  Boolean(error) &&
+  (error.code === "42703" ||
+    error.code === "PGRST204" ||
+    /column .* does not exist/i.test(error.message || ""));
 
 let sb = null;
 
@@ -213,6 +288,15 @@ const fromDb = (r) => ({
   activity: new Date(r.activity).getTime(),
   sortOrder: Number(r.sort_order),
   deleted: r.deleted,
+  salary: r.salary || "",
+  equity: r.equity || "",
+  startDate: r.start_date || "",
+  benefits: Number(r.benefits_score) || 0,
+  scoreSalary: Number(r.score_salary) || 0,
+  scoreGrowth: Number(r.score_growth) || 0,
+  scoreCulture: Number(r.score_culture) || 0,
+  scoreLocation: Number(r.score_location) || 0,
+  history: Array.isArray(r.stage_history) ? r.stage_history : [],
 });
 
 const FIELD_TO_COLUMN = {
@@ -223,7 +307,84 @@ const FIELD_TO_COLUMN = {
   replies: "replies",
   nextSteps: "next_steps",
   notes: "notes",
+  salary: "salary",
+  equity: "equity",
+  startDate: "start_date",
+  benefits: "benefits_score",
+  scoreSalary: "score_salary",
+  scoreGrowth: "score_growth",
+  scoreCulture: "score_culture",
+  scoreLocation: "score_location",
 };
+
+/* --------------------------- scoring & analytics -------------------------- */
+
+const SCORES = [
+  { field: "scoreSalary", label: "Salary" },
+  { field: "scoreGrowth", label: "Growth" },
+  { field: "scoreCulture", label: "Culture" },
+  { field: "scoreLocation", label: "Location" },
+];
+
+/* Mean of whichever facets have been rated, so a half-filled scorecard still
+   sorts sensibly. Null means nothing has been rated at all. */
+function aggregate(row) {
+  const rated = SCORES.map((s) => row[s.field]).filter((n) => n > 0);
+  if (!rated.length) return null;
+  return rated.reduce((a, b) => a + b, 0) / rated.length;
+}
+
+/* The funnel proper. "To apply" is not in it (nothing has been sent yet) and
+   "Closed" is an outcome rather than a step. */
+const FUNNEL = ["applied", "replied", "interview", "offer"];
+const ORDER = STAGES.map((s) => s.key);
+
+const firstReached = (row, stage) => {
+  const hit = row.history.find((h) => h.to === stage);
+  return hit ? new Date(hit.at).getTime() : null;
+};
+
+/* Two sources of evidence, unioned. stage_history is exact but only covers
+   moves made since it existed; a row's current position implies every earlier
+   stage. Closed is the exception — it can be reached from anywhere, so it
+   implies nothing beyond having been applied for. */
+function reached(row, stage) {
+  if (row.history.some((h) => h.to === stage)) return true;
+  const implied = row.status === "closed" ? "applied" : row.status;
+  return ORDER.indexOf(implied) >= ORDER.indexOf(stage);
+}
+
+function funnelStats(rows) {
+  const steps = FUNNEL.map((key) => ({
+    key,
+    label: stageOf(key).label,
+    count: rows.filter((r) => reached(r, key)).length,
+  }));
+
+  steps.forEach((step, i) => {
+    if (i === 0) {
+      step.rate = null;
+      step.meanDays = null;
+      step.sampled = 0;
+      return;
+    }
+    const prev = steps[i - 1];
+    step.rate = prev.count ? step.count / prev.count : null;
+
+    /* Only rows with both timestamps recorded can contribute a duration, so
+       the sample is reported alongside the mean rather than hidden. */
+    const gaps = [];
+    rows.forEach((r) => {
+      const from = firstReached(r, prev.key);
+      const to = firstReached(r, step.key);
+      if (from != null && to != null && to >= from) gaps.push((to - from) / DAY);
+    });
+    step.sampled = gaps.length;
+    step.meanDays = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+  });
+
+  return steps;
+}
 
 const SEED = [
   {
@@ -273,6 +434,11 @@ const CSS = `
   --st-offer-fill:#ddd0ec;     --st-offer-line:#a48ec4;     --st-offer-mark:#7d63a8;
   --st-closed-fill:#e6e2d6;    --st-closed-line:#cdc6b4;    --st-closed-mark:#8a857a;
 
+  /* Funnel ramp. The stages are ordinal, so this is one hue stepping
+     light-to-dark with depth rather than four competing identities. Validated
+     for monotonic lightness and against the surface at both ends. */
+  --fn-1:#c4a25c; --fn-2:#a8853a; --fn-3:#836726; --fn-4:#54431a;
+
   background:var(--bg); color:var(--ink);
 }
 
@@ -291,6 +457,10 @@ const CSS = `
   --st-interview-fill:#382d13; --st-interview-line:#6f5820; --st-interview-mark:#c9a247;
   --st-offer-fill:#2d2440;     --st-offer-line:#574475;     --st-offer-mark:#a78ec9;
   --st-closed-fill:#29271f;    --st-closed-line:#46423a;    --st-closed-mark:#8b867a;
+
+  /* The ramp's anchor flips against a dark surface: deepest funnel step is
+     now the brightest, not the darkest. */
+  --fn-1:#7a6224; --fn-2:#a88534; --fn-3:#cfa64d; --fn-4:#eed489;
 }
 .tk-page *, .tk-page *::placeholder { color:var(--ink); }
 .tk-surface { background:var(--surface); }
@@ -351,6 +521,51 @@ const CSS = `
 .tk-kbd {
   background:var(--lift); border:1px solid var(--line);
   border-radius:4px; padding:1px 5px;
+}
+
+/* Detail drawer. The accent edge ties it to the row it belongs to, which
+   border-spacing would otherwise leave floating. */
+.tk-detail > td {
+  background:var(--lift);
+  border:1px solid var(--line); border-left:3px solid var(--accent);
+  border-radius:8px;
+}
+.tk-panel { border:1px solid var(--line-soft); border-radius:8px; }
+
+/* Rating swatches: a 5-step meter, not five separate colours. */
+.tk-score { border:1px solid var(--line-strong); }
+.tk-score:hover { border-color:var(--accent); }
+
+/* Funnel bars. Thin marks, rounded only at the data end, anchored to a common
+   left baseline so the widths are comparable. */
+.tk-track { background:var(--line-soft); border-radius:4px; }
+.tk-bar { height:14px; border-radius:0 4px 4px 0; min-width:3px; }
+
+@media print {
+  /* Force the light palette regardless of theme — this rule sits after the
+     dark block and matches it, so it wins on the printed page only. */
+  .tk-page, [data-theme="dark"] .tk-page {
+    --bg:#fff; --surface:#fff; --lift:#fff; --hover:#fff; --active:#fff;
+    --line:#c4c4c4; --line-soft:#dcdcdc; --line-strong:#a8a8a8;
+    --ink:#1a1a1a; --accent:#8a6d28; --shadow:transparent;
+    --warn:#f3ddab; --cold:#eec9c2;
+    --st-to-apply-fill:#ebe6d6;  --st-applied-fill:#bfe0c8;
+    --st-replied-fill:#c6dbeb;   --st-interview-fill:#f3ddab;
+    --st-offer-fill:#ddd0ec;     --st-closed-fill:#e6e2d6;
+    --fn-1:#c4a25c; --fn-2:#a8853a; --fn-3:#836726; --fn-4:#54431a;
+    padding:0 !important;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .tk-noprint, .tk-del { display:none !important; }
+  .tk-printonly { display:block !important; }
+  /* Controls keep their text but lose the affordances that imply clicking. */
+  .tk-cell, .tk-btn, .tk-trigger { border-color:transparent !important; }
+  .tk-table { border-spacing:0 6px; }
+  .tk-rowcard > td, .tk-detail > td { break-inside:avoid; }
+  tr, .tk-card, .tk-panel { break-inside:avoid; }
+  thead { display:table-header-group; }
+  a[href]::after { content:""; }
+  @page { margin:14mm; }
 }
 `;
 
@@ -841,7 +1056,7 @@ function SyncChip({ status }) {
   const s = map[status] || map.offline;
   return (
     <span
-      className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${s.cls}`}
+      className={`tk-noprint rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${s.cls}`}
       style={{ background: s.bg }}
     >
       {s.label}
@@ -1007,6 +1222,210 @@ function StageRail({ rows, filter, setFilter }) {
 const TH =
   "px-3 py-2 text-left font-mono text-[11px] font-normal uppercase tracking-wider tk-secondary";
 
+/* ---------------------------- scoring & offers ---------------------------- */
+
+const LABEL = "font-mono text-[11px] uppercase tracking-wider tk-secondary";
+
+function Rating({ label, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className={LABEL}>{label}</span>
+      <div className="flex gap-1" role="group" aria-label={`${label} score`}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => onChange(value === n ? 0 : n)}
+            aria-label={`${label}: ${n} out of 5`}
+            aria-pressed={n <= value}
+            title={value === n ? "Click again to clear" : `${n} of 5`}
+            className="tk-score tk-focus h-4 w-4 rounded-sm transition-colors"
+            style={{ background: n <= value ? "var(--accent)" : "transparent" }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type, placeholder }) {
+  return (
+    <label className="block">
+      <span className={LABEL}>{label}</span>
+      <input
+        type={type || "text"}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="tk-input tk-focus mt-1 w-full rounded px-2 py-1.5 text-sm"
+      />
+    </label>
+  );
+}
+
+/* Scores are always editable — you form a view on a company long before it
+   makes an offer. The offer fields are the part that unlocks. */
+function DetailPanel({ row, onEdit }) {
+  const mean = aggregate(row);
+  const atOffer = row.status === "offer";
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <section className="tk-panel p-3">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <p className={LABEL}>Company score</p>
+          <p className="font-mono text-sm">
+            {mean == null ? <span className="tk-tertiary">Not rated</span> : mean.toFixed(1)}
+            {mean != null && <span className="tk-tertiary"> / 5</span>}
+          </p>
+        </div>
+        <div className="space-y-2">
+          {SCORES.map((s) => (
+            <Rating
+              key={s.field}
+              label={s.label}
+              value={row[s.field]}
+              onChange={(n) => onEdit(row.id, s.field, n)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="tk-panel p-3">
+        <p className={`${LABEL} mb-3`}>Offer</p>
+        {atOffer ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="Salary"
+                value={row.salary}
+                placeholder="£65,000"
+                onChange={(v) => onEdit(row.id, "salary", v)}
+              />
+              <Field
+                label="Equity"
+                value={row.equity}
+                placeholder="0.15%"
+                onChange={(v) => onEdit(row.id, "equity", v)}
+              />
+            </div>
+            <Field
+              label="Start date"
+              type="date"
+              value={row.startDate}
+              onChange={(v) => onEdit(row.id, "startDate", v)}
+            />
+            <Rating
+              label="Benefits"
+              value={row.benefits}
+              onChange={(n) => onEdit(row.id, "benefits", n)}
+            />
+          </div>
+        ) : (
+          <p className="text-sm leading-relaxed tk-tertiary">
+            Salary, equity, start date and benefits appear here once this
+            application reaches the Offer stage.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ------------------------------- analytics -------------------------------- */
+
+function Stat({ label, value, sub }) {
+  return (
+    <div>
+      <p className={LABEL}>{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
+      {sub && <p className="mt-0.5 font-mono text-[11px] tk-tertiary">{sub}</p>}
+    </div>
+  );
+}
+
+const oneDp = (n) => (Math.round(n * 10) / 10).toString();
+
+function Funnel({ rows }) {
+  const steps = funnelStats(rows);
+  const top = steps[0].count;
+
+  /* The single most useful sentence the data can produce, when there is
+     enough of it to be worth saying. Taken straight from the two counts
+     rather than by chaining the step reciprocals. */
+  const interviews = steps[2].count;
+  const headline =
+    top >= 3 && interviews > 0
+      ? `About ${oneDp(top / interviews)} applications per interview.`
+      : null;
+
+  return (
+    <div className="tk-card rounded-lg p-4">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <p className={LABEL}>Funnel</p>
+        {headline && <p className="font-mono text-[11px] tk-secondary">{headline}</p>}
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {steps.map((s) => (
+          <Stat
+            key={s.key}
+            label={s.label}
+            value={s.count}
+            sub={s.rate == null ? "start of funnel" : `${Math.round(s.rate * 100)}% of previous`}
+          />
+        ))}
+      </div>
+
+      {top === 0 ? (
+        <p className="text-sm tk-tertiary">
+          Nothing has been applied for yet. Move a row to Applied and the funnel
+          starts measuring.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {steps.map((s, i) => (
+            <React.Fragment key={s.key}>
+              {i > 0 && (
+                <p className="pl-[7.75rem] font-mono text-[10px] uppercase tracking-wider tk-tertiary">
+                  ↓ {s.rate == null ? "—" : `${Math.round(s.rate * 100)}%`}
+                  {s.meanDays != null && (
+                    <span title={`Mean of ${s.sampled} recorded transition${s.sampled === 1 ? "" : "s"}`}>
+                      {" · "}
+                      {oneDp(s.meanDays)} days avg
+                      <span className="tk-tertiary"> (n={s.sampled})</span>
+                    </span>
+                  )}
+                  {s.meanDays == null && (
+                    <span title="No transitions recorded yet for this step">
+                      {" · timing pending"}
+                    </span>
+                  )}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-wider tk-secondary">
+                  {s.label}
+                </span>
+                <div className="tk-track h-3.5 flex-1">
+                  <div
+                    className="tk-bar"
+                    style={{
+                      width: `${top ? Math.max((s.count / top) * 100, s.count ? 1.5 : 0) : 0}%`,
+                      background: `var(--fn-${i + 1})`,
+                    }}
+                    title={`${s.label}: ${s.count} of ${top} applied`}
+                  />
+                </div>
+                <span className="w-8 shrink-0 text-right font-mono text-sm">{s.count}</span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------- grouping --------------------------------- */
 
 const GROUPS = [
@@ -1059,7 +1478,30 @@ function buildGroups(rows, field) {
 /* One control for how the pipeline is arranged. "None" is the field dropdown's
    own resting value, so an ungrouped list needs no explanatory chip; the
    category dropdown only exists once there is something to categorise. */
-function ViewBar({ groupBy, setGroupBy, groupValue, setGroupValue, groups, total }) {
+const SORTS = [
+  { key: "", label: "Pipeline order" },
+  { key: "score-desc", label: "Score, best first" },
+  { key: "score-asc", label: "Score, worst first" },
+];
+
+const MIN_SCORES = [
+  { key: "", label: "Any score" },
+  { key: "3", label: "Rated 3+" },
+  { key: "4", label: "Rated 4+" },
+];
+
+function ViewBar({
+  groupBy,
+  setGroupBy,
+  groupValue,
+  setGroupValue,
+  groups,
+  total,
+  sort,
+  setSort,
+  minScore,
+  setMinScore,
+}) {
   const fields = [{ key: "", label: "None" }].concat(
     GROUPS.map((g) => ({ key: g.key, label: g.label }))
   );
@@ -1090,11 +1532,29 @@ function ViewBar({ groupBy, setGroupBy, groupValue, setGroupValue, groups, total
         />
       )}
 
-      {groupBy && (
+      <Dropdown
+        label="Sort"
+        value={sort}
+        items={SORTS}
+        on={Boolean(sort)}
+        onPick={setSort}
+      />
+
+      <Dropdown
+        label="Filter"
+        value={minScore}
+        items={MIN_SCORES}
+        on={Boolean(minScore)}
+        onPick={setMinScore}
+      />
+
+      {(groupBy || sort || minScore) && (
         <button
           onClick={() => {
             setGroupBy(null);
             setGroupValue(null);
+            setSort("");
+            setMinScore("");
           }}
           className="tk-focus rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
         >
@@ -1121,9 +1581,78 @@ function GroupHeading({ section, columns }) {
   );
 }
 
+/* Shown when the database predates the scoring and offer columns, which is
+   what a first-release install looks like after upgrading this page. */
+function MigrationNotice({ onDismiss }) {
+  const [copied, setCopied] = useState(false);
+  const [shown, setShown] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(MIGRATION_SQL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      setShown(true);
+    }
+  };
+
+  return (
+    <div
+      className="tk-noprint mb-6 rounded-lg p-4"
+      style={{ background: "var(--warn)", border: "1px solid var(--warn-line)" }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] uppercase tracking-wider">
+            Your database needs one update
+          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed">
+            This version adds company scoring, offer details and stage history.
+            Run the script below in <strong>SQL Editor → New query</strong>, then
+            reload. It only adds columns, so nothing you already have is touched.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={copy}
+              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+            >
+              {copied ? "Copied" : "Copy SQL"}
+            </button>
+            <button
+              onClick={() => setShown((v) => !v)}
+              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+            >
+              {shown ? "Hide" : "Show"} SQL
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+            >
+              Reload
+            </button>
+          </div>
+          {shown && (
+            <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+              {MIGRATION_SQL}
+            </pre>
+          )}
+        </div>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="tk-focus shrink-0 rounded px-2 leading-6"
+        >
+          &times;
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------- rows ----------------------------------- */
 
-function DesktopRow({ row, rowIndex, onEdit, onDelete, onAdvance }) {
+function DesktopRow({ row, rowIndex, open, onToggle, onEdit, onDelete, onAdvance }) {
   /* Coordinates the keyboard handler on the table reads to move focus. */
   const cell = (column) => ({
     "data-r": rowIndex,
@@ -1194,11 +1723,38 @@ function DesktopRow({ row, rowIndex, onEdit, onDelete, onAdvance }) {
           onChange={(v) => onEdit(row.id, "notes", v)}
         />
       </td>
+      <td className="w-20 px-2 py-3">
+        <ScoreCell row={row} open={open} onToggle={onToggle} cell={cell(7)} />
+      </td>
     </tr>
   );
 }
 
-function MobileCard({ row, onEdit, onDelete, onAdvance }) {
+/* The aggregate doubles as the handle for the detail drawer: the number you
+   want to check is the thing you click to change it. */
+function ScoreCell({ row, open, onToggle, cell }) {
+  const mean = aggregate(row);
+  return (
+    <button
+      onClick={() => onToggle(row.id)}
+      aria-expanded={open}
+      aria-label={`${open ? "Hide" : "Show"} details for ${row.company || "this application"}`}
+      title={mean == null ? "Not rated — click for details" : `Score ${mean.toFixed(1)} of 5`}
+      {...cell}
+      className="tk-cell tk-focus flex w-full items-center justify-between gap-1 rounded p-2 text-left transition-colors"
+    >
+      <span className="font-mono text-sm">
+        {mean == null ? <span className="tk-tertiary">–</span> : mean.toFixed(1)}
+      </span>
+      <span aria-hidden="true" className="tk-noprint tk-tertiary text-[10px]">
+        {open ? "▲" : "▼"}
+      </span>
+    </button>
+  );
+}
+
+function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance }) {
+  const mean = aggregate(row);
   return (
     <div className="tk-card rounded-lg p-4">
       <div className="flex items-start justify-between gap-3">
@@ -1250,6 +1806,24 @@ function MobileCard({ row, onEdit, onDelete, onAdvance }) {
           </div>
         ))}
       </div>
+
+      <button
+        onClick={() => onToggle(row.id)}
+        aria-expanded={open}
+        className="tk-btn tk-focus mt-4 flex w-full items-center justify-between rounded px-3 py-2 font-mono text-[11px] uppercase tracking-wider transition-colors"
+      >
+        <span>Score &amp; offer</span>
+        <span>
+          {mean == null ? <span className="tk-tertiary">Not rated</span> : mean.toFixed(1)}
+          <span aria-hidden="true" className="tk-tertiary"> {open ? "▲" : "▼"}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-3">
+          <DetailPanel row={row} onEdit={onEdit} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1262,13 +1836,21 @@ function Tracker({ session }) {
   const [filter, setFilter] = useState(null);
   const [groupBy, setGroupBy] = useState(null);
   const [groupValue, setGroupValue] = useState(null);
+  const [sort, setSort] = useState("");
+  const [minScore, setMinScore] = useState("");
+  const [expanded, setExpanded] = useState(null);
   const [sync, setSync] = useState("offline");
   const [loading, setLoading] = useState(true);
   const [opError, setOpError] = useState("");
+  const [needsMigration, setNeedsMigration] = useState(false);
   const pending = useRef(0);
 
   const report = (label, error) => {
     if (!error) return false;
+    if (isMissingColumn(error)) {
+      setNeedsMigration(true);
+      return true;
+    }
     setOpError(
       label +
         " failed.\n\n" +
@@ -1278,6 +1860,8 @@ function Tracker({ session }) {
     );
     return true;
   };
+
+  const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id));
 
   const mark = useCallback((delta) => {
     pending.current = Math.max(0, pending.current + delta);
@@ -1383,14 +1967,21 @@ function Tracker({ session }) {
     mark(-1);
   };
 
-  const editField = (id, field, value) =>
-    patch(id, { [FIELD_TO_COLUMN[field]]: value }, { [field]: value });
+  /* An empty date has to reach Postgres as null, not "". */
+  const editField = (id, field, value) => {
+    const stored = field === "startDate" && value === "" ? null : value;
+    patch(id, { [FIELD_TO_COLUMN[field]]: stored }, { [field]: value });
+  };
 
   const onAdvance = (id) => {
     const row = all.find((r) => r.id === id);
     if (!row) return;
     const status = advance(row.status);
-    patch(id, { status }, { status });
+    /* Every move is appended, so the funnel can measure real durations rather
+       than infer them. Capped so a row clicked round the loop all afternoon
+       cannot grow without bound. */
+    const history = [...row.history, { to: status, at: new Date().toISOString() }].slice(-200);
+    patch(id, { status, stage_history: history }, { status, history });
   };
 
   const addRow = async () => {
@@ -1405,6 +1996,7 @@ function Tracker({ session }) {
         location: "",
         status: "to-apply",
         sort_order: sortOrder,
+        stage_history: [{ to: "to-apply", at: new Date().toISOString() }],
       })
       .select();
 
@@ -1439,9 +2031,28 @@ function Tracker({ session }) {
 
   const rows = all.filter((r) => !r.deleted);
   const trash = all.filter((r) => r.deleted);
-  const staged = filter ? rows.filter((r) => r.status === filter) : rows;
   const liveRows = rows.filter((r) => LIVE.includes(r.status));
   const stale = liveRows.filter((r) => daysSince(r.activity) >= 7).length;
+
+  /* Stage filter, then score floor, then ordering. Unrated rows sink to the
+     bottom of a score sort rather than pretending to be zero. */
+  const byStage = filter ? rows.filter((r) => r.status === filter) : rows;
+  const scored = minScore
+    ? byStage.filter((r) => (aggregate(r) ?? -1) >= Number(minScore))
+    : byStage;
+
+  let staged = scored;
+  if (sort) {
+    const dir = sort === "score-asc" ? -1 : 1;
+    staged = [...scored].sort((a, b) => {
+      const x = aggregate(a);
+      const y = aggregate(b);
+      if (x == null && y == null) return a.sortOrder - b.sortOrder;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return dir * (y - x);
+    });
+  }
 
   /* Grouping is off by default. With it on, the rows split into one section
      per distinct value; picking a category narrows to that section alone. A
@@ -1518,12 +2129,19 @@ function Tracker({ session }) {
             <SyncChip status={sync} />
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="tk-noprint flex flex-wrap gap-2">
           <button
             onClick={addRow}
             className="tk-btn tk-focus rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
           >
             + Add application
+          </button>
+          <button
+            onClick={() => window.print()}
+            title="Opens your browser's print dialogue — choose Save as PDF"
+            className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+          >
+            Share / Export
           </button>
           <ThemeToggle />
           <button
@@ -1535,9 +2153,21 @@ function Tracker({ session }) {
         </div>
       </header>
 
+      {/* Only ever visible on paper: says what the export is and when. */}
+      <p className="tk-printonly mb-6 hidden font-mono text-[11px] uppercase tracking-wider tk-secondary">
+        Pipeline export · {new Date().toLocaleDateString()} · {visibleCount} of {rows.length}{" "}
+        applications
+        {filter ? ` · stage: ${stageOf(filter).label}` : ""}
+        {groupBy ? ` · grouped by ${GROUPS.find((g) => g.key === groupBy).label}` : ""}
+      </p>
+
+      {needsMigration && (
+        <MigrationNotice onDismiss={() => setNeedsMigration(false)} />
+      )}
+
       {opError && (
         <div
-          className="mb-6 rounded-lg p-4"
+          className="tk-noprint mb-6 rounded-lg p-4"
           style={{ background: "var(--cold)", border: "1px solid var(--cold-line)" }}
         >
           <div className="flex items-start justify-between gap-4">
@@ -1565,6 +2195,10 @@ function Tracker({ session }) {
       </div>
 
       <div className="mb-6">
+        <Funnel rows={rows} />
+      </div>
+
+      <div className="tk-noprint mb-6">
         <ViewBar
           groupBy={groupBy}
           setGroupBy={setGroupBy}
@@ -1572,6 +2206,10 @@ function Tracker({ session }) {
           setGroupValue={setGroupValue}
           groups={groups}
           total={staged.length}
+          sort={sort}
+          setSort={setSort}
+          minScore={minScore}
+          setMinScore={setMinScore}
         />
       </div>
 
@@ -1587,21 +2225,32 @@ function Tracker({ session }) {
               <th className={TH}>Replies</th>
               <th className={TH}>Next steps</th>
               <th className={TH}>Notes</th>
+              <th className={`${TH} w-20`}>Score</th>
             </tr>
           </thead>
           <tbody>
             {sections.map((section) => (
               <React.Fragment key={section.key}>
-                {groupBy && <GroupHeading section={section} columns={7} />}
+                {groupBy && <GroupHeading section={section} columns={8} />}
                 {section.items.map((row) => (
-                  <DesktopRow
-                    key={row.id}
-                    row={row}
-                    rowIndex={rowIndex.get(row.id)}
-                    onEdit={editField}
-                    onDelete={(id) => setDeleted(id, true)}
-                    onAdvance={onAdvance}
-                  />
+                  <React.Fragment key={row.id}>
+                    <DesktopRow
+                      row={row}
+                      rowIndex={rowIndex.get(row.id)}
+                      open={expanded === row.id}
+                      onToggle={toggleExpanded}
+                      onEdit={editField}
+                      onDelete={(id) => setDeleted(id, true)}
+                      onAdvance={onAdvance}
+                    />
+                    {expanded === row.id && (
+                      <tr className="tk-detail">
+                        <td colSpan={8} className="p-4">
+                          <DetailPanel row={row} onEdit={editField} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </React.Fragment>
             ))}
@@ -1618,6 +2267,8 @@ function Tracker({ session }) {
               <MobileCard
                 key={row.id}
                 row={row}
+                open={expanded === row.id}
+                onToggle={toggleExpanded}
                 onEdit={editField}
                 onDelete={(id) => setDeleted(id, true)}
                 onAdvance={onAdvance}
@@ -1642,7 +2293,7 @@ function Tracker({ session }) {
       )}
 
       {trash.length > 0 && (
-        <div className="tk-card mt-6 rounded-lg p-4">
+        <div className="tk-noprint tk-card mt-6 rounded-lg p-4">
           <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
             Recently deleted · {trash.length}
           </p>
@@ -1678,7 +2329,7 @@ function Tracker({ session }) {
         </div>
       )}
 
-      <div className="mt-6 space-y-2 font-mono text-[11px] leading-relaxed tk-tertiary">
+      <div className="tk-noprint mt-6 space-y-2 font-mono text-[11px] leading-relaxed tk-tertiary">
         <p>
           Click a status to advance it: To apply → Applied → Replied → Interview → Offer
           → Closed. Editing any cell resets that row's clock. Live rows untouched for 7

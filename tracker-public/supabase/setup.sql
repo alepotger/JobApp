@@ -23,6 +23,44 @@ create table if not exists public.applications (
 alter table public.applications
   alter column user_id set default auth.uid();
 
+-- Offer details, company scoring and stage history. Kept as separate ALTERs so
+-- this script also upgrades a table created before these columns existed.
+alter table public.applications
+  add column if not exists salary         text     not null default '',
+  add column if not exists equity         text     not null default '',
+  add column if not exists start_date     date,
+  add column if not exists benefits_score smallint not null default 0,
+  add column if not exists score_salary   smallint not null default 0,
+  add column if not exists score_growth   smallint not null default 0,
+  add column if not exists score_culture  smallint not null default 0,
+  add column if not exists score_location smallint not null default 0,
+  add column if not exists stage_history  jsonb    not null default '[]'::jsonb;
+
+-- Ratings run 1-5, with 0 meaning "not rated yet".
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'applications_score_range'
+  ) then
+    alter table public.applications
+      add constraint applications_score_range check (
+        benefits_score between 0 and 5
+        and score_salary   between 0 and 5
+        and score_growth   between 0 and 5
+        and score_culture  between 0 and 5
+        and score_location between 0 and 5
+      );
+  end if;
+end $$;
+
+-- Anchor pre-existing rows at their current stage so the funnel starts
+-- measuring from the next move each one makes.
+update public.applications
+   set stage_history = jsonb_build_array(
+         jsonb_build_object('to', status, 'at', activity)
+       )
+ where stage_history = '[]'::jsonb;
+
 create index if not exists applications_user_idx
   on public.applications (user_id, sort_order);
 

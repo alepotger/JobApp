@@ -36,6 +36,19 @@ passes through anyone else's account.
 - **Dark mode.** A toggle in the header, remembered per browser. It follows your
   system preference until you override it, and applies before the first paint so
   a reload never flashes light.
+- **Funnel analytics.** A dashboard across the top counts how many applications
+  reached each stage, the conversion between them, and the mean days each step
+  actually took — measured from recorded transitions, not estimated. It also
+  says the number that matters: how many applications you send per interview.
+- **Company scoring.** Rate each company 1-5 on salary, growth, culture and
+  location. The table shows the aggregate, and sorts or filters by it. Rating
+  only some facets is fine — the mean uses whichever you have filled in.
+- **Offer tracking.** Salary, equity, start date and a benefits rating appear in
+  the row's drawer once an application reaches the Offer stage, and stay out of
+  the way before then.
+- **Export to PDF.** *Share / Export* opens the print dialogue against a print
+  stylesheet: controls, delete buttons and the sync chip drop away, the palette
+  forces back to light even in dark mode, and rows avoid splitting across pages.
 - **Soft delete.** Deleted rows move to a Recently deleted panel and restore to
   their original position. Permanent deletion is a separate, confirmed action.
 - **Live sync.** Changes appear on your other signed-in devices in about a
@@ -65,6 +78,19 @@ Open the deployed page and it walks you through all four steps. In short:
 
 Sign in with an email link or the six-digit code. Use the same address on every
 device to see one pipeline everywhere.
+
+### Upgrading an existing database
+
+`setup.sql` is idempotent and also upgrades an older table, so re-running it is
+the simplest path. If you would rather apply only the delta, run
+[`supabase/migrations/001-offer-scoring.sql`](supabase/migrations/001-offer-scoring.sql),
+which adds the scoring, offer and stage-history columns. Either way the page
+detects a database missing those columns and offers you the script on screen.
+
+Stage history starts empty for rows that predate it. The migration anchors each
+one at its current stage rather than inventing the earlier dates, so the "mean
+days" figures are built only from transitions actually observed — each is
+labelled with the sample size it came from.
 
 ## Hosting it
 
