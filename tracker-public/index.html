@@ -9,12 +9,28 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  /* Set the theme before first paint, so opening the page in dark mode never
+     flashes cream. Runs ahead of React on purpose. */
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("tracker.theme"); } catch (e) { /* ignore */ }
+    if (t !== "dark" && t !== "light") {
+      t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <style>
-  html, body { background: #f9f6ee; margin: 0; }
+  :root { --page-bg:#f9f6ee; --page-ink:#545454; --page-lift:#fffdf7; --page-line:#ded7c5; }
+  :root[data-theme="dark"] { --page-bg:#14130f; --page-ink:#e6e0d2; --page-lift:#232019; --page-line:#3a352b; }
+  html, body { background: var(--page-bg); margin: 0; }
 </style>
 </head>
 <body>
-<div id="boot" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#545454;padding:32px;max-width:720px">
+<div id="boot" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--page-ink);padding:32px;max-width:720px">
   <p style="font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin:0">Loading</p>
   <div id="boot-help" style="display:none;margin-top:20px">
     <p style="font-size:18px;font-weight:600;margin:0 0 12px;font-family:system-ui,sans-serif">The page scripts did not load</p>
@@ -43,9 +59,9 @@
     var r = document.getElementById("root");
     if (!r || r.hasChildNodes()) return;
     r.innerHTML =
-      '<div style="font-family:ui-monospace,monospace;color:#545454;padding:32px;max-width:760px">' +
+      '<div style="font-family:ui-monospace,monospace;color:var(--page-ink);padding:32px;max-width:760px">' +
       '<p style="font-size:18px;font-weight:600;margin:0 0 12px">Something stopped the page loading</p>' +
-      '<pre style="background:#fffdf7;border:1px solid #ded7c5;border-radius:8px;padding:16px;' +
+      '<pre style="background:var(--page-lift);border:1px solid var(--page-line);border-radius:8px;padding:16px;' +
       'white-space:pre-wrap;font-size:12px;line-height:1.6;margin:0">' + msg + '</pre>' +
       '<p style="font-size:12px;line-height:1.6;margin:16px 0 0;opacity:.85">' +
       'Copy this message and send it back to Claude.</p></div>';
@@ -89,6 +105,22 @@ function saveConfig(c) {
 function clearConfig() {
   try {
     window.localStorage.removeItem(CFG_KEY);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+/* Theme. The head script has already put the right value on <html> by the time
+   React runs; these only handle changing it afterwards. */
+const THEME_KEY = "tracker.theme";
+
+const readTheme = () =>
+  document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try {
+    window.localStorage.setItem(THEME_KEY, theme);
   } catch (e) {
     /* ignore */
   }
@@ -150,14 +182,17 @@ function connect(cfg) {
 
 const DAY = 86400000;
 
-const STAGES = [
-  { key: "to-apply", label: "To apply", fill: "#ebe6d6", line: "#cfc7b2", mark: "#948871" },
-  { key: "applied", label: "Applied", fill: "#bfe0c8", line: "#6faa83", mark: "#4f8f68" },
-  { key: "replied", label: "Replied", fill: "#c6dbeb", line: "#7fa4c2", mark: "#4f7fa8" },
-  { key: "interview", label: "Interview", fill: "#f3ddab", line: "#c9a247", mark: "#a87e1c" },
-  { key: "offer", label: "Offer", fill: "#ddd0ec", line: "#a48ec4", mark: "#7d63a8" },
-  { key: "closed", label: "Closed", fill: "#e6e2d6", line: "#cdc6b4", mark: "#8a857a" },
-];
+/* Stage colours are CSS variables rather than literals, so one dark-mode block
+   restyles every pill, rail segment and legend swatch at once. */
+const STAGES = ["to-apply", "applied", "replied", "interview", "offer", "closed"].map(
+  (key, i) => ({
+    key,
+    label: ["To apply", "Applied", "Replied", "Interview", "Offer", "Closed"][i],
+    fill: `var(--st-${key}-fill)`,
+    line: `var(--st-${key}-line)`,
+    mark: `var(--st-${key}-mark)`,
+  })
+);
 
 const stageOf = (key) => STAGES.find((s) => s.key === key) || STAGES[0];
 const advance = (key) =>
@@ -229,7 +264,33 @@ const CSS = `
   --line:#ded7c5; --line-soft:#e5dfd0; --line-strong:#cfc7b2;
   --ink:#545454; --accent:#b08d3f;
   --warn:#f3ddab; --warn-line:#c9a247; --cold:#eec9c2; --cold-line:#c08c82;
+  --shadow:rgba(90,78,50,.16);
+
+  --st-to-apply-fill:#ebe6d6;  --st-to-apply-line:#cfc7b2;  --st-to-apply-mark:#948871;
+  --st-applied-fill:#bfe0c8;   --st-applied-line:#6faa83;   --st-applied-mark:#4f8f68;
+  --st-replied-fill:#c6dbeb;   --st-replied-line:#7fa4c2;   --st-replied-mark:#4f7fa8;
+  --st-interview-fill:#f3ddab; --st-interview-line:#c9a247; --st-interview-mark:#a87e1c;
+  --st-offer-fill:#ddd0ec;     --st-offer-line:#a48ec4;     --st-offer-mark:#7d63a8;
+  --st-closed-fill:#e6e2d6;    --st-closed-line:#cdc6b4;    --st-closed-mark:#8a857a;
+
   background:var(--bg); color:var(--ink);
+}
+
+/* Dark mode. Warm charcoals rather than blue-blacks, so the paper-stock
+   character of the light theme survives the flip. */
+[data-theme="dark"] .tk-page {
+  --bg:#14130f; --surface:#1c1a15; --lift:#232019; --hover:#26231b; --active:#302b20;
+  --line:#3a352b; --line-soft:#2f2b23; --line-strong:#4a4436;
+  --ink:#e6e0d2; --accent:#d0a94f;
+  --warn:#4a3c1c; --warn-line:#8a6f2c; --cold:#4a2a24; --cold-line:#8a5147;
+  --shadow:rgba(0,0,0,.55);
+
+  --st-to-apply-fill:#2a271f;  --st-to-apply-line:#443f33;  --st-to-apply-mark:#8d836c;
+  --st-applied-fill:#1c3327;   --st-applied-line:#3d6b4f;   --st-applied-mark:#6aa886;
+  --st-replied-fill:#1b2c3a;   --st-replied-line:#3c6180;   --st-replied-mark:#74a3c8;
+  --st-interview-fill:#382d13; --st-interview-line:#6f5820; --st-interview-mark:#c9a247;
+  --st-offer-fill:#2d2440;     --st-offer-line:#574475;     --st-offer-mark:#a78ec9;
+  --st-closed-fill:#29271f;    --st-closed-line:#46423a;    --st-closed-mark:#8b867a;
 }
 .tk-page *, .tk-page *::placeholder { color:var(--ink); }
 .tk-surface { background:var(--surface); }
@@ -272,9 +333,25 @@ const CSS = `
 }
 .tk-rowcard:hover > td { background:var(--hover); }
 
-.tk-chip { background:transparent; border:1px solid var(--line); }
-.tk-chip:hover { background:var(--active); border-color:var(--accent); }
-.tk-chip-on { background:var(--active); border:1px solid var(--accent); }
+/* Dropdowns. The trigger reads as a quiet control until the view is actually
+   grouped, at which point it takes the accent border — so "not grouped" is a
+   visible resting state rather than one more button to compare against. */
+.tk-trigger { background:var(--surface); border:1px solid var(--line); }
+.tk-trigger:hover { background:var(--active); border-color:var(--accent); }
+.tk-trigger-on { background:var(--active); border-color:var(--accent); }
+.tk-menu {
+  background:var(--lift); border:1px solid var(--line-strong);
+  box-shadow:0 12px 32px var(--shadow);
+}
+.tk-menu-item { background:transparent; border:1px solid transparent; }
+.tk-menu-item:hover, .tk-menu-item:focus {
+  background:var(--hover); border-color:var(--line); outline:none;
+}
+.tk-menu-item[aria-checked="true"] { background:var(--active); border-color:var(--accent); }
+.tk-kbd {
+  background:var(--lift); border:1px solid var(--line);
+  border-radius:4px; padding:1px 5px;
+}
 `;
 
 /* ---------------------------------- shell --------------------------------- */
@@ -619,6 +696,142 @@ function SignIn({ cfgUrl, onReset }) {
 
 /* --------------------------------- pieces --------------------------------- */
 
+function ThemeToggle() {
+  const [theme, setTheme] = useState(readTheme);
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button
+      onClick={() => {
+        applyTheme(next);
+        setTheme(next);
+      }}
+      title={`Switch to ${next} mode`}
+      aria-label={`Switch to ${next} mode`}
+      className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+    >
+      {theme === "dark" ? "☀ Light" : "☾ Dark"}
+    </button>
+  );
+}
+
+/* A menu-button dropdown: closes on click-away, Escape and Tab; arrows, Home
+   and End move between options; the trigger gets focus back after a pick. */
+function Dropdown({ label, value, items, onPick, on }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const wrap = useRef(null);
+  const trigger = useRef(null);
+  const list = useRef(null);
+
+  const current = items.find((i) => i.key === value) || items[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => {
+      if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !list.current) return;
+    const el = list.current.querySelector(`[data-i="${active}"]`);
+    if (el) el.focus();
+  }, [open, active]);
+
+  const show = () => {
+    setActive(Math.max(0, items.findIndex((i) => i.key === value)));
+    setOpen(true);
+  };
+  const hide = (refocus) => {
+    setOpen(false);
+    if (refocus && trigger.current) trigger.current.focus();
+  };
+
+  const onMenuKey = (e) => {
+    const last = items.length - 1;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((i) => (i === last ? 0 : i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => (i === 0 ? last : i - 1));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setActive(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setActive(last);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      hide(true);
+    } else if (e.key === "Tab") {
+      hide(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={wrap}>
+      <button
+        ref={trigger}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => (open ? hide(false) : show())}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            show();
+          }
+        }}
+        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+          on ? "tk-trigger-on" : ""
+        }`}
+      >
+        <span className="tk-tertiary">{label}</span>
+        <span className={on ? "" : "tk-secondary"}>{current.label}</span>
+        {current.count != null && <span className="tk-tertiary">{current.count}</span>}
+        <span aria-hidden="true" className="tk-tertiary">
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div
+          ref={list}
+          role="menu"
+          aria-label={label}
+          onKeyDown={onMenuKey}
+          className="tk-menu absolute left-0 z-20 mt-1 max-h-72 min-w-[14rem] overflow-auto rounded-lg p-1"
+        >
+          {items.map((item, i) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitemradio"
+              aria-checked={item.key === value}
+              data-i={i}
+              tabIndex={-1}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => {
+                onPick(item.key);
+                hide(true);
+              }}
+              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-wider transition-colors"
+            >
+              <span className="truncate">{item.label}</span>
+              {item.count != null && (
+                <span className="tk-tertiary shrink-0">{item.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SyncChip({ status }) {
   const map = {
     live: { label: "Live", bg: "transparent", cls: "tk-secondary" },
@@ -661,13 +874,14 @@ function AgeChip({ row }) {
   );
 }
 
-function StatusCell({ row, onAdvance }) {
+function StatusCell({ row, onAdvance, cell }) {
   const s = stageOf(row.status);
   return (
     <div>
       <button
         onClick={() => onAdvance(row.id)}
-        title="Click to advance stage"
+        title="Advance stage (Enter)"
+        {...cell}
         className="tk-pill tk-focus w-full rounded px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-all"
         style={{ background: s.fill, border: `1px solid ${s.line}` }}
       >
@@ -678,10 +892,14 @@ function StatusCell({ row, onAdvance }) {
   );
 }
 
-function EditableCell({ value, placeholder, onChange }) {
+function EditableCell({ value, placeholder, onChange, cell }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const box = useRef(null);
+  const btn = useRef(null);
+  /* Set only when the editor is dismissed from the keyboard. Committing by
+     clicking elsewhere must leave focus where the user put it. */
+  const returning = useRef(false);
 
   const current = value || "";
 
@@ -689,9 +907,10 @@ function EditableCell({ value, placeholder, onChange }) {
     setDraft(current);
     setEditing(true);
   };
-  const commit = () => {
+  const close = (save, byKey) => {
+    returning.current = Boolean(byKey);
     setEditing(false);
-    if (draft !== current) onChange(draft);
+    if (save && draft !== current) onChange(draft);
   };
 
   /* Focus by hand rather than with autoFocus: autoFocus leaves the caret at
@@ -706,6 +925,13 @@ function EditableCell({ value, placeholder, onChange }) {
     el.scrollTop = el.scrollHeight;
   }, [editing]);
 
+  /* Hand focus back to the cell so arrow navigation carries on from here. */
+  useEffect(() => {
+    if (editing || !returning.current) return;
+    returning.current = false;
+    if (btn.current) btn.current.focus();
+  }, [editing]);
+
   if (editing) {
     return (
       <textarea
@@ -713,10 +939,10 @@ function EditableCell({ value, placeholder, onChange }) {
         rows={4}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
+        onBlur={() => close(true, false)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setEditing(false);
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) commit();
+          if (e.key === "Escape") close(false, true);
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) close(true, true);
         }}
         className="tk-edit w-full resize-y rounded p-2 text-sm leading-snug focus:outline-none"
       />
@@ -725,7 +951,9 @@ function EditableCell({ value, placeholder, onChange }) {
 
   return (
     <button
+      ref={btn}
       onClick={open}
+      {...cell}
       className="tk-cell tk-focus w-full rounded p-2 text-left text-sm leading-snug transition-colors"
     >
       {current ? current : <span className="tk-tertiary">{placeholder}</span>}
@@ -828,78 +1056,50 @@ function buildGroups(rows, field) {
   return out;
 }
 
-function GroupBar({ groupBy, setGroupBy, groupValue, setGroupValue, groups }) {
-  const pick = (key) => {
-    setGroupBy(key);
-    setGroupValue(null);
-  };
+/* One control for how the pipeline is arranged. "None" is the field dropdown's
+   own resting value, so an ungrouped list needs no explanatory chip; the
+   category dropdown only exists once there is something to categorise. */
+function ViewBar({ groupBy, setGroupBy, groupValue, setGroupValue, groups, total }) {
+  const fields = [{ key: "", label: "None" }].concat(
+    GROUPS.map((g) => ({ key: g.key, label: g.label }))
+  );
+  const categories = [{ key: "", label: "All", count: total }].concat(
+    groups.map((g) => ({ key: g.key, label: g.label, count: g.items.length }))
+  );
 
   return (
-    <div className="tk-card rounded-lg p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="mr-1 font-mono text-[11px] uppercase tracking-wider tk-tertiary">
-          Optional view · group by
-        </span>
-
-        <button
-          onClick={() => pick(null)}
-          className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-            groupBy === null ? "tk-chip-on" : "tk-chip tk-secondary"
-          }`}
-        >
-          Off
-        </button>
-
-        {GROUPS.map((g) => (
-          <button
-            key={g.key}
-            onClick={() => pick(groupBy === g.key ? null : g.key)}
-            className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-              groupBy === g.key ? "tk-chip-on" : "tk-chip tk-secondary"
-            }`}
-          >
-            {g.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <Dropdown
+        label="Group by"
+        value={groupBy || ""}
+        items={fields}
+        on={Boolean(groupBy)}
+        onPick={(key) => {
+          setGroupBy(key || null);
+          setGroupValue(null);
+        }}
+      />
 
       {groupBy && (
-        <div
-          className="mt-3 flex flex-wrap items-center gap-2 pt-3"
-          style={{ borderTop: "1px solid var(--line-soft)" }}
+        <Dropdown
+          label="Showing"
+          value={groupValue || ""}
+          items={categories}
+          on={Boolean(groupValue)}
+          onPick={(key) => setGroupValue(key || null)}
+        />
+      )}
+
+      {groupBy && (
+        <button
+          onClick={() => {
+            setGroupBy(null);
+            setGroupValue(null);
+          }}
+          className="tk-focus rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
         >
-          <span className="mr-1 font-mono text-[11px] uppercase tracking-wider tk-tertiary">
-            {GROUPS.find((g) => g.key === groupBy).label}
-          </span>
-
-          <button
-            onClick={() => setGroupValue(null)}
-            className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-              groupValue === null ? "tk-chip-on" : "tk-chip tk-secondary"
-            }`}
-          >
-            All
-          </button>
-
-          {groups.map((g) => (
-            <button
-              key={g.key}
-              onClick={() => setGroupValue(groupValue === g.key ? null : g.key)}
-              className={`tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                groupValue === g.key ? "tk-chip-on" : "tk-chip tk-secondary"
-              }`}
-            >
-              {g.label}
-              <span>{g.items.length}</span>
-            </button>
-          ))}
-
-          {groups.length === 0 && (
-            <span className="font-mono text-[11px] tk-tertiary">
-              Nothing to group yet.
-            </span>
-          )}
-        </div>
+          Clear
+        </button>
       )}
     </div>
   );
@@ -923,7 +1123,14 @@ function GroupHeading({ section, columns }) {
 
 /* --------------------------------- rows ----------------------------------- */
 
-function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
+function DesktopRow({ row, rowIndex, onEdit, onDelete, onAdvance }) {
+  /* Coordinates the keyboard handler on the table reads to move focus. */
+  const cell = (column) => ({
+    "data-r": rowIndex,
+    "data-c": column,
+    "data-row-id": row.id,
+  });
+
   return (
     <tr className="tk-rowcard align-top">
       <td className="w-52 px-2 py-3">
@@ -931,6 +1138,7 @@ function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
           <EditableCell
             value={row.company}
             placeholder="Company"
+            cell={cell(0)}
             onChange={(v) => onEdit(row.id, "company", v)}
           />
           <button
@@ -947,6 +1155,7 @@ function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
         <EditableCell
           value={row.role}
           placeholder="Role"
+          cell={cell(1)}
           onChange={(v) => onEdit(row.id, "role", v)}
         />
       </td>
@@ -954,16 +1163,18 @@ function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
         <EditableCell
           value={row.location}
           placeholder="City"
+          cell={cell(2)}
           onChange={(v) => onEdit(row.id, "location", v)}
         />
       </td>
       <td className="px-3 py-3">
-        <StatusCell row={row} onAdvance={onAdvance} />
+        <StatusCell row={row} onAdvance={onAdvance} cell={cell(3)} />
       </td>
       <td className="w-56 px-2 py-3">
         <EditableCell
           value={row.replies}
           placeholder="Log the reply"
+          cell={cell(4)}
           onChange={(v) => onEdit(row.id, "replies", v)}
         />
       </td>
@@ -971,6 +1182,7 @@ function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
         <EditableCell
           value={row.nextSteps}
           placeholder="Set the next action"
+          cell={cell(5)}
           onChange={(v) => onEdit(row.id, "nextSteps", v)}
         />
       </td>
@@ -978,6 +1190,7 @@ function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
         <EditableCell
           value={row.notes}
           placeholder="Angle, contact, ATS"
+          cell={cell(6)}
           onChange={(v) => onEdit(row.id, "notes", v)}
         />
       </td>
@@ -1242,6 +1455,39 @@ function Tracker({ session }) {
     : [{ key: "all", label: "", items: staged }];
   const visibleCount = sections.reduce((n, s) => n + s.items.length, 0);
 
+  /* Row numbers run across section boundaries, so arrowing down leaves one
+     group and enters the next without a dead key press. */
+  const rowIndex = new Map();
+  sections.forEach((s) => s.items.forEach((r) => rowIndex.set(r.id, rowIndex.size)));
+
+  const grid = useRef(null);
+
+  const onGridKey = (e) => {
+    const el = e.target;
+    // While a cell is open for editing the caret owns the arrow keys.
+    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") return;
+    if (!el.hasAttribute || !el.hasAttribute("data-r")) return;
+
+    if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault();
+      onAdvance(el.getAttribute("data-row-id"));
+      return;
+    }
+
+    const step = { ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1] }[
+      e.key
+    ];
+    if (!step) return;
+
+    const r = Number(el.getAttribute("data-r")) + step[0];
+    const c = Number(el.getAttribute("data-c")) + step[1];
+    const target =
+      grid.current && grid.current.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+    if (!target) return;
+    e.preventDefault();
+    target.focus();
+  };
+
   if (loading) {
     return (
       <Shell>
@@ -1272,13 +1518,14 @@ function Tracker({ session }) {
             <SyncChip status={sync} />
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={addRow}
             className="tk-btn tk-focus rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
           >
             + Add application
           </button>
+          <ThemeToggle />
           <button
             onClick={() => sb.auth.signOut()}
             className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
@@ -1318,17 +1565,18 @@ function Tracker({ session }) {
       </div>
 
       <div className="mb-6">
-        <GroupBar
+        <ViewBar
           groupBy={groupBy}
           setGroupBy={setGroupBy}
           groupValue={groupValue}
           setGroupValue={setGroupValue}
           groups={groups}
+          total={staged.length}
         />
       </div>
 
       {/* Desktop table */}
-      <div className="hidden overflow-x-auto lg:block">
+      <div className="hidden overflow-x-auto lg:block" ref={grid} onKeyDown={onGridKey}>
         <table className="tk-table min-w-full">
           <thead>
             <tr>
@@ -1349,6 +1597,7 @@ function Tracker({ session }) {
                   <DesktopRow
                     key={row.id}
                     row={row}
+                    rowIndex={rowIndex.get(row.id)}
                     onEdit={editField}
                     onDelete={(id) => setDeleted(id, true)}
                     onAdvance={onAdvance}
@@ -1429,13 +1678,33 @@ function Tracker({ session }) {
         </div>
       )}
 
-      <p className="mt-6 font-mono text-[11px] leading-relaxed tk-tertiary">
-        Click a status to advance it: To apply → Applied → Replied → Interview → Offer →
-        Closed. Editing any cell resets that row's clock. Live rows untouched for 7 days
-        flag for chase, 14 days flag cold. Group by is off unless you turn it on: pick a
-        field to split the pipeline into sections, then pick one category to see only
-        those rows. Every change syncs to your other devices within a second.
-      </p>
+      <div className="mt-6 space-y-2 font-mono text-[11px] leading-relaxed tk-tertiary">
+        <p>
+          Click a status to advance it: To apply → Applied → Replied → Interview → Offer
+          → Closed. Editing any cell resets that row's clock. Live rows untouched for 7
+          days flag for chase, 14 days flag cold. Every change syncs to your other
+          devices within a second.
+        </p>
+        <ul className="flex flex-wrap gap-x-5 gap-y-2">
+          {[
+            [["Tab"], "between cells"],
+            [["↑", "↓", "←", "→"], "move"],
+            [["Enter"], "edit, or advance from the status pill"],
+            [["Shift", "Enter"], "advance from anywhere in the row"],
+            [["⌘", "Enter"], "save"],
+            [["Esc"], "discard"],
+          ].map(([keys, what]) => (
+            <li key={what} className="flex items-center gap-1.5">
+              {keys.map((k) => (
+                <span key={k} className="tk-kbd">
+                  {k}
+                </span>
+              ))}
+              <span className="ml-0.5">{what}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </Shell>
   );
 }

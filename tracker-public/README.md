@@ -6,6 +6,7 @@ passes through anyone else's account.
 
 ![Stages: To apply, Applied, Replied, Interview, Offer, Closed](https://img.shields.io/badge/stages-6-555)
 ![No build step](https://img.shields.io/badge/build-none-555)
+![Dark mode](https://img.shields.io/badge/theme-light%20%2F%20dark-555)
 ![MIT](https://img.shields.io/badge/licence-MIT-555)
 
 ---
@@ -21,10 +22,20 @@ passes through anyone else's account.
 - **Inline editing.** Company, role, location, replies, next steps and notes
   are all click-to-edit. An empty cell opens an empty box; a cell with text in
   it opens with the caret already at the end, so you carry on where you left off.
-- **Group by, off by default.** Optionally split the pipeline by location,
-  company, role or status. Whatever you have typed into those cells becomes the
-  categories — type "London" into a few location cells and London becomes one.
-  Pick a category to see only those rows; switch it back to Off for the flat list.
+- **Group by, off by default.** A **Group by** dropdown splits the pipeline by
+  location, company, role or status; it rests on **None**, so an ungrouped list
+  is the obvious default rather than one option among several. Whatever you have
+  typed into those cells becomes the categories — type "London" into a few
+  location cells and London becomes one. A second dropdown then narrows to a
+  single category, with counts against each.
+- **Keyboard driven.** `Tab` moves between cells and the arrow keys move around
+  the table like a grid. `Enter` opens a cell to edit, or advances the stage when
+  the status pill has focus; `Shift`+`Enter` advances the stage from anywhere in
+  the row. `Esc` discards an edit, `⌘`/`Ctrl`+`Enter` saves it, and either way
+  focus returns to the cell you came from.
+- **Dark mode.** A toggle in the header, remembered per browser. It follows your
+  system preference until you override it, and applies before the first paint so
+  a reload never flashes light.
 - **Soft delete.** Deleted rows move to a Recently deleted panel and restore to
   their original position. Permanent deletion is a separate, confirmed action.
 - **Live sync.** Changes appear on your other signed-in devices in about a
