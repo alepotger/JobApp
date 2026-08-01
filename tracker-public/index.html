@@ -1,0 +1,1554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Application tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  html, body { background: #f9f6ee; margin: 0; }
+</style>
+</head>
+<body>
+<div id="boot" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#545454;padding:32px;max-width:720px">
+  <p style="font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin:0">Loading</p>
+  <div id="boot-help" style="display:none;margin-top:20px">
+    <p style="font-size:18px;font-weight:600;margin:0 0 12px;font-family:system-ui,sans-serif">The page scripts did not load</p>
+    <p style="font-size:13px;line-height:1.7;margin:0;font-family:system-ui,sans-serif">
+      This page needs React, Babel and the Supabase client from public CDNs.
+      One of them was blocked. Most likely causes: no internet connection, or a
+      managed school or work network blocking <strong>unpkg.com</strong>,
+      <strong>cdn.jsdelivr.net</strong> or <strong>cdn.tailwindcss.com</strong>.
+      Try the same URL on your phone over mobile data &mdash; if it works there,
+      the Chromebook network is filtering them.
+    </p>
+  </div>
+</div>
+<div id="root"></div>
+
+<script>
+  setTimeout(function () {
+    var h = document.getElementById("boot-help");
+    if (h && document.getElementById("boot")) h.style.display = "block";
+  }, 6000);
+</script>
+
+<script>
+  // If anything below fails, say so on screen instead of showing a blank page.
+  window.__bootError = function (msg) {
+    var r = document.getElementById("root");
+    if (!r || r.hasChildNodes()) return;
+    r.innerHTML =
+      '<div style="font-family:ui-monospace,monospace;color:#545454;padding:32px;max-width:760px">' +
+      '<p style="font-size:18px;font-weight:600;margin:0 0 12px">Something stopped the page loading</p>' +
+      '<pre style="background:#fffdf7;border:1px solid #ded7c5;border-radius:8px;padding:16px;' +
+      'white-space:pre-wrap;font-size:12px;line-height:1.6;margin:0">' + msg + '</pre>' +
+      '<p style="font-size:12px;line-height:1.6;margin:16px 0 0;opacity:.85">' +
+      'Copy this message and send it back to Claude.</p></div>';
+  };
+  window.addEventListener("error", function (e) {
+    window.__bootError((e.message || "Unknown error") + "\n\n" + (e.filename || ""));
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    window.__bootError("Unhandled promise rejection:\n" + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+</script>
+
+<script type="text/babel">
+/* Nothing in this file needs editing. Connection details are entered
+   on screen the first time you open it, and kept in this browser. */
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+const LIB_READY = Boolean(window.supabase && window.supabase.createClient);
+const CFG_KEY = "tracker.config";
+
+function loadConfig() {
+  try {
+    const raw = window.localStorage.getItem(CFG_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    return c && c.url && c.key ? c : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveConfig(c) {
+  try {
+    window.localStorage.setItem(CFG_KEY, JSON.stringify(c));
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function clearConfig() {
+  try {
+    window.localStorage.removeItem(CFG_KEY);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+const SETUP_SQL = `create table if not exists public.applications (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  company     text not null default '',
+  role_title  text not null default '',
+  location    text not null default '',
+  status      text not null default 'to-apply',
+  replies     text not null default '',
+  next_steps  text not null default '',
+  notes       text not null default '',
+  activity    timestamptz not null default now(),
+  sort_order  bigint not null default 0,
+  deleted     boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+alter table public.applications
+  alter column user_id set default auth.uid();
+
+create index if not exists applications_user_idx
+  on public.applications (user_id, sort_order);
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.applications to authenticated;
+
+alter table public.applications enable row level security;
+
+drop policy if exists "owner full access" on public.applications;
+create policy "owner full access"
+  on public.applications
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'applications'
+  ) then
+    alter publication supabase_realtime add table public.applications;
+  end if;
+end $$;`;
+
+let sb = null;
+
+function connect(cfg) {
+  sb = window.supabase.createClient(cfg.url, cfg.key);
+  return sb;
+}
+
+const DAY = 86400000;
+
+const STAGES = [
+  { key: "to-apply", label: "To apply", fill: "#ebe6d6", line: "#cfc7b2", mark: "#948871" },
+  { key: "applied", label: "Applied", fill: "#bfe0c8", line: "#6faa83", mark: "#4f8f68" },
+  { key: "replied", label: "Replied", fill: "#c6dbeb", line: "#7fa4c2", mark: "#4f7fa8" },
+  { key: "interview", label: "Interview", fill: "#f3ddab", line: "#c9a247", mark: "#a87e1c" },
+  { key: "offer", label: "Offer", fill: "#ddd0ec", line: "#a48ec4", mark: "#7d63a8" },
+  { key: "closed", label: "Closed", fill: "#e6e2d6", line: "#cdc6b4", mark: "#8a857a" },
+];
+
+const stageOf = (key) => STAGES.find((s) => s.key === key) || STAGES[0];
+const advance = (key) =>
+  STAGES[(STAGES.findIndex((s) => s.key === key) + 1) % STAGES.length].key;
+
+const LIVE = ["applied", "replied", "interview"];
+const daysSince = (ts) => Math.floor((Date.now() - ts) / DAY);
+
+const fromDb = (r) => ({
+  id: r.id,
+  company: r.company,
+  role: r.role_title,
+  location: r.location,
+  status: r.status,
+  replies: r.replies,
+  nextSteps: r.next_steps,
+  notes: r.notes,
+  activity: new Date(r.activity).getTime(),
+  sortOrder: Number(r.sort_order),
+  deleted: r.deleted,
+});
+
+const FIELD_TO_COLUMN = {
+  company: "company",
+  role: "role_title",
+  location: "location",
+  status: "status",
+  replies: "replies",
+  nextSteps: "next_steps",
+  notes: "notes",
+};
+
+const SEED = [
+  {
+    company: "Example Consulting",
+    role: "Analyst, Strategy",
+    location: "London, UK",
+    status: "applied",
+    replies: "Automated acknowledgement received. Nothing from the hiring manager yet.",
+    nextSteps: "Follow up directly if there is no reply within a week.",
+    notes: "Sample row. Edit or delete it once you add your own.",
+    offsetDays: 9,
+  },
+  {
+    company: "Example Studio",
+    role: "Business Development Associate",
+    location: "Milan, IT",
+    status: "to-apply",
+    replies: "",
+    nextSteps: "Tailor the first CV bullet to the job description before submitting.",
+    notes: "Sample row. Click any cell to edit it.",
+    offsetDays: 2,
+  },
+  {
+    company: "Example Foundation",
+    role: "Programme Operations Assistant",
+    location: "Berlin, DE",
+    status: "interview",
+    replies: "First round scheduled, 30 minutes, video.",
+    nextSteps: "Prepare three examples of operational problem solving.",
+    notes: "Sample row. Use the status pill to move a row through the pipeline.",
+    offsetDays: 1,
+  },
+];
+
+const CSS = `
+.tk-page {
+  --bg:#f9f6ee; --surface:#f4f0e3; --lift:#fffdf7; --hover:#f1ebdc; --active:#efe8d7;
+  --line:#ded7c5; --line-soft:#e5dfd0; --line-strong:#cfc7b2;
+  --ink:#545454; --accent:#b08d3f;
+  --warn:#f3ddab; --warn-line:#c9a247; --cold:#eec9c2; --cold-line:#c08c82;
+  background:var(--bg); color:var(--ink);
+}
+.tk-page *, .tk-page *::placeholder { color:var(--ink); }
+.tk-surface { background:var(--surface); }
+.tk-card { background:var(--surface); border:1px solid var(--line); }
+.tk-line-b { border-bottom:1px solid var(--line); }
+.tk-divide > * + * { border-top:1px solid var(--line-soft); }
+.tk-secondary { opacity:.85; }
+.tk-tertiary { opacity:.70; }
+.tk-btn { background:var(--surface); border:1px solid var(--line); }
+.tk-btn:hover { background:var(--active); border-color:var(--accent); }
+.tk-del { background:transparent; border:1px solid transparent; }
+.tk-del:hover { background:var(--cold); border-color:var(--cold-line); }
+.tk-pill:hover { filter:brightness(.965); }
+.tk-cell { border:1px solid transparent; }
+.tk-cell:hover { background:var(--hover); border-color:var(--line); }
+.tk-edit { background:var(--lift); border:1px solid var(--accent); }
+.tk-input { background:var(--lift); border:1px solid var(--line); }
+.tk-input:focus { border-color:var(--accent); outline:none; }
+.tk-focus:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.tk-rail { background:var(--line-soft); }
+.tk-dash { border:1px dashed var(--line-strong); }
+.tk-code { background:var(--lift); border:1px solid var(--line); }
+
+/* Separated, card-like table rows. border-spacing gives each row its own
+   gap; the per-cell borders close the card up around it. */
+.tk-table { border-collapse:separate; border-spacing:0 10px; }
+.tk-rowcard > td {
+  background:var(--surface);
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  transition:background-color .15s ease;
+}
+.tk-rowcard > td:first-child {
+  border-left:1px solid var(--line);
+  border-top-left-radius:8px; border-bottom-left-radius:8px;
+}
+.tk-rowcard > td:last-child {
+  border-right:1px solid var(--line);
+  border-top-right-radius:8px; border-bottom-right-radius:8px;
+}
+.tk-rowcard:hover > td { background:var(--hover); }
+
+.tk-chip { background:transparent; border:1px solid var(--line); }
+.tk-chip:hover { background:var(--active); border-color:var(--accent); }
+.tk-chip-on { background:var(--active); border:1px solid var(--accent); }
+`;
+
+/* ---------------------------------- shell --------------------------------- */
+
+function Shell({ children, right }) {
+  return (
+    <div className="tk-page min-h-screen p-4 sm:p-8">
+      <style>{CSS}</style>
+      <div className="mx-auto max-w-7xl">{children}</div>
+    </div>
+  );
+}
+
+function ConnectForm({ onSave }) {
+  const [url, setUrl] = useState("");
+  const [key, setKey] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [showSql, setShowSql] = useState(false);
+
+  const copySql = async () => {
+    try {
+      await navigator.clipboard.writeText(SETUP_SQL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      setShowSql(true);
+    }
+  };
+
+  const submit = () => {
+    const raw = url.trim();
+    const k = key.trim();
+
+    let origin;
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "https:") throw new Error("not https");
+      origin = parsed.origin;
+    } catch (e) {
+      setError("That is not a valid URL. It should look like https://abcdefgh.supabase.co");
+      return;
+    }
+
+    if (origin.includes("supabase.com")) {
+      setError(
+        "That is the dashboard address, not your project URL. You need the one ending in .supabase.co"
+      );
+      return;
+    }
+    if (k.length < 20) {
+      setError("That key looks too short. Copy the whole publishable or anon key.");
+      return;
+    }
+
+    onSave({ url: origin, key: k });
+  };
+
+  return (
+    <Shell>
+      <div className="mx-auto max-w-2xl pt-8 sm:pt-16">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Application tracker
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed tk-secondary">
+          A pipeline tracker for job applications, synced across your devices. It runs
+          on your own free Supabase database, so your data stays in an account you
+          control. Setup takes about ten minutes, once.
+        </p>
+
+        <ol className="tk-divide mt-8">
+          <li className="py-4">
+            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Step 1
+            </p>
+            <p className="mt-1 text-sm leading-relaxed">
+              Create a free project at{" "}
+              <a
+                href="https://supabase.com/dashboard"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                supabase.com
+              </a>
+              . Any region, any name.
+            </p>
+          </li>
+
+          <li className="py-4">
+            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Step 2
+            </p>
+            <p className="mt-1 text-sm leading-relaxed">
+              In your project, open <strong>SQL Editor</strong>, click{" "}
+              <strong>New query</strong>, paste the script below and click{" "}
+              <strong>Run</strong>. It creates one table and locks it to your account.
+              Running it twice is harmless.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={copySql}
+                className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+              >
+                {copied ? "Copied" : "Copy SQL"}
+              </button>
+              <button
+                onClick={() => setShowSql((v) => !v)}
+                className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+              >
+                {showSql ? "Hide" : "Show"} SQL
+              </button>
+            </div>
+            {showSql && (
+              <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+                {SETUP_SQL}
+              </pre>
+            )}
+          </li>
+
+          <li className="py-4">
+            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Step 3
+            </p>
+            <p className="mt-1 text-sm leading-relaxed">
+              Under <strong>Authentication &rarr; URL Configuration</strong>, set{" "}
+              <strong>Site URL</strong> to this page&rsquo;s address and add it to{" "}
+              <strong>Redirect URLs</strong> as well. Include the{" "}
+              <code>https://</code> prefix or sign-in links will break.
+            </p>
+            <p className="tk-code mt-2 break-all rounded p-2 font-mono text-[11px]">
+              {window.location.origin}
+            </p>
+          </li>
+
+          <li className="py-4">
+            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Step 4
+            </p>
+            <p className="mt-1 text-sm leading-relaxed">
+              Copy both values from <strong>Project Settings &rarr; API Keys</strong>{" "}
+              and paste them here.
+            </p>
+
+            <label className="mt-4 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Project URL
+            </label>
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://abcdefgh.supabase.co"
+              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 font-mono text-sm"
+            />
+
+            <label className="mt-4 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Publishable or anon key
+            </label>
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="sb_publishable_… or eyJhbGciOi…"
+              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 font-mono text-sm"
+            />
+
+            {error && (
+              <p
+                className="mt-3 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider"
+                style={{ background: "var(--cold)" }}
+              >
+                {error}
+              </p>
+            )}
+
+            <button
+              onClick={submit}
+              className="tk-btn tk-focus mt-4 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+            >
+              Connect
+            </button>
+          </li>
+        </ol>
+
+        <p className="mt-6 font-mono text-[11px] leading-relaxed tk-tertiary">
+          Never paste a service_role or sb_secret key here. Those bypass every security
+          policy and belong on a server. The publishable key is designed to be public;
+          the row-level security policy in the script is what keeps your data private.
+        </p>
+      </div>
+    </Shell>
+  );
+}
+
+function SignIn({ cfgUrl, onReset }) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [state, setState] = useState("idle");
+  const [error, setError] = useState("");
+
+  const send = async () => {
+    if (!email.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    setState("sending");
+    setError("");
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) {
+      setError(error.message);
+      setState("idle");
+    } else {
+      setState("sent");
+    }
+  };
+
+  const verify = async () => {
+    const token = code.trim();
+    if (token.length < 6) {
+      setError("Enter the six-digit code from the email.");
+      return;
+    }
+    setState("verifying");
+    setError("");
+    const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+    if (error) {
+      setError(error.message);
+      setState("sent");
+    }
+    // On success the auth listener swaps this screen out.
+  };
+
+  return (
+    <Shell>
+      <div className="mx-auto max-w-md pt-8 sm:pt-16">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Application tracker
+        </h1>
+
+        {state === "sent" || state === "verifying" ? (
+          <>
+            <p className="mt-4 text-sm leading-relaxed">
+              Check <strong>{email}</strong>. Click the link in the email, or type the
+              six-digit code below if the link fails.
+            </p>
+
+            <label className="mt-6 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+              Six-digit code
+            </label>
+            <div className="mt-1 flex flex-col gap-3 sm:flex-row">
+              <input
+                value={code}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                onChange={(e) => setCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && verify()}
+                className="tk-input tk-focus w-full rounded px-3 py-2 font-mono text-sm tracking-widest"
+              />
+              <button
+                onClick={verify}
+                disabled={state === "verifying"}
+                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+              >
+                {state === "verifying" ? "Checking" : "Verify"}
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setState("idle");
+                setCode("");
+                setError("");
+              }}
+              className="tk-focus mt-4 rounded font-mono text-[11px] uppercase tracking-wider underline tk-secondary"
+            >
+              Send another
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mt-3 text-sm leading-relaxed tk-secondary">
+              Sign in with the same address on your laptop and your phone to see one
+              pipeline on both.
+            </p>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <input
+                type="email"
+                value={email}
+                autoComplete="email"
+                placeholder="you@example.com"
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                className="tk-input tk-focus w-full rounded px-3 py-2 text-sm"
+              />
+              <button
+                onClick={send}
+                disabled={state === "sending"}
+                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+              >
+                {state === "sending" ? "Sending" : "Send link"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {error && (
+          <>
+            <p
+              className="mt-3 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider"
+              style={{ background: "var(--cold)" }}
+            >
+              {error}
+            </p>
+            {/expired|invalid/i.test(error) && (
+              <p className="mt-3 text-sm leading-relaxed">
+                Links are single use, and mail providers sometimes open them while
+                scanning. Send another and use the six-digit code instead.
+              </p>
+            )}
+          </>
+        )}
+
+        <div className="tk-line-b mt-8 pb-4" />
+        <p className="font-mono text-[11px] uppercase leading-relaxed tracking-wider tk-tertiary">
+          Connected to
+        </p>
+        <p className="mt-1 break-all font-mono text-[11px] leading-relaxed tk-secondary">
+          {cfgUrl}
+        </p>
+        <button
+          onClick={onReset}
+          className="tk-btn tk-focus mt-3 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        >
+          Change connection details
+        </button>
+      </div>
+    </Shell>
+  );
+}
+
+/* --------------------------------- pieces --------------------------------- */
+
+function SyncChip({ status }) {
+  const map = {
+    live: { label: "Live", bg: "transparent", cls: "tk-secondary" },
+    saving: { label: "Saving", bg: "var(--warn)", cls: "" },
+    offline: { label: "Offline", bg: "var(--cold)", cls: "" },
+  };
+  const s = map[status] || map.offline;
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${s.cls}`}
+      style={{ background: s.bg }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function AgeChip({ row }) {
+  if (!LIVE.includes(row.status)) return null;
+  const d = daysSince(row.activity);
+  let bg = "transparent";
+  let label = d === 0 ? "today" : `d+${d}`;
+  let cls = "tk-secondary";
+  if (d >= 14) {
+    bg = "var(--cold)";
+    label = `d+${d} · cold`;
+    cls = "";
+  } else if (d >= 7) {
+    bg = "var(--warn)";
+    label = `d+${d} · chase`;
+    cls = "";
+  }
+  return (
+    <span
+      className={`mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${cls}`}
+      style={{ background: bg }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function StatusCell({ row, onAdvance }) {
+  const s = stageOf(row.status);
+  return (
+    <div>
+      <button
+        onClick={() => onAdvance(row.id)}
+        title="Click to advance stage"
+        className="tk-pill tk-focus w-full rounded px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-all"
+        style={{ background: s.fill, border: `1px solid ${s.line}` }}
+      >
+        {s.label}
+      </button>
+      <AgeChip row={row} />
+    </div>
+  );
+}
+
+function EditableCell({ value, placeholder, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const box = useRef(null);
+
+  const current = value || "";
+
+  const open = () => {
+    setDraft(current);
+    setEditing(true);
+  };
+  const commit = () => {
+    setEditing(false);
+    if (draft !== current) onChange(draft);
+  };
+
+  /* Focus by hand rather than with autoFocus: autoFocus leaves the caret at
+     position 0, and typing should continue from the end of what is there. */
+  useEffect(() => {
+    if (!editing) return;
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+    el.scrollTop = el.scrollHeight;
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <textarea
+        ref={box}
+        rows={4}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setEditing(false);
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) commit();
+        }}
+        className="tk-edit w-full resize-y rounded p-2 text-sm leading-snug focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={open}
+      className="tk-cell tk-focus w-full rounded p-2 text-left text-sm leading-snug transition-colors"
+    >
+      {current ? current : <span className="tk-tertiary">{placeholder}</span>}
+    </button>
+  );
+}
+
+function StageRail({ rows, filter, setFilter }) {
+  const total = rows.length || 1;
+  return (
+    <div>
+      <div className="tk-rail flex h-2 w-full overflow-hidden rounded-full">
+        {STAGES.map((s) => {
+          const n = rows.filter((r) => r.status === s.key).length;
+          if (!n) return null;
+          return (
+            <div
+              key={s.key}
+              style={{ width: `${(n / total) * 100}%`, background: s.mark }}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {STAGES.map((s) => {
+          const n = rows.filter((r) => r.status === s.key).length;
+          const active = filter === s.key;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setFilter(active ? null : s.key)}
+              className={`tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                active ? "" : "tk-secondary"
+              }`}
+              style={{
+                background: active ? "var(--active)" : "transparent",
+                border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
+              }}
+            >
+              <span className="h-2 w-2 rounded-sm" style={{ background: s.mark }} />
+              {s.label}
+              <span>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const TH =
+  "px-3 py-2 text-left font-mono text-[11px] font-normal uppercase tracking-wider tk-secondary";
+
+/* ------------------------------- grouping --------------------------------- */
+
+const GROUPS = [
+  { key: "location", label: "Location" },
+  { key: "company", label: "Company" },
+  { key: "role", label: "Role" },
+  { key: "status", label: "Status" },
+];
+
+const UNSET = "u";
+
+/* Buckets rows by whatever is typed in one field. Matching is case-insensitive
+   so "London" and "london" are one category; the label keeps the first spelling
+   seen. Status is bucketed by stage key and shown with its proper label. */
+function buildGroups(rows, field) {
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const raw = String(row[field] == null ? "" : row[field]).trim();
+    const key = raw === "" ? UNSET : raw.toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        label:
+          raw === ""
+            ? "Unspecified"
+            : field === "status"
+            ? stageOf(raw).label
+            : raw,
+        items: [],
+      });
+    }
+    map.get(key).items.push(row);
+  });
+
+  const out = [...map.values()];
+  if (field === "status") {
+    const order = STAGES.map((s) => s.key);
+    out.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  } else {
+    out.sort((a, b) => {
+      if (a.key === UNSET) return 1;
+      if (b.key === UNSET) return -1;
+      return a.label.localeCompare(b.label);
+    });
+  }
+  return out;
+}
+
+function GroupBar({ groupBy, setGroupBy, groupValue, setGroupValue, groups }) {
+  const pick = (key) => {
+    setGroupBy(key);
+    setGroupValue(null);
+  };
+
+  return (
+    <div className="tk-card rounded-lg p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 font-mono text-[11px] uppercase tracking-wider tk-tertiary">
+          Optional view · group by
+        </span>
+
+        <button
+          onClick={() => pick(null)}
+          className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+            groupBy === null ? "tk-chip-on" : "tk-chip tk-secondary"
+          }`}
+        >
+          Off
+        </button>
+
+        {GROUPS.map((g) => (
+          <button
+            key={g.key}
+            onClick={() => pick(groupBy === g.key ? null : g.key)}
+            className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+              groupBy === g.key ? "tk-chip-on" : "tk-chip tk-secondary"
+            }`}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+
+      {groupBy && (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-2 pt-3"
+          style={{ borderTop: "1px solid var(--line-soft)" }}
+        >
+          <span className="mr-1 font-mono text-[11px] uppercase tracking-wider tk-tertiary">
+            {GROUPS.find((g) => g.key === groupBy).label}
+          </span>
+
+          <button
+            onClick={() => setGroupValue(null)}
+            className={`tk-focus rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+              groupValue === null ? "tk-chip-on" : "tk-chip tk-secondary"
+            }`}
+          >
+            All
+          </button>
+
+          {groups.map((g) => (
+            <button
+              key={g.key}
+              onClick={() => setGroupValue(groupValue === g.key ? null : g.key)}
+              className={`tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                groupValue === g.key ? "tk-chip-on" : "tk-chip tk-secondary"
+              }`}
+            >
+              {g.label}
+              <span>{g.items.length}</span>
+            </button>
+          ))}
+
+          {groups.length === 0 && (
+            <span className="font-mono text-[11px] tk-tertiary">
+              Nothing to group yet.
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GroupHeading({ section, columns }) {
+  const text = (
+    <span className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+      {section.label} · {section.items.length}
+    </span>
+  );
+  if (!columns) return <div className="pb-1 pt-2">{text}</div>;
+  return (
+    <tr>
+      <td colSpan={columns} className="px-1 pb-0 pt-2">
+        {text}
+      </td>
+    </tr>
+  );
+}
+
+/* --------------------------------- rows ----------------------------------- */
+
+function DesktopRow({ row, onEdit, onDelete, onAdvance }) {
+  return (
+    <tr className="tk-rowcard align-top">
+      <td className="w-52 px-2 py-3">
+        <div className="flex items-start justify-between gap-1">
+          <EditableCell
+            value={row.company}
+            placeholder="Company"
+            onChange={(v) => onEdit(row.id, "company", v)}
+          />
+          <button
+            onClick={() => onDelete(row.id)}
+            title="Delete application"
+            aria-label={`Delete ${row.company || "application"}`}
+            className="tk-del tk-focus mt-2 shrink-0 rounded px-1.5 leading-5 transition-colors"
+          >
+            ×
+          </button>
+        </div>
+      </td>
+      <td className="w-52 px-2 py-3">
+        <EditableCell
+          value={row.role}
+          placeholder="Role"
+          onChange={(v) => onEdit(row.id, "role", v)}
+        />
+      </td>
+      <td className="w-32 px-2 py-3">
+        <EditableCell
+          value={row.location}
+          placeholder="City"
+          onChange={(v) => onEdit(row.id, "location", v)}
+        />
+      </td>
+      <td className="px-3 py-3">
+        <StatusCell row={row} onAdvance={onAdvance} />
+      </td>
+      <td className="w-56 px-2 py-3">
+        <EditableCell
+          value={row.replies}
+          placeholder="Log the reply"
+          onChange={(v) => onEdit(row.id, "replies", v)}
+        />
+      </td>
+      <td className="w-56 px-2 py-3">
+        <EditableCell
+          value={row.nextSteps}
+          placeholder="Set the next action"
+          onChange={(v) => onEdit(row.id, "nextSteps", v)}
+        />
+      </td>
+      <td className="w-64 px-2 py-3">
+        <EditableCell
+          value={row.notes}
+          placeholder="Angle, contact, ATS"
+          onChange={(v) => onEdit(row.id, "notes", v)}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function MobileCard({ row, onEdit, onDelete, onAdvance }) {
+  return (
+    <div className="tk-card rounded-lg p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <EditableCell
+            value={row.company}
+            placeholder="Company"
+            onChange={(v) => onEdit(row.id, "company", v)}
+          />
+          <EditableCell
+            value={row.role}
+            placeholder="Role"
+            onChange={(v) => onEdit(row.id, "role", v)}
+          />
+          <EditableCell
+            value={row.location}
+            placeholder="City"
+            onChange={(v) => onEdit(row.id, "location", v)}
+          />
+        </div>
+        <button
+          onClick={() => onDelete(row.id)}
+          aria-label={`Delete ${row.company || "application"}`}
+          className="tk-del tk-focus shrink-0 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        >
+          Delete
+        </button>
+      </div>
+
+      <div className="mt-3 w-32">
+        <StatusCell row={row} onAdvance={onAdvance} />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {[
+          ["Replies", "replies", "Log the reply"],
+          ["Next steps", "nextSteps", "Set the next action"],
+          ["Notes", "notes", "Angle, contact, ATS"],
+        ].map(([label, field, placeholder]) => (
+          <div key={field}>
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-wider tk-secondary">
+              {label}
+            </p>
+            <EditableCell
+              value={row[field]}
+              placeholder={placeholder}
+              onChange={(v) => onEdit(row.id, field, v)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------- tracker -------------------------------- */
+
+function Tracker({ session }) {
+  const userId = session.user.id;
+  const [all, setAll] = useState([]);
+  const [filter, setFilter] = useState(null);
+  const [groupBy, setGroupBy] = useState(null);
+  const [groupValue, setGroupValue] = useState(null);
+  const [sync, setSync] = useState("offline");
+  const [loading, setLoading] = useState(true);
+  const [opError, setOpError] = useState("");
+  const pending = useRef(0);
+
+  const report = (label, error) => {
+    if (!error) return false;
+    setOpError(
+      label +
+        " failed.\n\n" +
+        (error.message || String(error)) +
+        (error.hint ? "\n\nHint: " + error.hint : "") +
+        (error.code ? "\n\nCode: " + error.code : "")
+    );
+    return true;
+  };
+
+  const mark = useCallback((delta) => {
+    pending.current = Math.max(0, pending.current + delta);
+    setSync(pending.current > 0 ? "saving" : "live");
+  }, []);
+
+  const merge = useCallback((record) => {
+    const row = fromDb(record);
+    setAll((prev) => {
+      const i = prev.findIndex((r) => r.id === row.id);
+      if (i === -1) return [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder);
+      const next = [...prev];
+      next[i] = row;
+      return next.sort((a, b) => a.sortOrder - b.sortOrder);
+    });
+  }, []);
+
+  /* initial load + seed on first run */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await sb
+        .from("applications")
+        .select("*")
+        .order("sort_order", { ascending: true });
+
+      if (cancelled) return;
+      if (error) {
+        report("Loading your applications", error);
+        setLoading(false);
+        return;
+      }
+
+      if (data.length === 0) {
+        const now = Date.now();
+        const payload = SEED.map((s, i) => ({
+          user_id: userId,
+          company: s.company,
+          role_title: s.role,
+          location: s.location,
+          status: s.status,
+          replies: s.replies,
+          next_steps: s.nextSteps,
+          notes: s.notes,
+          activity: new Date(now - s.offsetDays * DAY).toISOString(),
+          sort_order: i,
+        }));
+        const { data: seeded, error: seedError } = await sb
+          .from("applications")
+          .insert(payload)
+          .select();
+        if (cancelled) return;
+        if (!report("Creating the sample rows", seedError)) {
+          if (seeded && seeded.length) setAll(seeded.map(fromDb));
+        }
+      } else {
+        setAll(data.map(fromDb));
+      }
+      setLoading(false);
+      setSync("live");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  /* realtime */
+  useEffect(() => {
+    const channel = sb
+      .channel("applications-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "applications" },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setAll((prev) => prev.filter((r) => r.id !== payload.old.id));
+          } else {
+            merge(payload.new);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") setSync(pending.current > 0 ? "saving" : "live");
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") setSync("offline");
+      });
+
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [merge]);
+
+  /* writes */
+  const patch = async (id, columns, local) => {
+    setAll((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...local, activity: Date.now() } : r))
+    );
+    mark(1);
+    const { error } = await sb
+      .from("applications")
+      .update({ ...columns, activity: new Date().toISOString() })
+      .eq("id", id);
+    report("Saving that change", error);
+    mark(-1);
+  };
+
+  const editField = (id, field, value) =>
+    patch(id, { [FIELD_TO_COLUMN[field]]: value }, { [field]: value });
+
+  const onAdvance = (id) => {
+    const row = all.find((r) => r.id === id);
+    if (!row) return;
+    const status = advance(row.status);
+    patch(id, { status }, { status });
+  };
+
+  const addRow = async () => {
+    const sortOrder = all.reduce((m, r) => Math.max(m, r.sortOrder), -1) + 1;
+    mark(1);
+    const { data, error } = await sb
+      .from("applications")
+      .insert({
+        user_id: userId,
+        company: "",
+        role_title: "",
+        location: "",
+        status: "to-apply",
+        sort_order: sortOrder,
+      })
+      .select();
+
+    if (!report("Adding an application", error)) {
+      if (data && data[0]) {
+        merge(data[0]);
+        // A stage filter or a picked category would hide a brand-new row.
+        setFilter(null);
+        setGroupValue(null);
+      } else {
+        setOpError(
+          "The row was created but could not be read back.\n\n" +
+            "Re-run the setup SQL. The policy must be created with FOR ALL so it " +
+            "covers reads as well as writes."
+        );
+      }
+    }
+    mark(-1);
+  };
+
+  const setDeleted = (id, deleted) =>
+    patch(id, { deleted }, { deleted });
+
+  const purge = async (id) => {
+    if (!window.confirm("Delete this application permanently? This cannot be undone.")) return;
+    setAll((prev) => prev.filter((r) => r.id !== id));
+    mark(1);
+    const { error } = await sb.from("applications").delete().eq("id", id);
+    report("Deleting permanently", error);
+    mark(-1);
+  };
+
+  const rows = all.filter((r) => !r.deleted);
+  const trash = all.filter((r) => r.deleted);
+  const staged = filter ? rows.filter((r) => r.status === filter) : rows;
+  const liveRows = rows.filter((r) => LIVE.includes(r.status));
+  const stale = liveRows.filter((r) => daysSince(r.activity) >= 7).length;
+
+  /* Grouping is off by default. With it on, the rows split into one section
+     per distinct value; picking a category narrows to that section alone. A
+     picked category that no longer exists falls back to showing every group. */
+  const groups = groupBy ? buildGroups(staged, groupBy) : [];
+  const picked = groupValue ? groups.find((g) => g.key === groupValue) : null;
+  const sections = groupBy
+    ? picked
+      ? [picked]
+      : groups
+    : [{ key: "all", label: "", items: staged }];
+  const visibleCount = sections.reduce((n, s) => n + s.items.length, 0);
+
+  if (loading) {
+    return (
+      <Shell>
+        <p className="pt-10 font-mono text-xs uppercase tracking-wider tk-secondary">
+          Loading pipeline…
+        </p>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <header className="tk-line-b mb-6 flex flex-wrap items-end justify-between gap-4 pb-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Application tracker
+          </h1>
+          <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs">
+            <span className="tk-secondary">
+              {rows.length} tracked · {liveRows.length} live
+            </span>
+            <span
+              className={stale ? "rounded px-1.5 py-0.5" : "tk-secondary"}
+              style={{ background: stale ? "var(--warn)" : "transparent" }}
+            >
+              {stale} awaiting chase
+            </span>
+            <SyncChip status={sync} />
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={addRow}
+            className="tk-btn tk-focus rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+          >
+            + Add application
+          </button>
+          <button
+            onClick={() => sb.auth.signOut()}
+            className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      {opError && (
+        <div
+          className="mb-6 rounded-lg p-4"
+          style={{ background: "var(--cold)", border: "1px solid var(--cold-line)" }}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-wider">
+                Database error
+              </p>
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                {opError}
+              </pre>
+            </div>
+            <button
+              onClick={() => setOpError("")}
+              aria-label="Dismiss"
+              className="tk-focus shrink-0 rounded px-2 leading-6"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-6">
+        <StageRail rows={rows} filter={filter} setFilter={setFilter} />
+      </div>
+
+      <div className="mb-6">
+        <GroupBar
+          groupBy={groupBy}
+          setGroupBy={setGroupBy}
+          groupValue={groupValue}
+          setGroupValue={setGroupValue}
+          groups={groups}
+        />
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="tk-table min-w-full">
+          <thead>
+            <tr>
+              <th className={TH}>Company</th>
+              <th className={TH}>Role</th>
+              <th className={TH}>Location</th>
+              <th className={`${TH} w-32`}>Status</th>
+              <th className={TH}>Replies</th>
+              <th className={TH}>Next steps</th>
+              <th className={TH}>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sections.map((section) => (
+              <React.Fragment key={section.key}>
+                {groupBy && <GroupHeading section={section} columns={7} />}
+                {section.items.map((row) => (
+                  <DesktopRow
+                    key={row.id}
+                    row={row}
+                    onEdit={editField}
+                    onDelete={(id) => setDeleted(id, true)}
+                    onAdvance={onAdvance}
+                  />
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="lg:hidden">
+        {sections.map((section) => (
+          <div key={section.key} className="mb-4 space-y-4">
+            {groupBy && <GroupHeading section={section} />}
+            {section.items.map((row) => (
+              <MobileCard
+                key={row.id}
+                row={row}
+                onEdit={editField}
+                onDelete={(id) => setDeleted(id, true)}
+                onAdvance={onAdvance}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {visibleCount === 0 && (
+        <div className="tk-dash rounded-lg p-10 text-center">
+          <p className="tk-secondary">
+            {filter ? "No applications at this stage." : "No applications yet."}
+          </p>
+          <button
+            onClick={() => (filter ? setFilter(null) : addRow())}
+            className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
+          >
+            {filter ? "Show all" : "Add the first one"}
+          </button>
+        </div>
+      )}
+
+      {trash.length > 0 && (
+        <div className="tk-card mt-6 rounded-lg p-4">
+          <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            Recently deleted · {trash.length}
+          </p>
+          <ul className="tk-divide mt-3">
+            {trash.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
+              >
+                <span>
+                  <span className="font-medium">
+                    {row.company || "Untitled application"}
+                  </span>
+                  {row.role && <span className="tk-secondary"> — {row.role}</span>}
+                </span>
+                <span className="flex gap-2">
+                  <button
+                    onClick={() => setDeleted(row.id, false)}
+                    className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    onClick={() => purge(row.id)}
+                    className="tk-btn tk-del tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                  >
+                    Delete for good
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-6 font-mono text-[11px] leading-relaxed tk-tertiary">
+        Click a status to advance it: To apply → Applied → Replied → Interview → Offer →
+        Closed. Editing any cell resets that row's clock. Live rows untouched for 7 days
+        flag for chase, 14 days flag cold. Group by is off unless you turn it on: pick a
+        field to split the pipeline into sections, then pick one category to see only
+        those rows. Every change syncs to your other devices within a second.
+      </p>
+    </Shell>
+  );
+}
+
+/* ----------------------------------- app ---------------------------------- */
+
+function App() {
+  const [cfg, setCfg] = useState(loadConfig);
+  const [session, setSession] = useState(null);
+  const [checked, setChecked] = useState(false);
+  const [bootError, setBootError] = useState("");
+
+  if (cfg && LIB_READY && !sb) connect(cfg);
+
+  useEffect(() => {
+    if (!cfg || !LIB_READY || !sb) return;
+    let done = false;
+
+    sb.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch((e) => setBootError(e.message || String(e)))
+      .finally(() => {
+        done = true;
+        setChecked(true);
+      });
+
+    const timer = setTimeout(() => {
+      if (!done) {
+        setBootError(
+          "No response from Supabase after 10 seconds.\n\nThe project URL may be wrong, or the project may be paused. Open your Supabase dashboard and check the project is running."
+        );
+        setChecked(true);
+      }
+    }, 10000);
+
+    const { data: sub } = sb.auth.onAuthStateChange((_e, next) => setSession(next));
+
+    return () => {
+      clearTimeout(timer);
+      sub.subscription.unsubscribe();
+    };
+  }, [cfg]);
+
+  const reset = () => {
+    clearConfig();
+    window.location.reload();
+  };
+
+  if (!LIB_READY) {
+    return (
+      <Shell>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Supabase library did not load
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed">
+          The page could not fetch the Supabase client from its CDN. Check your
+          connection and reload. On a managed school or work network, cdn.jsdelivr.net
+          may be blocked.
+        </p>
+      </Shell>
+    );
+  }
+
+  if (!cfg) {
+    return (
+      <ConnectForm
+        onSave={(c) => {
+          saveConfig(c);
+          setCfg(c);
+        }}
+      />
+    );
+  }
+
+  if (bootError) {
+    return (
+      <Shell>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Could not reach your database
+        </h1>
+        <pre className="tk-code mt-4 max-w-2xl overflow-x-auto whitespace-pre-wrap rounded-lg p-4 font-mono text-xs leading-relaxed">
+          {bootError}
+        </pre>
+        <button
+          onClick={reset}
+          className="tk-btn tk-focus mt-4 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        >
+          Re-enter connection details
+        </button>
+      </Shell>
+    );
+  }
+
+  if (!checked) {
+    return (
+      <Shell>
+        <p className="pt-10 font-mono text-xs uppercase tracking-wider tk-secondary">
+          Checking session
+        </p>
+      </Shell>
+    );
+  }
+
+  if (!session) return <SignIn cfgUrl={cfg.url} onReset={reset} />;
+
+  return <Tracker key={session.user.id} session={session} />;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+var boot = document.getElementById("boot");
+if (boot) boot.remove();
+</script>
+</body>
+</html>
