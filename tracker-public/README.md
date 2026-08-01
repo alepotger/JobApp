@@ -45,10 +45,14 @@ passes through anyone else's account.
   want the screen for the table; the choice is remembered.
 - **Company scoring.** Rate each company 1-5 on salary, growth, culture and
   location. The table shows the aggregate, and sorts or filters by it. Rating
-  only some facets is fine — the mean uses whichever you have filled in.
+  only some facets is fine — the mean uses whichever you have filled in. Any
+  rating clears again from the × beside it, or all four at once from *Clear
+  all*, so a guess you were only trying out is never permanent.
 - **Offer tracking.** Salary, equity, start date and a benefits rating appear in
   the row's drawer once an application reaches the Offer stage, and stay out of
-  the way before then.
+  the way before then. The start date is typed day-first as `DD/MM/YYYY` — just
+  the digits, the separators appear on their own, and backspace runs back
+  through the whole field rather than sticking at each slash.
 - **Export to PDF.** *Share / Export* opens the print dialogue against a print
   stylesheet: controls, delete buttons and the sync chip drop away, the palette
   forces back to light even in dark mode, and rows avoid splitting across pages.
