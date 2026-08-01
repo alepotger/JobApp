@@ -4,10 +4,17 @@ A pipeline tracker for job applications. One page, no build step, synced across
 your devices. **Every user runs it on their own database**, so nobody's data
 passes through anyone else's account.
 
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/Officient)
+
 ![Stages: To apply, Applied, Replied, Interview, Offer, Closed](https://img.shields.io/badge/stages-6-555)
 ![No build step](https://img.shields.io/badge/build-none-555)
 ![Dark mode](https://img.shields.io/badge/theme-light%20%2F%20dark-555)
 ![MIT](https://img.shields.io/badge/licence-MIT-555)
+
+The button gives you your own copy at your own address in about a minute. Then
+connect it to a free Supabase database and sign in — the page walks you through
+both, and [Getting started](#getting-started) below has the same steps with
+screenshottable detail.
 
 ---
 
@@ -77,21 +84,117 @@ script, and point the page at it. That means:
 - The author of this repo cannot see your data and is not responsible for it.
 - No usage limits imposed by anyone else, and nothing to pay.
 
-## Setup
+## Getting started
 
-Open the deployed page and it walks you through all four steps. In short:
+Four steps, about ten minutes, once. The deployed page walks you through the
+same thing on screen — this is the version you can read first.
 
-1. Create a free project at [supabase.com](https://supabase.com/dashboard).
-2. In **SQL Editor → New query**, paste [`supabase/setup.sql`](supabase/setup.sql)
-   and run it.
-3. Under **Authentication → URL Configuration**, set **Site URL** to the address
-   where you host this page, and add the same URL to **Redirect URLs**. Include
-   the `https://` prefix.
-4. Copy **Project URL** and the **publishable** (or legacy **anon**) key from
-   **Project Settings → API Keys** and paste them into the page.
+### 1. Get your own copy
 
-Sign in with an email link or the six-digit code. Use the same address on every
-device to see one pipeline everywhere.
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/Officient)
+
+Netlify forks the repo to your GitHub account and publishes it. There is no
+build step and nothing to configure — accept the defaults. You end up at an
+address like `https://silly-name-123456.netlify.app`.
+
+**Copy that address. You need it in step 3, and it has to match exactly.**
+
+Renaming the site later (Site configuration → Change site name) or adding a
+custom domain changes the address, and sign-in breaks until you update step 3
+to match. Rename first if you are going to.
+
+<details>
+<summary>Prefer to host it elsewhere?</summary>
+
+`tracker-public/index.html` is the whole application; any static host works.
+
+- **Netlify, by hand:** drag the `tracker-public` folder onto
+  [app.netlify.com/drop](https://app.netlify.com/drop).
+- **GitHub Pages:** enable Pages on your fork, serve from `/tracker-public`.
+- **Locally:** `cd tracker-public && python3 -m http.server 8000`, then open
+  `http://localhost:8000`. Opening the file directly with `file://` is
+  unreliable — browsers restrict storage on that origin.
+
+</details>
+
+### 2. Create the database
+
+1. Sign up at [supabase.com](https://supabase.com/dashboard) and create a
+   project. Any region, any name. The free tier is plenty.
+2. Open **SQL Editor → New query**, paste all of
+   [`supabase/setup.sql`](supabase/setup.sql), and click **Run**.
+
+That creates one table and locks it to your account. Running it twice is
+harmless.
+
+### 3. Tell Supabase where your page lives
+
+This is the step that decides whether signing in works, so do it before
+trying to sign in rather than after.
+
+In your Supabase project, go to **Authentication → URL Configuration** and set
+**both** of these to the address from step 1:
+
+| Field | Value |
+|---|---|
+| **Site URL** | `https://your-site.netlify.app` |
+| **Redirect URLs** | `https://your-site.netlify.app` |
+
+Include the `https://` and leave off any trailing slash. If the address here
+does not match your page exactly, Supabase refuses to send you back to it and
+the sign-in link fails.
+
+### 4. Connect and sign in
+
+Open your page. It asks for two values, both from
+**Project Settings → API Keys** in Supabase:
+
+- **Project URL** — looks like `https://abcdefgh.supabase.co`
+- **Publishable key** (or the legacy **anon** key) — starts `sb_publishable_…`
+  or `eyJhbGciOi…`
+
+Paste them in and press **Connect**. They are stored in that browser only.
+
+> Never paste a `service_role` or `sb_secret_` key. Those bypass every security
+> policy and belong on a server. See [On security](#on-security).
+
+## Signing in
+
+There is no password to invent or remember. Type your email address, press
+**Send link**, and Supabase emails you.
+
+**On the device you asked from**, click the link in the email — you land back on
+the tracker, signed in.
+
+**On a different device**, use the six-digit code instead. Links are tied to the
+browser that requested them, so a link opened on your phone after requesting it
+on your laptop will not work; the code always will.
+
+To make the code appear in the email, add it to the template once: **Supabase →
+Authentication → Emails → Magic Link**, and include `{{ .Token }}` somewhere in
+the body. For example:
+
+```html
+<h2>Sign in to your tracker</h2>
+<p><a href="{{ .ConfirmationURL }}">Click here to sign in</a></p>
+<p>Or type this code into the page: <strong>{{ .Token }}</strong></p>
+```
+
+Sign in with the **same email address on every device** and you see one pipeline
+everywhere, syncing in about a second.
+
+### When sign-in does not work
+
+| What you see | What it means |
+|---|---|
+| *"requested path is invalid"*, or the link lands on a Supabase error page | Step 3 does not match your page's address. Check for a missing `https://`, a trailing slash, or a site you renamed after setting it. |
+| The link says **expired** or **invalid** the first time you click it | Some mail providers open links while scanning them, which spends the single use. Send another and use the six-digit code. |
+| No email at all | Check spam. The built-in mail service allows only a handful of messages an hour — wait a few minutes, or connect your own SMTP under **Authentication → Emails**. |
+| The email arrives with no six-digit code | The default template only contains the link. Add `{{ .Token }}` as shown above. |
+| *"Database error"* once you are signed in | The setup SQL did not finish. Re-run all of `supabase/setup.sql`. |
+
+The page recognises most of these and shows the fix on screen, including the
+exact address to paste into step 3.
 
 ### Upgrading an existing database
 
@@ -106,18 +209,22 @@ one at its current stage rather than inventing the earlier dates, so the "mean
 days" figures are built only from transitions actually observed — each is
 labelled with the sample size it came from.
 
-## Hosting it
+## Hosting
 
-`index.html` is the whole application. Any static host works:
-
-- **Netlify:** drag the folder onto [app.netlify.com/drop](https://app.netlify.com/drop).
-- **GitHub Pages:** enable Pages on the repo, serve from the root.
-- **Locally:** `python3 -m http.server 8000`, then open
-  `http://localhost:8000`. Opening the file directly with `file://` is
-  unreliable — browsers restrict storage on that origin.
+`tracker-public/index.html` is the whole application — there is no build step,
+so any static host works. The deploy button uses
+[`netlify.toml`](../netlify.toml) at the repository root, which publishes the
+`tracker-public` folder and sets the security headers. Other hosts are covered
+under [step 1](#1-get-your-own-copy).
 
 React, Tailwind and the Supabase client load from public CDNs, so an internet
-connection is required.
+connection is required. On a managed school or work network those hosts are
+sometimes blocked; the page says so explicitly rather than showing a blank
+screen.
+
+Whenever you change the address the page is served from — a renamed Netlify
+site, a custom domain — update **Site URL** and **Redirect URLs** in Supabase to
+match, or sign-in stops working.
 
 ## On security
 

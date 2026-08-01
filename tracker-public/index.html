@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Application tracker</title>
+<!-- Inline so the page stays a single file with no assets to serve. -->
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iI2Y5ZjZlZSIvPjxyZWN0IHg9IjciIHk9IjgiIHdpZHRoPSIxOCIgaGVpZ2h0PSIzLjYiIHJ4PSIxLjgiIGZpbGw9IiM4MzY3MjYiLz48cmVjdCB4PSI3IiB5PSIxNC4yIiB3aWR0aD0iMTMiIGhlaWdodD0iMy42IiByeD0iMS44IiBmaWxsPSIjYTg4NTNhIi8+PHJlY3QgeD0iNyIgeT0iMjAuNCIgd2lkdGg9IjgiIGhlaWdodD0iMy42IiByeD0iMS44IiBmaWxsPSIjYzRhMjVjIi8+PC9zdmc+" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -640,6 +642,31 @@ function Shell({ children, right }) {
   );
 }
 
+/* Setup asks you to copy this page's own address into two Supabase fields, and
+   a mistyped character there is the single commonest reason sign-in fails. */
+function CopyValue({ value }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <code className="tk-code break-all rounded p-2 font-mono text-[11px]">{value}</code>
+      <button
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          } catch (e) {
+            /* Clipboard blocked. The value is on screen either way. */
+          }
+        }}
+        className="tk-btn tk-focus shrink-0 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 function ConnectForm({ onSave }) {
   const [url, setUrl] = useState("");
   const [key, setKey] = useState("");
@@ -757,9 +784,7 @@ function ConnectForm({ onSave }) {
               <strong>Redirect URLs</strong> as well. Include the{" "}
               <code>https://</code> prefix or sign-in links will break.
             </p>
-            <p className="tk-code mt-2 break-all rounded p-2 font-mono text-[11px]">
-              {window.location.origin}
-            </p>
+            <CopyValue value={window.location.origin} />
           </li>
 
           <li className="py-4">
@@ -942,10 +967,28 @@ function SignIn({ cfgUrl, onReset }) {
             >
               {error}
             </p>
+            {/redirect|not allowed|requested path/i.test(error) && (
+              <>
+                <p className="mt-3 text-sm leading-relaxed">
+                  Supabase will only send people back to an address it has been
+                  told about. Open <strong>Authentication &rarr; URL
+                  Configuration</strong> and put this exact address in both{" "}
+                  <strong>Site URL</strong> and <strong>Redirect URLs</strong>:
+                </p>
+                <CopyValue value={window.location.origin} />
+              </>
+            )}
             {/expired|invalid/i.test(error) && (
               <p className="mt-3 text-sm leading-relaxed">
                 Links are single use, and mail providers sometimes open them while
                 scanning. Send another and use the six-digit code instead.
+              </p>
+            )}
+            {/rate|limit|too many/i.test(error) && (
+              <p className="mt-3 text-sm leading-relaxed">
+                The built-in mail service allows only a handful of messages an
+                hour. Wait a few minutes, or connect your own SMTP under{" "}
+                <strong>Authentication &rarr; Emails</strong>.
               </p>
             )}
           </>
