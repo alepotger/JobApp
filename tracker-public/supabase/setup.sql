@@ -26,6 +26,7 @@ alter table public.applications
 -- Offer details, company scoring and stage history. Kept as separate ALTERs so
 -- this script also upgrades a table created before these columns existed.
 alter table public.applications
+  add column if not exists contact_email  text     not null default '',
   add column if not exists salary         text     not null default '',
   add column if not exists equity         text     not null default '',
   add column if not exists start_date     date,

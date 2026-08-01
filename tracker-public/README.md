@@ -132,6 +132,31 @@ an empty result.
 Never paste a `service_role` or `sb_secret_` key into this page. Those carry
 `BYPASSRLS` and ignore every policy.
 
+## Optional: email sync and a weekly digest
+
+Two [Supabase Edge Functions](supabase/functions/) add background behaviour. The
+tracker works fully without them — skip this unless you want it.
+
+- **Replies file themselves.** Point a mail provider (Resend, SendGrid) at the
+  `inbound-email` function and forward company replies to your inbound address.
+  The reply is appended to that application's Replies field and the row moves to
+  **Replied**. Matching is by contact address first, then the sender's domain
+  against the company name, then the company name in the subject — the fallback
+  for applicant tracking systems, which all send from the same few domains.
+- **A weekly nudge.** `weekly-digest` runs on `pg_cron` and emails you *"You have
+  3 apps awaiting follow-up. Last touched 9 days ago."* It stays quiet in a week
+  with nothing to chase.
+
+Both refuse to guess. Two live applications at the same company leave the mail
+unfiled rather than picking one, and nothing already at Interview or beyond is
+ever dragged back to Replied. Unmatched mail is still recorded, so you can see
+what arrived and why nothing moved.
+
+Setup, secrets and provider routing are in
+[`supabase/functions/README.md`](supabase/functions/README.md). Run
+[`supabase/migrations/002-inbound-and-digest.sql`](supabase/migrations/002-inbound-and-digest.sql)
+first.
+
 ## Limits
 
 - **Last write wins.** Editing the same cell on two devices in the same second

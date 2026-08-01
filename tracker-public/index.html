@@ -166,6 +166,7 @@ alter table public.applications
   alter column user_id set default auth.uid();
 
 alter table public.applications
+  add column if not exists contact_email  text     not null default '',
   add column if not exists salary         text     not null default '',
   add column if not exists equity         text     not null default '',
   add column if not exists start_date     date,
@@ -229,6 +230,7 @@ end $$;`;
 /* Just the columns added after the first release. Shown on screen when a query
    fails because the table predates them, so the fix is one copy away. */
 const MIGRATION_SQL = `alter table public.applications
+  add column if not exists contact_email  text     not null default '',
   add column if not exists salary         text     not null default '',
   add column if not exists equity         text     not null default '',
   add column if not exists start_date     date,
@@ -308,6 +310,7 @@ const fromDb = (r) => ({
   activity: new Date(r.activity).getTime(),
   sortOrder: Number(r.sort_order),
   deleted: r.deleted,
+  contactEmail: r.contact_email || "",
   salary: r.salary || "",
   equity: r.equity || "",
   startDate: r.start_date || "",
@@ -327,6 +330,7 @@ const FIELD_TO_COLUMN = {
   replies: "replies",
   nextSteps: "next_steps",
   notes: "notes",
+  contactEmail: "contact_email",
   salary: "salary",
   equity: "equity",
   startDate: "start_date",
@@ -1615,6 +1619,18 @@ function DetailPanel({ row, onEdit }) {
               onChange={(n) => onEdit(row.id, s.field, n)}
             />
           ))}
+        </div>
+
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--line-soft)" }}>
+          <Field
+            label="Contact email"
+            value={row.contactEmail}
+            placeholder="e.g. careers@company.com"
+            onChange={(v) => onEdit(row.id, "contactEmail", v)}
+          />
+          <p className="mt-1 font-mono text-[10px] leading-relaxed tk-tertiary">
+            Replies from this address file themselves against this row.
+          </p>
         </div>
       </section>
 
