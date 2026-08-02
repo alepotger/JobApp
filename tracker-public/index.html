@@ -26,8 +26,8 @@
   })();
 </script>
 <style>
-  :root { --page-bg:#f8f8f5; --page-ink:#1e1d18; --page-lift:#ffffff; --page-line:#e4e3df; }
-  :root[data-theme="dark"] { --page-bg:#000000; --page-ink:#eaebee; --page-lift:#17191f; --page-line:#21242a; }
+  :root { --page-bg:#f9fafb; --page-ink:#13161d; --page-lift:#ffffff; --page-line:#e5e6ea; }
+  :root[data-theme="dark"] { --page-bg:#0a0a0a; --page-ink:#ededed; --page-lift:#1e1e1e; --page-line:#272727; }
   html, body { background: var(--page-bg); margin: 0; }
   /* Set here as well as in the app so the boot screen is already on-scale. */
   body { font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text",
@@ -482,177 +482,201 @@ const CSS = `
    browser rather than hand-matched, so the two cannot drift.
    ======================================================================== */
 .tk-page {
-  --bg:               #f8f8f5;
-  --surface:          #fefdfc;
-  --surface-2:        #fafaf7;
+  --bg:               #f9fafb;
+  --surface:          #ffffff;
+  --surface-2:        #fafbfc;
   --lift:             #ffffff;
-  --hover:            #f4f3f0;
-  --active:           #eeece6;
-  --line:             #e4e3df;
-  --line-soft:        #eeeeeb;
-  --line-strong:      #cccac5;
-  --ink:              #1e1d18;
-  --ink-2:            #595852;
-  --ink-3:            #706f69;
-  --accent:           #966c01;
-  --accent-hover:     #865a00;
-  --accent-wash:      #fbf7ee;
-  --warn:             #fce9c2;
-  --warn-line:        #c99d4e;
-  --cold:             #ffddd9;
-  --cold-line:        #d67069;
-  --st-to-apply-fill: #edebe4;
-  --st-to-apply-line: #d4d1c7;
-  --st-to-apply-mark: #848073;
-  --st-applied-fill:  #d4f1d8;
-  --st-applied-line:  #99cda3;
-  --st-applied-mark:  #33854a;
-  --st-replied-fill:  #d3ebff;
-  --st-replied-line:  #98c3e8;
-  --st-replied-mark:  #2b77b0;
-  --st-interview-fill:#fce5bf;
-  --st-interview-line:#deb775;
-  --st-interview-mark:#9e7112;
-  --st-offer-fill:    #ece2ff;
-  --st-offer-line:    #c4b4e5;
-  --st-offer-mark:    #7d5eaf;
-  --st-closed-fill:   #ecebe8;
-  --st-closed-line:   #d2d1cd;
-  --st-closed-mark:   #878681;
-  --fn-1:             #c6a66b;
-  --fn-2:             #aa863e;
-  --fn-3:             #8a650d;
-  --fn-4:             #604200;
+  --hover:            #f2f4f7;
+  --active:           #e9ebef;
+  --line:             #e5e6ea;
+  --line-soft:        #f0f1f3;
+  --line-strong:      #cbced3;
+  --ink:              #13161d;
+  --ink-2:            #575b62;
+  --ink-3:            #6e7278;
+  --accent:           #3b5bd4;
+  --accent-hover:     #2b45c5;
+  --accent-wash:      #f1f6ff;
+  --warn:             #ffeed1;
+  --warn-line:        #dea052;
+  --cold:             #ffe6e5;
+  --cold-line:        #e06062;
+  --st-to-apply-fill: #f2f3f6;
+  --st-to-apply-line: #dfe1e5;
+  --st-to-apply-text: #4a4d54;
+  --st-to-apply-mark: #7c8089;
+  --st-applied-fill:  #e3f8e9;
+  --st-applied-line:  #bce3c8;
+  --st-applied-text:  #036035;
+  --st-applied-mark:  #249057;
+  --st-replied-fill:  #e2f5ff;
+  --st-replied-line:  #bbddf6;
+  --st-replied-text:  #0056a4;
+  --st-replied-mark:  #007dc6;
+  --st-interview-fill:#ffefd5;
+  --st-interview-line:#f3d2a4;
+  --st-interview-text:#75410b;
+  --st-interview-mark:#af7112;
+  --st-offer-fill:    #f5eeff;
+  --st-offer-line:    #ddd0f7;
+  --st-offer-text:    #6635a3;
+  --st-offer-mark:    #875ec4;
+  --st-closed-fill:   #f2f3f5;
+  --st-closed-line:   #e0e1e4;
+  --st-closed-text:   #616368;
+  --st-closed-mark:   #8a8c91;
+  --fn-1:             #98afeb;
+  --fn-2:             #6d8bde;
+  --fn-3:             #4564d0;
+  --fn-4:             #2b439d;
 }
 [data-theme="dark"] .tk-page {
-  --bg:               #000000;
-  --surface:          #090b0f;
-  --surface-2:        #101317;
-  --lift:             #17191f;
-  --hover:            #1d2027;
-  --active:           #282d36;
-  --line:             #21242a;
-  --line-soft:        #15171c;
-  --line-strong:      #3e424c;
-  --ink:              #eaebee;
-  --ink-2:            #abaeb4;
-  --ink-3:            #7e8289;
-  --accent:           #e3b756;
-  --accent-hover:     #fbcd68;
-  --accent-wash:      #1a150b;
-  --warn:             #332307;
-  --warn-line:        #a27825;
-  --cold:             #3c1b19;
-  --cold-line:        #b75b55;
-  --st-to-apply-fill: #1a1d23;
-  --st-to-apply-line: #363b44;
-  --st-to-apply-mark: #979faf;
-  --st-applied-fill:  #0b2817;
-  --st-applied-line:  #24593a;
-  --st-applied-mark:  #62c689;
-  --st-replied-fill:  #0b2437;
-  --st-replied-line:  #235175;
-  --st-replied-mark:  #6fb5ef;
-  --st-interview-fill:#2e1f03;
-  --st-interview-line:#634811;
-  --st-interview-mark:#e4b154;
-  --st-offer-fill:    #251c35;
-  --st-offer-line:    #544371;
-  --st-offer-mark:    #ba9cef;
-  --st-closed-fill:   #16181c;
-  --st-closed-line:   #303339;
-  --st-closed-mark:   #82868f;
-  --fn-1:             #715621;
-  --fn-2:             #9d7a34;
-  --fn-3:             #c79e4d;
-  --fn-4:             #efc880;
+  --bg:               #0a0a0a;
+  --surface:          #141414;
+  --surface-2:        #1a1a1a;
+  --lift:             #1e1e1e;
+  --hover:            #232323;
+  --active:           #2a2a2a;
+  --line:             #272727;
+  --line-soft:        #1f1f1f;
+  --line-strong:      #3a3a3a;
+  --ink:              #ededed;
+  --ink-2:            #9da1a9;
+  --ink-3:            #80838b;
+  --accent:           #7a9eff;
+  --accent-hover:     #94b9ff;
+  --accent-wash:      #161e35;
+  --warn:             #2f1e02;
+  --warn-line:        #bd821a;
+  --cold:             #391414;
+  --cold-line:        #d15b5c;
+  --st-to-apply-fill: #191b1d;
+  --st-to-apply-line: #303338;
+  --st-to-apply-text: #acb1bb;
+  --st-to-apply-mark: #999faa;
+  --st-applied-fill:  #0b2516;
+  --st-applied-line:  #1a4e30;
+  --st-applied-text:  #6fe79f;
+  --st-applied-mark:  #56db8f;
+  --st-replied-fill:  #072232;
+  --st-replied-line:  #134766;
+  --st-replied-text:  #7dd5ff;
+  --st-replied-mark:  #5cc9ff;
+  --st-interview-fill:#2c1c04;
+  --st-interview-line:#593c08;
+  --st-interview-text:#ffc95e;
+  --st-interview-mark:#fcba43;
+  --st-offer-fill:    #231a31;
+  --st-offer-line:    #493864;
+  --st-offer-text:    #dabcff;
+  --st-offer-mark:    #cfabff;
+  --st-closed-fill:   #17181a;
+  --st-closed-line:   #2c2e31;
+  --st-closed-text:   #95989f;
+  --st-closed-mark:   #898c92;
+  --fn-1:             #344da2;
+  --fn-2:             #5272d8;
+  --fn-3:             #7598fe;
+  --fn-4:             #a6c4ff;
 }
 @supports (color: oklch(0% 0 0)) {
   .tk-page {
-    --bg:               oklch(97.8% 0.004 95);
-    --surface:          oklch(99.5% 0.002 95);
-    --surface-2:        oklch(98.4% 0.003 95);
+    --bg:               oklch(98.4% 0.002 265);
+    --surface:          oklch(100% 0 0);
+    --surface-2:        oklch(98.8% 0.002 265);
     --lift:             oklch(100% 0 0);
-    --hover:            oklch(96.5% 0.005 95);
-    --active:           oklch(94.2% 0.008 90);
-    --line:             oklch(91.5% 0.005 95);
-    --line-soft:        oklch(94.8% 0.004 95);
-    --line-strong:      oklch(84% 0.008 95);
-    --ink:              oklch(23% 0.010 95);
-    --ink-2:            oklch(46% 0.009 95);
-    --ink-3:            oklch(54% 0.009 95);
-    --accent:           oklch(56% 0.115 82);
-    --accent-hover:     oklch(50% 0.125 82);
-    --accent-wash:      oklch(97.6% 0.013 85);
-    --warn:             oklch(94% 0.055 85);
-    --warn-line:        oklch(72% 0.11 80);
-    --cold:             oklch(93% 0.045 25);
-    --cold-line:        oklch(66% 0.13 25);
-    --st-to-apply-fill: oklch(94% 0.010 95);
-    --st-to-apply-line: oklch(86% 0.014 95);
-    --st-to-apply-mark: oklch(60% 0.020 95);
-    --st-applied-fill:  oklch(93% 0.045 150);
-    --st-applied-line:  oklch(80% 0.080 150);
-    --st-applied-mark:  oklch(55% 0.120 150);
-    --st-replied-fill:  oklch(93% 0.040 245);
-    --st-replied-line:  oklch(80% 0.070 245);
-    --st-replied-mark:  oklch(55% 0.115 245);
-    --st-interview-fill:oklch(93% 0.055 80);
-    --st-interview-line:oklch(80% 0.095 80);
-    --st-interview-mark:oklch(58% 0.115 80);
-    --st-offer-fill:    oklch(93% 0.040 300);
-    --st-offer-line:    oklch(80% 0.070 300);
-    --st-offer-mark:    oklch(55% 0.125 300);
-    --st-closed-fill:   oklch(94% 0.004 95);
-    --st-closed-line:   oklch(86% 0.006 95);
-    --st-closed-mark:   oklch(62% 0.008 95);
-    --fn-1:             oklch(74% 0.085 82);
-    --fn-2:             oklch(64% 0.100 82);
-    --fn-3:             oklch(53% 0.105 82);
-    --fn-4:             oklch(40% 0.090 82);
+    --hover:            oklch(96.6% 0.004 265);
+    --active:           oklch(94% 0.006 265);
+    --line:             oklch(92.6% 0.005 265);
+    --line-soft:        oklch(95.8% 0.003 265);
+    --line-strong:      oklch(85% 0.008 265);
+    --ink:              oklch(20% 0.014 265);
+    --ink-2:            oklch(47% 0.012 265);
+    --ink-3:            oklch(55% 0.011 265);
+    --accent:           oklch(52% 0.19 268);
+    --accent-hover:     oklch(46% 0.20 268);
+    --accent-wash:      oklch(97.2% 0.016 268);
+    --warn:             oklch(96% 0.045 75);
+    --warn-line:        oklch(75% 0.12 70);
+    --cold:             oklch(95% 0.035 20);
+    --cold-line:        oklch(65% 0.16 22);
+    --st-to-apply-fill: oklch(96.5% 0.004 265);
+    --st-to-apply-line: oklch(91% 0.006 265);
+    --st-to-apply-text: oklch(42% 0.012 265);
+    --st-to-apply-mark: oklch(60% 0.014 265);
+    --st-applied-fill:  oklch(96% 0.030 155);
+    --st-applied-line:  oklch(88% 0.055 155);
+    --st-applied-text:  oklch(43% 0.105 155);
+    --st-applied-mark:  oklch(58% 0.130 155);
+    --st-replied-fill:  oklch(96% 0.028 240);
+    --st-replied-line:  oklch(88% 0.050 240);
+    --st-replied-text:  oklch(45% 0.150 250);
+    --st-replied-mark:  oklch(57% 0.145 245);
+    --st-interview-fill:oklch(96% 0.040 75);
+    --st-interview-line:oklch(88% 0.070 75);
+    --st-interview-text:oklch(43% 0.095 60);
+    --st-interview-mark:oklch(60% 0.125 70);
+    --st-offer-fill:    oklch(96% 0.030 300);
+    --st-offer-line:    oklch(88% 0.055 300);
+    --st-offer-text:    oklch(45% 0.170 300);
+    --st-offer-mark:    oklch(57% 0.155 300);
+    --st-closed-fill:   oklch(96.5% 0.003 265);
+    --st-closed-line:   oklch(91% 0.004 265);
+    --st-closed-text:   oklch(50% 0.008 265);
+    --st-closed-mark:   oklch(64% 0.008 265);
+    --fn-1:             oklch(76% 0.090 268);
+    --fn-2:             oklch(65% 0.130 268);
+    --fn-3:             oklch(54% 0.170 268);
+    --fn-4:             oklch(42% 0.150 268);
   }
   [data-theme="dark"] .tk-page {
-    --bg:               oklch(0% 0 0);
-    --surface:          oklch(15% 0.008 265);
-    --surface-2:        oklch(18.5% 0.010 265);
-    --lift:             oklch(21.5% 0.012 265);
-    --hover:            oklch(24.5% 0.014 265);
-    --active:           oklch(29.5% 0.018 265);
-    --line:             oklch(26% 0.012 265);
-    --line-soft:        oklch(20.5% 0.010 265);
-    --line-strong:      oklch(38% 0.018 265);
-    --ink:              oklch(94% 0.004 265);
-    --ink-2:            oklch(75% 0.010 265);
-    --ink-3:            oklch(60.5% 0.012 265);
-    --accent:           oklch(80% 0.125 85);
-    --accent-hover:     oklch(87% 0.130 85);
-    --accent-wash:      oklch(20% 0.020 85);
-    --warn:             oklch(27% 0.048 80);
-    --warn-line:        oklch(60% 0.110 80);
-    --cold:             oklch(27% 0.052 25);
-    --cold-line:        oklch(58% 0.120 25);
-    --st-to-apply-fill: oklch(23% 0.013 265);
-    --st-to-apply-line: oklch(35% 0.018 265);
-    --st-to-apply-mark: oklch(70% 0.025 265);
-    --st-applied-fill:  oklch(25% 0.048 155);
-    --st-applied-line:  oklch(42% 0.078 155);
-    --st-applied-mark:  oklch(75% 0.130 155);
-    --st-replied-fill:  oklch(25% 0.048 245);
-    --st-replied-line:  oklch(42% 0.078 245);
-    --st-replied-mark:  oklch(75% 0.110 245);
-    --st-interview-fill:oklch(25% 0.048 80);
-    --st-interview-line:oklch(42% 0.078 80);
-    --st-interview-mark:oklch(79% 0.125 80);
-    --st-offer-fill:    oklch(25% 0.048 300);
-    --st-offer-line:    oklch(42% 0.078 300);
-    --st-offer-mark:    oklch(75% 0.120 300);
-    --st-closed-fill:   oklch(21% 0.008 265);
-    --st-closed-line:   oklch(32% 0.012 265);
-    --st-closed-mark:   oklch(62% 0.014 265);
-    --fn-1:             oklch(47% 0.078 82);
-    --fn-2:             oklch(60% 0.098 82);
-    --fn-3:             oklch(72% 0.110 82);
-    --fn-4:             oklch(85% 0.100 82);
+    --bg:               oklch(14.3% 0 0);
+    --surface:          oklch(18.9% 0 0);
+    --surface-2:        oklch(21.6% 0 0);
+    --lift:             oklch(23.3% 0 0);
+    --hover:            oklch(25.5% 0 0);
+    --active:           oklch(28.3% 0 0);
+    --line:             oklch(27.1% 0 0);
+    --line-soft:        oklch(23.8% 0 0);
+    --line-strong:      oklch(34.7% 0 0);
+    --ink:              oklch(94.5% 0 0);
+    --ink-2:            oklch(70.8% 0.012 265);
+    --ink-3:            oklch(61% 0.012 265);
+    --accent:           oklch(72% 0.160 268);
+    --accent-hover:     oklch(80% 0.150 268);
+    --accent-wash:      oklch(24% 0.045 268);
+    --warn:             oklch(25% 0.050 75);
+    --warn-line:        oklch(65% 0.130 75);
+    --cold:             oklch(25% 0.060 22);
+    --cold-line:        oklch(62% 0.150 22);
+    --st-to-apply-fill: oklch(22% 0.006 265);
+    --st-to-apply-line: oklch(32% 0.010 265);
+    --st-to-apply-text: oklch(76% 0.015 265);
+    --st-to-apply-mark: oklch(70% 0.018 265);
+    --st-applied-fill:  oklch(24% 0.045 155);
+    --st-applied-line:  oklch(38% 0.075 155);
+    --st-applied-text:  oklch(84% 0.150 155);
+    --st-applied-mark:  oklch(80% 0.160 155);
+    --st-replied-fill:  oklch(24% 0.045 240);
+    --st-replied-line:  oklch(38% 0.075 240);
+    --st-replied-text:  oklch(84% 0.120 240);
+    --st-replied-mark:  oklch(80% 0.140 240);
+    --st-interview-fill:oklch(24% 0.045 75);
+    --st-interview-line:oklch(38% 0.075 75);
+    --st-interview-text:oklch(87% 0.140 80);
+    --st-interview-mark:oklch(83% 0.150 78);
+    --st-offer-fill:    oklch(24% 0.045 300);
+    --st-offer-line:    oklch(38% 0.075 300);
+    --st-offer-text:    oklch(85% 0.120 300);
+    --st-offer-mark:    oklch(81% 0.140 300);
+    --st-closed-fill:   oklch(21% 0.004 265);
+    --st-closed-line:   oklch(30% 0.006 265);
+    --st-closed-text:   oklch(68% 0.010 265);
+    --st-closed-mark:   oklch(64% 0.010 265);
+    --fn-1:             oklch(45% 0.140 268);
+    --fn-2:             oklch(58% 0.160 268);
+    --fn-3:             oklch(70% 0.155 268);
+    --fn-4:             oklch(83% 0.120 268);
   }
 }
 
@@ -661,47 +685,53 @@ const CSS = `
    Emitted from the same source as the light theme so no token can be missed. */
 @media print {
   .tk-page, [data-theme="dark"] .tk-page {
-    --bg:               #f8f8f5;
-    --surface:          #fefdfc;
-    --surface-2:        #fafaf7;
+    --bg:               #f9fafb;
+    --surface:          #ffffff;
+    --surface-2:        #fafbfc;
     --lift:             #ffffff;
-    --hover:            #f4f3f0;
-    --active:           #eeece6;
-    --line:             #e4e3df;
-    --line-soft:        #eeeeeb;
-    --line-strong:      #cccac5;
-    --ink:              #1e1d18;
-    --ink-2:            #595852;
-    --ink-3:            #706f69;
-    --accent:           #966c01;
-    --accent-hover:     #865a00;
-    --accent-wash:      #fbf7ee;
-    --warn:             #fce9c2;
-    --warn-line:        #c99d4e;
-    --cold:             #ffddd9;
-    --cold-line:        #d67069;
-    --st-to-apply-fill: #edebe4;
-    --st-to-apply-line: #d4d1c7;
-    --st-to-apply-mark: #848073;
-    --st-applied-fill:  #d4f1d8;
-    --st-applied-line:  #99cda3;
-    --st-applied-mark:  #33854a;
-    --st-replied-fill:  #d3ebff;
-    --st-replied-line:  #98c3e8;
-    --st-replied-mark:  #2b77b0;
-    --st-interview-fill:#fce5bf;
-    --st-interview-line:#deb775;
-    --st-interview-mark:#9e7112;
-    --st-offer-fill:    #ece2ff;
-    --st-offer-line:    #c4b4e5;
-    --st-offer-mark:    #7d5eaf;
-    --st-closed-fill:   #ecebe8;
-    --st-closed-line:   #d2d1cd;
-    --st-closed-mark:   #878681;
-    --fn-1:             #c6a66b;
-    --fn-2:             #aa863e;
-    --fn-3:             #8a650d;
-    --fn-4:             #604200;
+    --hover:            #f2f4f7;
+    --active:           #e9ebef;
+    --line:             #e5e6ea;
+    --line-soft:        #f0f1f3;
+    --line-strong:      #cbced3;
+    --ink:              #13161d;
+    --ink-2:            #575b62;
+    --ink-3:            #6e7278;
+    --accent:           #3b5bd4;
+    --accent-hover:     #2b45c5;
+    --accent-wash:      #f1f6ff;
+    --warn:             #ffeed1;
+    --warn-line:        #dea052;
+    --cold:             #ffe6e5;
+    --cold-line:        #e06062;
+    --st-to-apply-fill: #f2f3f6;
+    --st-to-apply-line: #dfe1e5;
+    --st-to-apply-text: #4a4d54;
+    --st-to-apply-mark: #7c8089;
+    --st-applied-fill:  #e3f8e9;
+    --st-applied-line:  #bce3c8;
+    --st-applied-text:  #036035;
+    --st-applied-mark:  #249057;
+    --st-replied-fill:  #e2f5ff;
+    --st-replied-line:  #bbddf6;
+    --st-replied-text:  #0056a4;
+    --st-replied-mark:  #007dc6;
+    --st-interview-fill:#ffefd5;
+    --st-interview-line:#f3d2a4;
+    --st-interview-text:#75410b;
+    --st-interview-mark:#af7112;
+    --st-offer-fill:    #f5eeff;
+    --st-offer-line:    #ddd0f7;
+    --st-offer-text:    #6635a3;
+    --st-offer-mark:    #875ec4;
+    --st-closed-fill:   #f2f3f5;
+    --st-closed-line:   #e0e1e4;
+    --st-closed-text:   #616368;
+    --st-closed-mark:   #8a8c91;
+    --fn-1:             #98afeb;
+    --fn-2:             #6d8bde;
+    --fn-3:             #4564d0;
+    --fn-4:             #2b439d;
     --bg:#fff; --surface:#fff; --surface-2:#fff; --lift:#fff;
     --hover:#fff; --active:#fff;
     --ink:#15150f; --ink-2:#4a4a44; --ink-3:#6e6e68;
@@ -720,63 +750,69 @@ const CSS = `
   @page { margin:14mm; }
 }
 
-/* ---------------------------- non-colour tokens ---------------------------
-   A named semantic scale derived from one base unit, per the dossier's note
-   that elite systems use tokens rather than raw pixels sprinkled per
-   component. Type is a tempered fourth: tracking tightens as size grows,
-   which is the difference between "correct" and "expensive" typography. */
+/* ------------------------- type, space and motion -------------------------
+   A strict scale with its own variables, not values chosen per component.
+   Tracking is the tell: it tightens as type grows and opens right up for
+   small uppercase labels, which is what keeps a 11px caps label legible and
+   a 34px heading sleek. Weights skip the mediums entirely — 400 for reading,
+   600/700 for anything the eye should land on first. */
 .tk-page {
   --s-1:4px;  --s-2:8px;  --s-3:12px; --s-4:16px; --s-5:24px;
   --s-6:32px; --s-7:48px; --s-8:64px; --s-9:96px;
 
-  --t-micro:.6875rem; --t-cap:.75rem;  --t-body:.8125rem;
-  --t-ui:.875rem;     --t-lead:1.0625rem;
-  --t-title:1.375rem; --t-display:2rem;
+  --t-2xs:.6875rem; --t-xs:.75rem;   --t-sm:.8125rem;  --t-md:.875rem;
+  --t-lg:1rem;      --t-xl:1.25rem;  --t-2xl:1.625rem; --t-3xl:2.125rem;
 
-  --lh-tight:1.15; --lh-snug:1.35; --lh-body:1.55;
-  --tr-display:-.022em; --tr-title:-.015em; --tr-ui:-.006em; --tr-micro:.08em;
+  --lh-none:1;    --lh-tight:1.12; --lh-snug:1.3;
+  --lh-normal:1.5; --lh-relaxed:1.65;
+
+  --tr-tighter:-.032em; --tr-tight:-.021em; --tr-snug:-.011em;
+  --tr-normal:0;        --tr-wide:.045em;   --tr-wider:.085em; --tr-widest:.13em;
+
+  --w-light:300; --w-regular:400; --w-semibold:600; --w-bold:700;
 
   --r-1:6px; --r-2:8px; --r-3:10px; --r-4:14px;
 
-  /* Layered ambient + direct, never a single flat blur. */
-  --sh-1:0 1px 2px rgb(0 0 0/.04), 0 1px 1px rgb(0 0 0/.03);
-  --sh-2:0 2px 4px rgb(0 0 0/.04), 0 6px 16px rgb(0 0 0/.06);
-  --sh-3:0 12px 32px rgb(0 0 0/.10), 0 2px 8px rgb(0 0 0/.06);
-  --ring:0 0 0 3px rgb(150 108 1/.22);
+  --sh-1:0 1px 2px rgb(16 18 26/.04), 0 1px 1px rgb(16 18 26/.03);
+  --sh-2:0 2px 4px rgb(16 18 26/.04), 0 6px 16px rgb(16 18 26/.06);
+  --sh-3:0 12px 32px rgb(16 18 26/.10), 0 2px 8px rgb(16 18 26/.06);
+  --ring:0 0 0 3px rgb(59 91 212/.22);
 
-  /* Dossier motion guardrails: ease-out for entrances, everything under
-     300ms, exits slower than entrances (instant in, graceful out). */
   --ease:cubic-bezier(.22,1,.36,1);
   --ease-spring:cubic-bezier(.34,1.56,.64,1);
   --d-1:120ms; --d-2:180ms; --d-3:280ms; --d-exit:150ms;
 
-  --font-ui:'Inter var',Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text',
+  /* Named first so an installed Inter or Geist is preferred, then the
+     platform faces — which is how a Mac gets SF Pro without a webfont
+     request the latency budget cannot afford. */
+  --font-display:'Inter Display',Inter,Geist,-apple-system,BlinkMacSystemFont,
+                 'SF Pro Display','Segoe UI Variable Display','Segoe UI',system-ui,sans-serif;
+  --font-ui:Inter,Geist,-apple-system,BlinkMacSystemFont,'SF Pro Text',
             'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
-  --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+  --font-mono:'Geist Mono','SF Mono',ui-monospace,SFMono-Regular,Menlo,
+              'Cascadia Mono',Consolas,monospace;
 
   background:var(--bg);
   color:var(--ink);
   font-family:var(--font-ui);
-  font-size:var(--t-ui);
-  line-height:var(--lh-body);
-  letter-spacing:var(--tr-ui);
+  font-size:var(--t-md);
+  font-weight:var(--w-regular);
+  line-height:var(--lh-normal);
+  letter-spacing:var(--tr-snug);
   font-optical-sizing:auto;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
 }
 
-/* Elevation in dark mode comes from lighter surfaces, not heavier shadows —
-   the dossier is explicit that you cannot simply invert a light theme. The
-   hairline top highlight is what reads as a raised edge on a dark ground. */
+/* Dark elevation is carried by surface lightness, so shadows recede to
+   almost nothing and the ring picks up the dark-mode accent. */
 [data-theme="dark"] .tk-page {
-  --sh-1:0 1px 2px rgb(0 0 0/.30);
-  --sh-2:0 2px 6px rgb(0 0 0/.35), 0 8px 24px rgb(0 0 0/.25);
-  --sh-3:0 16px 40px rgb(0 0 0/.45), 0 2px 8px rgb(0 0 0/.30);
-  --ring:0 0 0 3px rgb(227 183 86/.28);
+  --sh-1:0 1px 2px rgb(0 0 0/.40);
+  --sh-2:0 2px 6px rgb(0 0 0/.45), 0 8px 24px rgb(0 0 0/.30);
+  --sh-3:0 16px 40px rgb(0 0 0/.55), 0 2px 8px rgb(0 0 0/.35);
+  --ring:0 0 0 3px rgb(122 158 255/.30);
 }
 
-/* Zero-specificity reset so form controls inherit the type system without
-   outranking the utility classes on the elements themselves. */
 .tk-page :where(input,textarea,button,select) {
   color:inherit; font-family:inherit; letter-spacing:inherit;
 }
@@ -785,22 +821,39 @@ const CSS = `
 }
 
 /* ------------------------------- typography ------------------------------ */
-.tk-display { font-size:var(--t-display); line-height:var(--lh-tight);
-              letter-spacing:var(--tr-display); font-weight:640; }
-.tk-title   { font-size:var(--t-title); line-height:var(--lh-snug);
-              letter-spacing:var(--tr-title); font-weight:600; }
-.tk-lead    { font-size:var(--t-lead); line-height:var(--lh-snug); font-weight:560; }
-.tk-body    { font-size:var(--t-body); line-height:var(--lh-body); }
-.tk-cap     { font-size:var(--t-cap); line-height:var(--lh-snug); }
-.tk-micro   { font-size:var(--t-micro); line-height:var(--lh-snug); font-weight:560;
-              text-transform:uppercase; letter-spacing:var(--tr-micro); }
-/* Mandated by the dossier for every data table: figures that do not jitter
-   between rows is effort the reader cannot name but the brain registers. */
+.tk-display { font-family:var(--font-display); font-size:var(--t-3xl);
+              line-height:var(--lh-tight); letter-spacing:var(--tr-tighter);
+              font-weight:var(--w-bold); }
+.tk-title   { font-family:var(--font-display); font-size:var(--t-xl);
+              line-height:var(--lh-snug); letter-spacing:var(--tr-tight);
+              font-weight:var(--w-semibold); }
+.tk-lead    { font-size:var(--t-lg); line-height:var(--lh-snug);
+              letter-spacing:var(--tr-snug); font-weight:var(--w-regular); }
+.tk-body    { font-size:var(--t-sm); line-height:var(--lh-normal); font-weight:var(--w-regular); }
+.tk-cap     { font-size:var(--t-xs); line-height:var(--lh-snug); font-weight:var(--w-regular); }
+
+/* Small caps labels: widely tracked, semibold, never medium. */
+.tk-micro   { font-size:var(--t-2xs); line-height:var(--lh-snug);
+              font-weight:var(--w-semibold); text-transform:uppercase;
+              letter-spacing:var(--tr-wider); }
+/* The widest tracking is reserved for the smallest caps — status pills. */
+.tk-pill-label { font-size:var(--t-2xs); font-weight:var(--w-semibold);
+                 text-transform:uppercase; letter-spacing:var(--tr-widest); }
+
+/* Critical data points get the sharp end of the weight scale. */
+.tk-figure  { font-family:var(--font-display); font-size:var(--t-2xl);
+              line-height:var(--lh-none); letter-spacing:var(--tr-tight);
+              font-weight:var(--w-bold); font-variant-numeric:tabular-nums; }
+.tk-strong  { font-weight:var(--w-semibold); }
+
+/* Dates, IDs and every column of figures: monospaced and non-jittering. */
 .tk-num, .tk-table, .tk-stat { font-variant-numeric:tabular-nums; }
-.tk-prose { max-width:66ch; }          /* Bringhurst's measure */
+.tk-data { font-family:var(--font-mono); font-variant-numeric:tabular-nums;
+           letter-spacing:var(--tr-normal); }
+.tk-prose { max-width:66ch; }
 .tk-secondary { color:var(--ink-2); }
 .tk-tertiary  { color:var(--ink-3); }
-.tk-mono { font-family:var(--font-mono); }
+.tk-mono { font-family:var(--font-mono); letter-spacing:var(--tr-normal); }
 
 /* ------------------------------- surfaces -------------------------------- */
 .tk-surface { background:var(--surface); }
@@ -810,6 +863,7 @@ const CSS = `
 }
 .tk-line-b { border-bottom:1px solid var(--line); }
 .tk-divide > * + * { border-top:1px solid var(--line-soft); }
+.tk-hairline { border-color:var(--line-soft); }
 .tk-rail { background:var(--line-soft); }
 .tk-dash { border:1px dashed var(--line-strong); border-radius:var(--r-4); }
 .tk-code {
@@ -833,12 +887,14 @@ const CSS = `
           transition:background-color var(--d-1) var(--ease), color var(--d-1) var(--ease); }
 .tk-del:hover { background:var(--cold); border-color:var(--cold-line); }
 
+/* A Linear/Notion-style tag: desaturated tint, hairline border a shade
+   deeper, and crisp coloured type inside — never generic ink on a wash. */
 .tk-pill {
   border-radius:var(--r-2);
-  transition:filter var(--d-1) var(--ease), transform var(--d-1) var(--ease),
-             box-shadow var(--d-1) var(--ease);
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease),
+             transform var(--d-1) var(--ease);
 }
-.tk-pill:hover { filter:brightness(1.03) saturate(1.05); box-shadow:var(--sh-1); }
+.tk-pill:hover { filter:brightness(1.02) saturate(1.04); }
 .tk-pill:active { transform:translateY(1px); }
 
 .tk-cell {
@@ -871,8 +927,9 @@ const CSS = `
 .tk-table { border-collapse:separate; border-spacing:0 10px; width:100%; }
 .tk-th {
   padding:0 var(--s-3) var(--s-2);
-  text-align:left; font-weight:560; color:var(--ink-3);
-  font-size:var(--t-micro); text-transform:uppercase; letter-spacing:var(--tr-micro);
+  text-align:left; color:var(--ink-3);
+  font-size:var(--t-2xs); font-weight:var(--w-semibold);
+  text-transform:uppercase; letter-spacing:var(--tr-wider);
 }
 .tk-rowcard > td {
   background:var(--surface);
@@ -890,7 +947,7 @@ const CSS = `
   border-top-right-radius:var(--r-3); border-bottom-right-radius:var(--r-3);
   padding-right:var(--s-3);
 }
-.tk-rowcard:hover > td { background:var(--hover); border-color:var(--line-strong); }
+.tk-rowcard:hover > td { background:var(--hover); border-color:var(--line); }
 
 /* -------------------------------- dropdown ------------------------------- */
 .tk-trigger {
@@ -918,7 +975,8 @@ const CSS = `
 .tk-kbd {
   background:var(--surface-2); border:1px solid var(--line);
   border-bottom-width:2px; border-radius:var(--r-1);
-  padding:1px 6px; font-family:var(--font-mono); font-size:var(--t-micro);
+  padding:1px 6px; font-family:var(--font-mono); font-size:var(--t-2xs);
+  font-weight:var(--w-semibold); letter-spacing:var(--tr-normal);
   color:var(--ink-2);
 }
 
@@ -1572,7 +1630,7 @@ function AgeChip({ row }) {
   }
   return (
     <span
-      className={`mt-1 inline-block rounded px-2 py-1 tk-micro ${cls}`}
+      className={`tk-data mt-2 inline-block rounded px-2 py-1 text-[.6875rem] font-semibold uppercase ${cls}`}
       style={{ background: bg }}
     >
       {label}
@@ -2041,7 +2099,7 @@ function DetailPanel({ row, onEdit, onClearScores }) {
       <section className="tk-panel p-4">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <p className={LABEL}>Company score</p>
-          <p className="flex items-baseline gap-3 tk-mono tk-body">
+          <p className="flex items-baseline gap-3 tk-data tk-strong">
             {mean == null ? <span className="tk-tertiary">Not rated</span> : mean.toFixed(1)}
             {mean != null && <span className="tk-tertiary">/ 5</span>}
             {mean != null && (
@@ -2125,8 +2183,8 @@ function Stat({ label, value, sub }) {
   return (
     <div>
       <p className={LABEL}>{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
-      {sub && <p className="mt-1 tk-mono tk-cap tk-tertiary">{sub}</p>}
+      <p className="tk-figure mt-2">{value}</p>
+      {sub && <p className="mt-2 tk-cap tk-tertiary">{sub}</p>}
     </div>
   );
 }
@@ -2228,7 +2286,7 @@ function Funnel({ rows, open, onToggle }) {
                         title={`${s.label}: ${s.count} of ${rows.length} tracked`}
                       />
                     </div>
-                    <span className="w-8 shrink-0 text-right tk-mono tk-body">
+                    <span className="tk-data tk-strong w-8 shrink-0 text-right">
                       {s.count}
                     </span>
                   </div>
@@ -2558,7 +2616,7 @@ function ScoreCell({ row, open, onToggle, cell }) {
       {...cell}
       className="tk-cell tk-focus flex w-full items-center justify-between gap-1 rounded p-2 text-left transition-colors"
     >
-      <span className="tk-mono tk-body">
+      <span className="tk-data tk-strong">
         {mean == null ? <span className="tk-tertiary">–</span> : mean.toFixed(1)}
       </span>
       <span aria-hidden="true" className="tk-noprint tk-tertiary text-[10px]">
