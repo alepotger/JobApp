@@ -4,7 +4,14 @@
 -- fields existed. It is idempotent: running it twice changes nothing. A fresh
 -- install does not need it, because setup.sql already includes everything here.
 
+-- contact_email belongs here even though the inbound-email feature in 002 is
+-- what reads it: the row drawer writes to it in the core UI, so a table
+-- without it is not a table this application can drive. It was originally
+-- only in 002, which meant anyone applying this delta on its own ended up one
+-- column short of a fresh setup.sql install. 002 still declares it, and
+-- `if not exists` makes running both harmless.
 alter table public.applications
+  add column if not exists contact_email  text     not null default '',
   add column if not exists salary         text     not null default '',
   add column if not exists equity         text     not null default '',
   add column if not exists start_date     date,

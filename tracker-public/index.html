@@ -6,11 +6,46 @@
 <title>JobApp — application tracker</title>
 <!-- Inline so the page stays a single file with no assets to serve. -->
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iI2Y5ZjZlZSIvPjxyZWN0IHg9IjciIHk9IjgiIHdpZHRoPSIxOCIgaGVpZ2h0PSIzLjYiIHJ4PSIxLjgiIGZpbGw9IiM4MzY3MjYiLz48cmVjdCB4PSI3IiB5PSIxNC4yIiB3aWR0aD0iMTMiIGhlaWdodD0iMy42IiByeD0iMS44IiBmaWxsPSIjYTg4NTNhIi8+PHJlY3QgeD0iNyIgeT0iMjAuNCIgd2lkdGg9IjgiIGhlaWdodD0iMy42IiByeD0iMS44IiBmaWxsPSIjYzRhMjVjIi8+PC9zdmc+" />
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Tailwind, built ahead of time and inlined rather than fetched.
+     The CDN build compiled the utilities in the browser from an unversioned
+     URL, which meant a third party could change what every visitor ran. This
+     is the same output, generated from this file's own classes:
+
+       npx tailwindcss@3.4.18 -c tailwind.config.js -i input.css -o out.css --minify
+       (content: this file; input: the three @tailwind directives)
+
+     Regenerate it whenever a Tailwind class is added, or the class will
+     silently do nothing. -->
+<style>*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.18 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.visible{visibility:visible}.invisible{visibility:hidden}.collapse{visibility:collapse}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.inset-x-0{left:0;right:0}.bottom-4{bottom:1rem}.left-0{left:0}.z-20{z-index:20}.z-30{z-index:30}.-mx-2{margin-left:-.5rem;margin-right:-.5rem}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:.25rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.ml-1{margin-left:.25rem}.mt-1{margin-top:.25rem}.mt-10{margin-top:2.5rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mt-5{margin-top:1.25rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.table{display:table}.grid{display:grid}.hidden{display:none}.h-1{height:.25rem}.h-1\.5{height:.375rem}.h-4{height:1rem}.max-h-72{max-height:18rem}.max-h-80{max-height:20rem}.min-h-screen{min-height:100vh}.w-1{width:.25rem}.w-1\.5{width:.375rem}.w-20{width:5rem}.w-24{width:6rem}.w-32{width:8rem}.w-4{width:1rem}.w-52{width:13rem}.w-56{width:14rem}.w-64{width:16rem}.w-8{width:2rem}.w-full{width:100%}.min-w-0{min-width:0}.min-w-\[15rem\]{min-width:15rem}.min-w-full{min-width:100%}.max-w-2xl{max-width:42rem}.max-w-\[1400px\]{max-width:1400px}.max-w-md{max-width:28rem}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-text{cursor:text}.resize-y{resize:vertical}.list-decimal{list-style-type:decimal}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-end{align-items:flex-end}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:.25rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}.gap-5{gap:1.25rem}.gap-x-5{-moz-column-gap:1.25rem;column-gap:1.25rem}.gap-y-2{row-gap:.5rem}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.overflow-auto{overflow:auto}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.break-all{word-break:break-all}.rounded-full{border-radius:9999px}.border{border-width:1px}.bg-transparent{background-color:transparent}.p-10{padding:2.5rem}.p-2{padding:.5rem}.p-3{padding:.75rem}.p-4{padding:1rem}.px-1{padding-left:.25rem;padding-right:.25rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.py-0{padding-top:0;padding-bottom:0}.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.py-5{padding-top:1.25rem;padding-bottom:1.25rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-0{padding-bottom:0}.pb-1{padding-bottom:.25rem}.pb-4{padding-bottom:1rem}.pb-6{padding-bottom:1.5rem}.pl-2{padding-left:.5rem}.pl-5{padding-left:1.25rem}.pt-10{padding-top:2.5rem}.pt-2{padding-top:.5rem}.pt-3{padding-top:.75rem}.pt-8{padding-top:2rem}.text-left{text-align:left}.text-center{text-align:center}.text-right{text-align:right}.align-top{vertical-align:top}.uppercase{text-transform:uppercase}.leading-4{line-height:1rem}.leading-5{line-height:1.25rem}.leading-6{line-height:1.5rem}.leading-relaxed{line-height:1.625}.leading-snug{line-height:1.375}.tracking-wider{letter-spacing:.05em}.tracking-widest{letter-spacing:.1em}.underline{text-decoration-line:underline}.line-through{text-decoration-line:line-through}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.ring{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(3px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.blur{--tw-blur:blur(8px)}.blur,.grayscale{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.grayscale{--tw-grayscale:grayscale(100%)}.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}@media (min-width:640px){.sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.sm\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.sm\:flex-row{flex-direction:row}.sm\:px-8{padding-left:2rem;padding-right:2rem}.sm\:py-12{padding-top:3rem;padding-bottom:3rem}.sm\:pt-16{padding-top:4rem}}@media (min-width:1024px){.lg\:block{display:block}.lg\:hidden{display:none}.lg\:px-12{padding-left:3rem;padding-right:3rem}}</style>
+
+<!-- Every dependency is pinned to an exact version and carries a
+     Subresource Integrity hash, so neither the CDN nor the package can change
+     what runs here without the browser refusing to execute it. The hashes are
+     sha384 over the files published in each version's npm tarball, which is
+     the byte-for-byte content unpkg and jsdelivr serve for these paths.
+     crossorigin is required: SRI is only checked on a CORS-enabled fetch. -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
+        integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
+        crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
+        integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
+        crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.8/babel.min.js"
+        integrity="sha384-Ux6uBqExf/7ahsSNrA9VI7vuaw6sKjDoVdjdUxmIoL2qdlzFVZ157sTi6JK3Z9Q8"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"
+        integrity="sha384-faMlYZUtkJj+Sh6Bmu/L0GzPcraRWN6CW+9RH3GUrK/Z0WS9tgaNNt0tHiLxsbdb"
+        crossorigin="anonymous"></script>
+<script>
+  /* THE VERSION. Bump this on every deploy.
+     It is what a bug report quotes back, and the only way to tell whether
+     someone is looking at the current build or a stale cache. Kept here, in
+     the first script on the page, so it is readable even if everything after
+     this fails to load. */
+  window.__VERSION = "2026.08.02";
+  document.documentElement.setAttribute("data-version", window.__VERSION);
+</script>
+
 <script>
   /* Set the theme before first paint, so opening the page in dark mode never
      flashes cream. Runs ahead of React on purpose. */
@@ -43,16 +78,24 @@
     <p style="font-size:13px;line-height:1.7;margin:0;font-family:system-ui,sans-serif">
       This page needs React, Babel and the Supabase client from public CDNs.
       One of them was blocked. Most likely causes: no internet connection, or a
-      managed school or work network blocking <strong>unpkg.com</strong>,
-      <strong>cdn.jsdelivr.net</strong> or <strong>cdn.tailwindcss.com</strong>.
+      managed school or work network blocking <strong>unpkg.com</strong> or
+      <strong>cdn.jsdelivr.net</strong>.
       Try the same URL on your phone over mobile data &mdash; if it works there,
-      the Chromebook network is filtering them.
+      your network is filtering them.
     </p>
+    <p id="boot-version" style="font-size:12px;line-height:1.7;margin:12px 0 0;opacity:.7;font-family:ui-monospace,monospace"></p>
   </div>
 </div>
 <div id="root"></div>
 
 <script>
+  /* The version goes in here rather than in the head script, which runs
+     before this element exists. */
+  (function () {
+    var p = document.getElementById("boot-version");
+    if (p) p.textContent = "JobApp " + window.__VERSION;
+  })();
+
   setTimeout(function () {
     var h = document.getElementById("boot-help");
     if (h && document.getElementById("boot")) h.style.display = "block";
@@ -86,11 +129,14 @@
       node("p", "font-size:18px;font-weight:600;margin:0 0 12px",
         "Something stopped the page loading")
     );
+    /* The version goes inside the copyable block, not beside it: a pasted bug
+       report should carry the build it came from without anyone remembering
+       to mention it. */
     wrap.appendChild(
       node("pre",
         "background:var(--page-lift);border:1px solid var(--page-line);border-radius:8px;" +
         "padding:16px;white-space:pre-wrap;font-size:12px;line-height:1.6;margin:0",
-        String(msg))
+        "JobApp " + (window.__VERSION || "unknown") + "\n\n" + String(msg))
     );
     wrap.appendChild(
       node("p", "font-size:12px;line-height:1.6;margin:16px 0 0;opacity:.85",
@@ -113,6 +159,11 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 const LIB_READY = Boolean(window.supabase && window.supabase.createClient);
+
+/* Set once in the head script, which is the single source. Read rather than
+   redeclared so the two can never disagree. */
+const VERSION = window.__VERSION || "unknown";
+
 const CFG_KEY = "tracker.config";
 
 function loadConfig() {
@@ -315,6 +366,18 @@ update public.applications
          jsonb_build_object('to', status, 'at', activity)
        )
  where stage_history = '[]'::jsonb;`;
+
+/* Every column fromDb reads, named explicitly so that asking for them is
+   itself the schema check. Keep this in step with fromDb: a column read there
+   and absent here would come back undefined on load and look like empty data
+   rather than a mistake. */
+const SELECT_COLUMNS = [
+  "id", "company", "role_title", "location", "status", "replies",
+  "next_steps", "notes", "activity", "sort_order", "deleted",
+  "contact_email", "salary", "equity", "start_date", "benefits_score",
+  "score_salary", "score_growth", "score_culture", "score_location",
+  "stage_history",
+].join(", ");
 
 /* Postgres 42703 / PostgREST PGRST204 both mean "that column is not there". */
 const isMissingColumn = (error) =>
@@ -1139,6 +1202,12 @@ function Shell({ children, right }) {
     <div className="tk-page min-h-screen px-5 py-8 sm:px-8 sm:py-12 lg:px-12">
       <style>{CSS}</style>
       <div className="mx-auto max-w-[1400px]">{children}</div>
+      {/* On every screen, including the ones before sign-in — a problem
+          reported from the setup steps needs a build number just as much as
+          one reported from the table. */}
+      <p className="mx-auto mt-10 max-w-[1400px] tk-mono tk-cap tk-tertiary">
+        JobApp {VERSION}
+      </p>
     </div>
   );
 }
@@ -3139,12 +3208,33 @@ function Tracker({ session }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error } = await sb
+      /* Naming the columns rather than asking for * is what makes an old
+         database announce itself. `select *` succeeds against a table that is
+         missing half of them — it just returns fewer columns — so a project
+         that predates the scoring and offer work used to look completely
+         normal until the first write failed, which could be days later. Asked
+         for by name, Postgres says 42703 immediately, on load.
+
+         The fallback matters as much as the probe: having learnt the table is
+         old, fetch it again with * so the reader still sees every application
+         they have. A migration notice on top of their pipeline is a prompt; a
+         migration notice on top of an empty screen is a broken app. */
+      let { data, error } = await sb
         .from("applications")
-        .select("*")
+        .select(SELECT_COLUMNS)
         .order("sort_order", { ascending: true });
 
       if (cancelled) return;
+
+      if (isMissingColumn(error)) {
+        setNeedsMigration(true);
+        ({ data, error } = await sb
+          .from("applications")
+          .select("*")
+          .order("sort_order", { ascending: true }));
+        if (cancelled) return;
+      }
+
       if (error) {
         report("Loading your applications", error);
         setLoading(false);

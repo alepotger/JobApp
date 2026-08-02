@@ -19,14 +19,17 @@
     Permissions-Policy = "geolocation=(), microphone=(), camera=(), interest-cohort=()"
 
     # 'unsafe-eval' is required: Babel Standalone compiles the JSX in the page
-    # at runtime. 'unsafe-inline' covers the page's own inline scripts and the
-    # styles Tailwind's CDN build injects.
+    # at runtime. 'unsafe-inline' covers the page's own inline scripts and its
+    # inlined stylesheet.
+    #
+    # Tailwind is no longer listed: it is built ahead of time and inlined, so
+    # cdn.tailwindcss.com is not contacted at all.
     #
     # connect-src has to stay open to https/wss because every user points the
     # page at their own Supabase project, and some are on custom domains.
     Content-Security-Policy = """\
       default-src 'self'; \
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; \
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; \
       style-src 'self' 'unsafe-inline'; \
       img-src 'self' data:; \
       font-src 'self' data:; \
@@ -35,8 +38,21 @@
       form-action 'none'; \
       frame-ancestors 'none'"""
 
-# The publishable Supabase key is meant to be public, but the page itself has
-# no reason to be cached hard while people are still setting it up.
+# The HTML must never be served from cache without asking first — a visitor
+# pinned to yesterday's index.html is running yesterday's application, which
+# is the whole failure this project is trying to avoid.
+#
+# Declared for BOTH paths on purpose. Netlify matches these rules against the
+# request path, and nobody types /index.html — they open the bare origin. A
+# rule written only for /index.html may never be consulted for the URL people
+# actually visit. Netlify's own default for HTML happens to be the same value,
+# but a guarantee this important should not rest on somebody else's default.
+[[headers]]
+  for = "/"
+
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 [[headers]]
   for = "/index.html"
 

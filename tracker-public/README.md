@@ -3,6 +3,12 @@
 The deployable application. `index.html` is the whole thing — no build step, no
 bundler, no dependencies to install.
 
+**The hosted page is
+[willowy-platypus-7b589d.netlify.app](https://willowy-platypus-7b589d.netlify.app).**
+Use it rather than deploying a copy: a copy is a snapshot and receives no
+later fix, security ones included. The reasoning is under
+[Why one address](../README.md#why-one-address-instead-of-your-own-copy).
+
 **The documentation lives at the [repository root](../README.md):** what it
 does, the deploy button, getting started, signing in and troubleshooting, and
 the optional email functions. It is kept in one place so the two cannot drift.
@@ -25,6 +31,11 @@ supabase/
 ```
 
 ## Design system
+
+Tailwind is generated ahead of time from this file's own classes and inlined
+into the head, rather than compiled in the browser from a CDN — see
+[Releasing a change](../README.md#versions-and-dependencies) for how to
+regenerate it. Everything below is the layer on top of it.
 
 The presentation layer is token-driven. Colour is authored in **OKLCH**, so a
 ramp stepped in lightness is stepped evenly in *perceived* lightness — which

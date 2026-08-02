@@ -4,17 +4,25 @@ A pipeline tracker for job applications. One page, no build step, synced across
 your devices. **Every user runs it on their own database**, so nobody's data
 passes through anyone else's account.
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/JobApp)
+## 👉 [Open JobApp](https://willowy-platypus-7b589d.netlify.app)
+
+**https://willowy-platypus-7b589d.netlify.app**
 
 ![Stages: To apply, Applied, Replied, Interview, Offer, Closed](https://img.shields.io/badge/stages-6-555)
 ![No build step](https://img.shields.io/badge/build-none-555)
 ![Dark mode](https://img.shields.io/badge/theme-light%20%2F%20dark-555)
 ![MIT](https://img.shields.io/badge/licence-MIT-555)
 
-The button gives you your own copy at your own address in about a minute. Then
-connect it to a free Supabase database and sign in — the page walks you through
-both, and [Getting started](#getting-started) below has the same steps in
-writing.
+That is the whole install. Open it, connect it to a free Supabase database of
+your own, and sign in — the page walks you through both, and
+[Getting started](#getting-started) below has the same steps in writing.
+
+**Nothing you type goes to that address.** It serves one HTML file and has no
+backend, no database and no account. Your applications go straight from your
+browser to the Supabase project you create in step 1, which only you can read.
+Using the same page as everybody else is what means you always have the current
+version, including security fixes — see
+[Why one address](#why-one-address-instead-of-your-own-copy).
 
 ---
 
@@ -98,10 +106,75 @@ script, and point the page at it. That means:
 - The author of this repo cannot see your data and is not responsible for it.
 - No usage limits imposed by anyone else, and nothing to pay.
 
+## Why one address instead of your own copy
+
+Everyone opens the same page. Everyone keeps their own database. Those two
+facts are independent, and it is worth being precise about why.
+
+**One address is the only way updates can reach you.** A copy — forked,
+cloned, drag-and-dropped, however it was made — is a snapshot of the day it
+was made. Nothing merges later commits into it on its own: a GitHub fork sits
+untouched until somebody clicks **Sync fork**, and a clone has no upstream at
+all. Someone running a copy from three months ago is running three-month-old
+code permanently, and would never receive a bug fix or a security fix. There
+is no notification, and no way for them to find out short of checking by hand.
+Shared page, one deploy, everybody current on their next reload.
+
+**It costs you nothing in privacy, because the page is not where your data
+is.** The page is static HTML: no backend, no database, no logs of your
+applications, no account with me. It is delivered to your browser and then
+your browser talks *directly* to your own Supabase project. Two people on the
+same page reach two different databases and cannot see a trace of each other.
+What actually protects the rows is the Row Level Security policy inside your
+project, which rejects anything where `auth.uid()` is not your user — and that
+is enforced by Postgres, in your account, whoever served the HTML.
+
+**The honest trade-off.** Because the page is served from one place, whoever
+controls that place can change what runs in your browser. That is true of
+every hosted web app you use, and it is the price of being able to fix things.
+A frozen copy cannot be tampered with through me — it also cannot be repaired
+through me. If that trade is not one you want to make, host it yourself and
+accept the other side of it, knowingly:
+
+<details>
+<summary><strong>Self-hosting — and the warning that comes with it</strong></summary>
+
+> ### ⚠️ A copy you host will never receive updates
+>
+> Not automatically, not with a prompt, not at all. It will not get bug fixes,
+> and **it will not get security fixes**. You are choosing to become the person
+> responsible for keeping it current, and the only way to do that is to come
+> back here, pull the latest `index.html` and redeploy it yourself. If you are
+> not going to do that, use
+> [the hosted page](https://willowy-platypus-7b589d.netlify.app).
+>
+> Check the version at the bottom of your page against
+> [the hosted one](https://willowy-platypus-7b589d.netlify.app) to see whether
+> you have fallen behind.
+
+`tracker-public/index.html` is the whole application; any static host works.
+
+- **Netlify button:** [deploy a copy](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/JobApp).
+  This copies the repository into *your* GitHub account and builds from your
+  copy — mine is never consulted again.
+- **Netlify, by hand:** drag the `tracker-public` folder onto
+  [app.netlify.com/drop](https://app.netlify.com/drop).
+- **GitHub Pages:** enable Pages on your fork, serve from `/tracker-public`.
+- **Locally:** `cd tracker-public && python3 -m http.server 8000`, then open
+  `http://localhost:8000`. Opening the file directly with `file://` is
+  unreliable — browsers restrict storage on that origin.
+
+Whichever you choose, **use your own address in step 2 instead of mine**, and
+update it in Supabase if you ever rename the site.
+
+</details>
+
 ## Getting started
 
-Four steps, about ten minutes, once. The deployed page walks you through the
-same thing on screen — this is the version you can read first.
+Three steps, about ten minutes, once. There is nothing to install and nothing
+to deploy — you are making yourself a database, not a copy of the app. The page
+walks you through the same thing on screen; this is the version you can read
+first.
 
 > **The rows you see on your first visit are made up.** A brand-new account
 > opens on three invented applications, so the page is not a blank table with
@@ -110,35 +183,7 @@ same thing on screen — this is the version you can read first.
 > click. None of them is anybody's real data — the tracker has no shared
 > backend, so nobody else's applications can ever reach your screen.
 
-### 1. Get your own copy
-
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/JobApp)
-
-Netlify forks this repo to your GitHub account and publishes it. There is no
-build step and nothing to configure — accept the defaults. You end up at an
-address like `https://silly-name-123456.netlify.app`.
-
-**Copy that address. You need it in step 3, and it has to match exactly.**
-
-Renaming the site later (Site configuration → Change site name) or adding a
-custom domain changes the address, and sign-in breaks until you update step 3
-to match. Rename first if you are going to.
-
-<details>
-<summary>Prefer to host it elsewhere?</summary>
-
-`tracker-public/index.html` is the whole application; any static host works.
-
-- **Netlify, by hand:** drag the `tracker-public` folder onto
-  [app.netlify.com/drop](https://app.netlify.com/drop).
-- **GitHub Pages:** enable Pages on your fork, serve from `/tracker-public`.
-- **Locally:** `cd tracker-public && python3 -m http.server 8000`, then open
-  `http://localhost:8000`. Opening the file directly with `file://` is
-  unreliable — browsers restrict storage on that origin.
-
-</details>
-
-### 2. Create the database
+### 1. Create the database
 
 1. Sign up at [supabase.com](https://supabase.com/dashboard) — GitHub or email,
    free, no card — and click **New project**. If it asks you to make an
@@ -156,28 +201,28 @@ to match. Rename first if you are going to.
 result, not an error — it means the table was built and there was nothing to
 print. Running it twice is harmless, so re-run it if you are unsure.
 
-### 3. Tell Supabase where your page lives
+### 2. Tell Supabase where JobApp lives
 
 This is the step that decides whether signing in works, so do it before
 trying to sign in rather than after.
 
-In your Supabase project, go to **Authentication → URL Configuration** and set
-**both** of these to the address from step 1:
+In your Supabase project, go to **Authentication → URL Configuration** and put
+**this exact address** in both fields:
 
 | Field | Value |
 |---|---|
-| **Site URL** | `https://your-site.netlify.app` |
-| **Redirect URLs** | `https://your-site.netlify.app` |
+| **Site URL** | `https://willowy-platypus-7b589d.netlify.app` |
+| **Redirect URLs** | `https://willowy-platypus-7b589d.netlify.app` |
 
 Include the `https://` and leave off any trailing slash. **Supabase compares
-the whole thing, character for character** — if the address here does not match
-your page exactly, it refuses to send you back and the sign-in link fails. The
-**Site URL** box usually starts out saying `http://localhost:3000`; replace it.
+the whole thing, character for character** — if it does not match, Supabase
+refuses to send you back and the sign-in link fails. The **Site URL** box
+usually starts out saying `http://localhost:3000`; replace it.
 
-### 4. Connect and sign in
+### 3. Connect and sign in
 
-Open your page. It asks for two values, both from
-**Project Settings → API Keys** in Supabase:
+Open [JobApp](https://willowy-platypus-7b589d.netlify.app). It asks for two
+values, both from **Project Settings → API Keys** in Supabase:
 
 - **Project URL** — looks like `https://abcdefgh.supabase.co`
 - **Publishable key** (or the legacy **anon** key) — starts `sb_publishable_…`
@@ -217,22 +262,30 @@ everywhere, syncing in about a second.
 
 | What you see | What it means |
 |---|---|
-| *"requested path is invalid"*, or the link lands on a Supabase error page | Step 3 does not match your page's address. Check for a missing `https://`, a trailing slash, or a site you renamed after setting it. |
+| *"requested path is invalid"*, or the link lands on a Supabase error page | Step 2 does not match. Check for a missing `https://` or a trailing slash — it has to be the address character for character. |
 | The link says **expired** or **invalid** the first time you click it | Some mail providers open links while scanning them, which spends the single use. Send another and use the six-digit code. |
 | No email at all | Check spam. The built-in mail service allows only a handful of messages an hour — wait a few minutes, or connect your own SMTP under **Authentication → Emails**. |
 | The email arrives with no six-digit code | The default template only contains the link. Add `{{ .Token }}` as shown above. |
 | *"Database error"* once you are signed in | The setup SQL did not finish. Re-run all of `tracker-public/supabase/setup.sql`. |
 
 The page recognises most of these and shows the fix on screen, including the
-exact address to paste into step 3.
+exact address to paste into step 2.
 
 ### Upgrading an existing database
 
-`setup.sql` is idempotent and also upgrades an older table, so re-running it is
-the simplest path. If you would rather apply only the delta, run
-[`001-offer-scoring.sql`](tracker-public/supabase/migrations/001-offer-scoring.sql),
-which adds the scoring, offer and stage-history columns. Either way the page
-detects a database missing those columns and offers you the script on screen.
+**You do not have to watch for this.** The page checks your table's shape on
+every load — it asks for the columns it needs by name, so an older database
+says so immediately rather than looking fine until a save fails days later. If
+anything is missing you get a notice with the exact SQL and a **Copy SQL**
+button, on top of your pipeline, which stays readable and editable meanwhile.
+
+If you would rather do it by hand: `setup.sql` is idempotent and also upgrades
+an older table, so re-running all of it is the simplest path. The delta on its
+own is
+[`001-offer-scoring.sql`](tracker-public/supabase/migrations/001-offer-scoring.sql).
+Both end in exactly the same schema, and both are safe to run twice — every
+statement is `if not exists`, nothing is dropped and no row is rewritten
+except to backfill stage history.
 
 Stage history starts empty for rows that predate it. The migration anchors each
 one at its current stage rather than inventing the earlier dates, so the "mean
@@ -257,21 +310,76 @@ tracker-public/
       _shared/                      matching, digest text, signature checks
 ```
 
+## Versions and dependencies
+
+**The version is at the bottom of every screen**, including the setup steps —
+`JobApp 2026.08.02`. Quote it in any bug report. On
+[the hosted page](https://willowy-platypus-7b589d.netlify.app) it is always the
+current one; on a copy you host it is however old your copy is.
+
+Three scripts load from public CDNs, each **pinned to an exact version** and
+carrying a **Subresource Integrity hash**, so neither the CDN nor a new package
+release can change what runs in your browser — the browser refuses to execute a
+file whose hash does not match:
+
+| Dependency | Version | Served from |
+|---|---|---|
+| React | 18.3.1 | unpkg |
+| React DOM | 18.3.1 | unpkg |
+| Babel Standalone | 7.29.8 | unpkg |
+| Supabase JS | 2.111.0 | jsDelivr |
+
+Tailwind is **not** fetched. It used to come from an unversioned CDN URL that
+compiled the styles in the browser, which meant a third party could restyle the
+page for everyone without warning. It is now built ahead of time from this
+file's own classes and inlined, so the page also survives a network that blocks
+CDNs better than it used to.
+
+An internet connection is still required for the three above. On a managed
+school or work network they are sometimes blocked; the page says so explicitly
+rather than showing a blank screen.
+
+<details>
+<summary>Releasing a change (maintainer)</summary>
+
+1. Bump `window.__VERSION` — the first script in `tracker-public/index.html`.
+2. If any Tailwind class was added or removed, regenerate the inlined
+   stylesheet, or the new class will silently do nothing:
+
+   ```
+   npx tailwindcss@3.4.18 -c tailwind.config.js -i input.css -o out.css --minify
+   ```
+
+   with `content: ["tracker-public/index.html"]` and the three `@tailwind`
+   directives as input, then paste the result into the `<style>` block in the
+   head.
+3. To change a pinned dependency, update the version **and** its `integrity`
+   hash together. The hash is sha384 over the file inside that version's npm
+   tarball, which is what the CDN serves:
+
+   ```
+   npm pack react@18.3.1
+   tar -xzf react-18.3.1.tgz
+   openssl dgst -sha384 -binary package/umd/react.production.min.js | openssl base64 -A
+   ```
+
+   A version bumped without its hash means a blank page for everyone: the
+   browser will refuse to run a file that does not match.
+4. Push. Netlify redeploys, and every visitor has it on their next load.
+
+</details>
+
 ## Hosting
 
 `tracker-public/index.html` is the whole application — there is no build step,
-so any static host works. The deploy button uses [`netlify.toml`](netlify.toml)
-at the repository root, which publishes the `tracker-public` folder and sets the
-security headers. Other hosts are covered under [step 1](#1-get-your-own-copy).
+so any static host works. [`netlify.toml`](netlify.toml) at the repository root
+publishes the `tracker-public` folder, sets the security headers, and marks the
+HTML `must-revalidate` so a returning visitor is never served a stale page.
 
-React, Tailwind and the Supabase client load from public CDNs, so an internet
-connection is required. On a managed school or work network those hosts are
-sometimes blocked; the page says so explicitly rather than showing a blank
-screen.
-
-Whenever you change the address the page is served from — a renamed Netlify
-site, a custom domain — update **Site URL** and **Redirect URLs** in Supabase to
-match, or sign-in stops working.
+If you host your own copy, read
+[the warning first](#why-one-address-instead-of-your-own-copy) — and whenever
+you change the address it is served from, update **Site URL** and **Redirect
+URLs** in Supabase to match, or sign-in stops working.
 
 ## On security
 
