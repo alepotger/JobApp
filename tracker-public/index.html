@@ -1150,6 +1150,40 @@ function Dropdown({ label, value, items, onPick, on }) {
   );
 }
 
+/* A single place to take back the actions that are otherwise awkward to
+   reverse: advancing a stage, deleting a row, clearing a scorecard. Anchored
+   to the bottom of the viewport so it never shifts the table under the cursor
+   of someone mid-click. */
+function UndoBar({ undo, onRun, onDismiss }) {
+  if (!undo) return null;
+  return (
+    <div className="tk-noprint fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
+      <div
+        className="tk-card flex items-center gap-3 rounded-lg px-3 py-2"
+        style={{ boxShadow: "0 12px 32px var(--shadow)" }}
+        role="status"
+      >
+        <span className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+          {undo.label}
+        </span>
+        <button
+          onClick={onRun}
+          className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        >
+          Undo
+        </button>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="tk-focus rounded px-1 leading-5 tk-tertiary"
+        >
+          &times;
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SyncChip({ status }) {
   const map = {
     live: { label: "Live", bg: "transparent", cls: "tk-secondary" },
@@ -1461,6 +1495,22 @@ function StageRail({ rows, filter, setFilter }) {
         })}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
+        {/* "All" is the way back. Clicking the active stage again also clears
+            the filter, but nothing on screen advertises that, so it cannot be
+            the only route out. */}
+        <button
+          onClick={() => setFilter(null)}
+          aria-pressed={filter === null}
+          className="tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+          style={{
+            background: filter === null ? "var(--active)" : "transparent",
+            border: `1px solid ${filter === null ? "var(--accent)" : "var(--line)"}`,
+          }}
+        >
+          All
+          <span className={filter === null ? "" : "tk-secondary"}>{rows.length}</span>
+        </button>
+
         {STAGES.map((s) => {
           const n = rows.filter((r) => r.status === s.key).length;
           const active = filter === s.key;
@@ -1468,6 +1518,8 @@ function StageRail({ rows, filter, setFilter }) {
             <button
               key={s.key}
               onClick={() => setFilter(active ? null : s.key)}
+              aria-pressed={active}
+              title={active ? `Showing ${s.label} only — click to show all` : `Show only ${s.label}`}
               className={`tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
                 active ? "" : "tk-secondary"
               }`}
@@ -1630,7 +1682,7 @@ function DateField({ label, value, onChange }) {
 
 /* Scores are always editable — you form a view on a company long before it
    makes an offer. The offer fields are the part that unlocks. */
-function DetailPanel({ row, onEdit }) {
+function DetailPanel({ row, onEdit, onClearScores }) {
   const mean = aggregate(row);
   const atOffer = row.status === "offer";
 
@@ -1644,7 +1696,7 @@ function DetailPanel({ row, onEdit }) {
             {mean != null && <span className="tk-tertiary">/ 5</span>}
             {mean != null && (
               <button
-                onClick={() => SCORES.forEach((s) => onEdit(row.id, s.field, 0))}
+                onClick={() => onClearScores(row.id)}
                 title="Clear every facet rating for this company"
                 className="tk-focus rounded font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
               >
@@ -1915,6 +1967,8 @@ function ViewBar({
   setSort,
   minScore,
   setMinScore,
+  dirty,
+  onReset,
 }) {
   const fields = [{ key: "", label: "None" }].concat(
     GROUPS.map((g) => ({ key: g.key, label: g.label }))
@@ -1962,17 +2016,15 @@ function ViewBar({
         onPick={setMinScore}
       />
 
-      {(groupBy || sort || minScore) && (
+      {/* One control that undoes every narrowing on screen, including the
+          stage filter set from the rail above. */}
+      {dirty && (
         <button
-          onClick={() => {
-            setGroupBy(null);
-            setGroupValue(null);
-            setSort("");
-            setMinScore("");
-          }}
+          onClick={onReset}
+          title="Show every application again"
           className="tk-focus rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
         >
-          Clear
+          Reset view
         </button>
       )}
     </div>
@@ -2166,7 +2218,7 @@ function ScoreCell({ row, open, onToggle, cell }) {
   );
 }
 
-function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance }) {
+function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearScores }) {
   const mean = aggregate(row);
   return (
     <div className="tk-card rounded-lg p-4">
@@ -2241,7 +2293,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance }) {
 
       {open && (
         <div className="mt-3">
-          <DetailPanel row={row} onEdit={onEdit} />
+          <DetailPanel row={row} onEdit={onEdit} onClearScores={onClearScores} />
         </div>
       )}
     </div>
@@ -2283,6 +2335,28 @@ function Tracker({ session }) {
   };
 
   const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id));
+
+  const [undo, setUndo] = useState(null);
+  const undoTimer = useRef(null);
+
+  const offerUndo = useCallback((label, run) => {
+    clearTimeout(undoTimer.current);
+    setUndo({ label, run });
+    undoTimer.current = setTimeout(() => setUndo(null), 12000);
+  }, []);
+
+  useEffect(() => () => clearTimeout(undoTimer.current), []);
+
+  /* Everything that can narrow what is on screen, and the one call that puts
+     all of it back. Anything added here must also be cleared here. */
+  const dirty = Boolean(filter || groupBy || groupValue || sort || minScore);
+  const resetView = () => {
+    setFilter(null);
+    setGroupBy(null);
+    setGroupValue(null);
+    setSort("");
+    setMinScore("");
+  };
 
   const mark = useCallback((delta) => {
     pending.current = Math.max(0, pending.current + delta);
@@ -2375,14 +2449,18 @@ function Tracker({ session }) {
   }, [merge]);
 
   /* writes */
-  const patch = async (id, columns, local) => {
+  /* Editing a row is what resets its chase clock. An undo is not an edit — it
+     puts the row back as it was, timer included, or a mistaken click would
+     quietly hide that something has been stale for nine days. */
+  const patch = async (id, columns, local, activityAt) => {
+    const when = activityAt || Date.now();
     setAll((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...local, activity: Date.now() } : r))
+      prev.map((r) => (r.id === id ? { ...r, ...local, activity: when } : r))
     );
     mark(1);
     const { error } = await sb
       .from("applications")
-      .update({ ...columns, activity: new Date().toISOString() })
+      .update({ ...columns, activity: new Date(when).toISOString() })
       .eq("id", id);
     report("Saving that change", error);
     mark(-1);
@@ -2397,6 +2475,7 @@ function Tracker({ session }) {
   const onAdvance = (id) => {
     const row = all.find((r) => r.id === id);
     if (!row) return;
+    const was = { status: row.status, history: row.history, activity: row.activity };
     const status = advance(row.status);
     /* Moves are appended so durations can be measured rather than inferred.
        Wrapping past Closed back to "To apply" starts the journey again, so the
@@ -2405,6 +2484,39 @@ function Tracker({ session }) {
     const trail = status === "to-apply" ? [] : row.history;
     const history = [...trail, { to: status, at: new Date().toISOString() }].slice(-200);
     patch(id, { status, stage_history: history }, { status, history });
+
+    /* Without this, stepping back means clicking round the whole pipeline —
+       and wrapping past Closed would discard the row's recorded timings. */
+    offerUndo(
+      `${row.company || "Application"} → ${stageOf(status).label}`,
+      () =>
+        patch(
+          id,
+          { status: was.status, stage_history: was.history },
+          { status: was.status, history: was.history },
+          was.activity
+        )
+    );
+  };
+
+  const clearScores = (id) => {
+    const row = all.find((r) => r.id === id);
+    if (!row) return;
+    const was = {};
+    const columns = {};
+    const local = {};
+    const clock = row.activity;
+    SCORES.forEach((s) => {
+      was[s.field] = row[s.field];
+      columns[FIELD_TO_COLUMN[s.field]] = 0;
+      local[s.field] = 0;
+    });
+    patch(id, columns, local);
+    offerUndo(`Cleared ${row.company || "company"} scores`, () => {
+      const restore = {};
+      SCORES.forEach((s) => (restore[FIELD_TO_COLUMN[s.field]] = was[s.field]));
+      patch(id, restore, was, clock);
+    });
   };
 
   const addRow = async () => {
@@ -2426,9 +2538,12 @@ function Tracker({ session }) {
     if (!report("Adding an application", error)) {
       if (data && data[0]) {
         merge(data[0]);
-        // A stage filter or a picked category would hide a brand-new row.
+        /* A brand-new row is blank and unrated, so every narrowing filter
+           would hide it — the row would be created and the screen would not
+           change, which reads as the button being broken. */
         setFilter(null);
         setGroupValue(null);
+        setMinScore("");
       } else {
         setOpError(
           "The row was created but could not be read back.\n\n" +
@@ -2440,8 +2555,18 @@ function Tracker({ session }) {
     mark(-1);
   };
 
-  const setDeleted = (id, deleted) =>
-    patch(id, { deleted }, { deleted });
+  const setDeleted = (id, deleted) => patch(id, { deleted }, { deleted });
+
+  /* Deleted rows land in a panel at the very bottom of the page, which is
+     easy to miss on a long pipeline. */
+  const removeRow = (id) => {
+    const row = all.find((r) => r.id === id);
+    const clock = row ? row.activity : undefined;
+    setDeleted(id, true);
+    offerUndo(`Deleted ${row && row.company ? row.company : "application"}`, () =>
+      patch(id, { deleted: false }, { deleted: false }, clock)
+    );
+  };
 
   const purge = async (id) => {
     if (!window.confirm("Delete this application permanently? This cannot be undone.")) return;
@@ -2493,6 +2618,14 @@ function Tracker({ session }) {
      group and enters the next without a dead key press. */
   const rowIndex = new Map();
   sections.forEach((s) => s.items.forEach((r) => rowIndex.set(r.id, rowIndex.size)));
+
+  /* Named so an empty table can explain itself. */
+  const hiding = [];
+  if (filter) hiding.push(`stage: ${stageOf(filter).label}`);
+  if (minScore) hiding.push(`rated ${minScore}+`);
+  if (groupBy && picked) {
+    hiding.push(`${GROUPS.find((g) => g.key === groupBy).label}: ${picked.label}`);
+  }
 
   const grid = useRef(null);
 
@@ -2574,7 +2707,14 @@ function Tracker({ session }) {
           </button>
           <ThemeToggle />
           <button
-            onClick={() => sb.auth.signOut()}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Sign out on this device? Your applications stay in your Supabase project, and signing back in needs another email."
+                )
+              )
+                sb.auth.signOut();
+            }}
             className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
           >
             Sign out
@@ -2648,6 +2788,8 @@ function Tracker({ session }) {
           setSort={setSort}
           minScore={minScore}
           setMinScore={setMinScore}
+          dirty={dirty}
+          onReset={resetView}
         />
       </div>
 
@@ -2678,13 +2820,13 @@ function Tracker({ session }) {
                       open={expanded === row.id}
                       onToggle={toggleExpanded}
                       onEdit={editField}
-                      onDelete={(id) => setDeleted(id, true)}
+                      onDelete={removeRow}
                       onAdvance={onAdvance}
                     />
                     {expanded === row.id && (
                       <tr className="tk-detail">
                         <td colSpan={8} className="p-4">
-                          <DetailPanel row={row} onEdit={editField} />
+                          <DetailPanel row={row} onEdit={editField} onClearScores={clearScores} />
                         </td>
                       </tr>
                     )}
@@ -2708,7 +2850,8 @@ function Tracker({ session }) {
                 open={expanded === row.id}
                 onToggle={toggleExpanded}
                 onEdit={editField}
-                onDelete={(id) => setDeleted(id, true)}
+                onClearScores={clearScores}
+                onDelete={removeRow}
                 onAdvance={onAdvance}
               />
             ))}
@@ -2718,15 +2861,39 @@ function Tracker({ session }) {
 
       {visibleCount === 0 && (
         <div className="tk-dash rounded-lg p-10 text-center">
-          <p className="tk-secondary">
-            {filter ? "No applications at this stage." : "No applications yet."}
-          </p>
-          <button
-            onClick={() => (filter ? setFilter(null) : addRow())}
-            className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
-          >
-            {filter ? "Show all" : "Add the first one"}
-          </button>
+          {rows.length === 0 ? (
+            <>
+              <p className="tk-secondary">No applications yet.</p>
+              <button
+                onClick={addRow}
+                className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
+              >
+                Add the first one
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Say which narrowing is responsible, rather than implying the
+                  pipeline is empty when it is not. */}
+              <p className="tk-secondary">
+                No applications match this view.
+                {hiding.length > 0 && (
+                  <>
+                    {" "}
+                    <span className="font-mono text-[11px] uppercase tracking-wider tk-tertiary">
+                      {hiding.join(" · ")}
+                    </span>
+                  </>
+                )}
+              </p>
+              <button
+                onClick={resetView}
+                className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
+              >
+                Show all {rows.length} applications
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -2794,6 +2961,14 @@ function Tracker({ session }) {
           ))}
         </ul>
       </div>
+      <UndoBar
+        undo={undo}
+        onRun={() => {
+          undo.run();
+          setUndo(null);
+        }}
+        onDismiss={() => setUndo(null)}
+      />
     </Shell>
   );
 }

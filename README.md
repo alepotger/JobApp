@@ -70,6 +70,12 @@ writing.
 - **Export to PDF.** *Share / Export* opens the print dialogue against a print
   stylesheet: controls, delete buttons and the sync chip drop away, the palette
   forces back to light even in dark mode, and rows avoid splitting across pages.
+- **Nothing is a dead end.** Every narrowing control has a visible way out —
+  an **All** chip on the stage rail, **Reset view** whenever anything is
+  filtered, and an empty table that names what is hiding rows rather than
+  implying you have none. Advancing a stage, deleting a row and clearing a
+  scorecard all offer an **Undo**, which restores the row exactly as it was,
+  including its chase timer and recorded stage history.
 - **Soft delete.** Deleted rows move to a Recently deleted panel and restore to
   their original position. Permanent deletion is a separate, confirmed action.
 - **Live sync.** Changes appear on your other signed-in devices in about a
