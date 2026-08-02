@@ -23,9 +23,11 @@ writing.
 - **Six-stage pipeline.** Click a status to advance it: To apply → Applied →
   Replied → Interview → Offer → Closed. The bar at the top shows the shape of
   your funnel and doubles as a filter.
-- **Chase timer.** Every live row tracks days since you last touched it. Seven
-  days flags amber, fourteen flags red. Editing anything resets that row's
-  clock — so the tracker measures follow-up, not submission count.
+- **Chase count.** The header counts anything live you have not touched for
+  seven days as awaiting chase, and editing a row resets its clock — so the
+  tracker measures follow-up, not submission count. There is deliberately no
+  per-row day counter: it read as "applied N days ago" when it actually
+  measured last edit, so it went out rather than mislead.
 - **Inline editing.** Company, role, location, replies and notes are all
   click-to-edit. An empty cell opens an empty box; a cell with text in it opens
   with the caret already at the end, so you carry on where you left off.

@@ -855,6 +855,18 @@ const CSS = `
 .tk-tertiary  { color:var(--ink-3); }
 .tk-mono { font-family:var(--font-mono); letter-spacing:var(--tr-normal); }
 
+/* Radius utilities, so no element falls back to a framework default that
+   sits off the scale. */
+.tk-r1 { border-radius:var(--r-1); }
+.tk-r2 { border-radius:var(--r-2); }
+.tk-r3 { border-radius:var(--r-3); }
+.tk-r4 { border-radius:var(--r-4); }
+.tk-rfull { border-radius:999px; }
+/* Disclosure marks: on the scale, and they rotate rather than swap glyph. */
+.tk-glyph { font-size:var(--t-2xs); line-height:var(--lh-none); display:inline-block;
+            transition:transform var(--d-2) var(--ease); }
+.tk-glyph[data-open="true"] { transform:rotate(90deg); }
+
 /* ------------------------------- surfaces -------------------------------- */
 .tk-surface { background:var(--surface); }
 .tk-card {
@@ -1001,10 +1013,26 @@ const CSS = `
 .tk-score:hover { border-color:var(--accent); transform:scale(1.12); }
 
 /* --------------------------------- funnel -------------------------------- */
-.tk-track { background:var(--line-soft); border-radius:var(--r-full,999px); }
+/* The funnel reads as a flow, not four unrelated progress bars: each step is
+   a thin mark on a near-invisible track, and the interval annotations hang
+   off a connector rule that runs between them. Tufte's data-ink argument —
+   the heavy track was mostly non-data. */
+.tk-track { background:var(--line-soft); border-radius:999px; height:6px; }
 .tk-bar {
-  height:10px; border-radius:var(--r-full,999px);
-  transition:width var(--d-3) var(--ease);
+  height:6px; border-radius:999px;
+  transition:width var(--d-3) var(--ease), background-color var(--d-2) var(--ease);
+}
+.tk-step { transition:background-color var(--d-1) var(--ease); border-radius:var(--r-2); }
+.tk-step:hover { background:var(--hover); }
+/* The connector: a hairline dropping from one step to the next, with the
+   interval printed beside it. */
+.tk-interval {
+  position:relative; margin-left:var(--s-5);
+  padding:var(--s-1) 0 var(--s-1) var(--s-4);
+}
+.tk-interval::before {
+  content:""; position:absolute; left:0; top:0; bottom:0;
+  border-left:1px solid var(--line);
 }
 .tk-stat { }
 
@@ -1060,7 +1088,7 @@ function CopyValue({ value }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <code className="tk-code break-all rounded p-2 tk-mono tk-cap">{value}</code>
+      <code className="tk-code break-all tk-r2 p-2 tk-mono tk-cap">{value}</code>
       <button
         onClick={async () => {
           try {
@@ -1071,7 +1099,7 @@ function CopyValue({ value }) {
             /* Clipboard blocked. The value is on screen either way. */
           }
         }}
-        className="tk-btn tk-focus shrink-0 rounded px-3 py-1 tk-micro transition-colors"
+        className="tk-btn tk-focus shrink-0 tk-r2 px-3 py-1 tk-micro transition-colors"
       >
         {copied ? "Copied" : "Copy"}
       </button>
@@ -1130,7 +1158,7 @@ function ConnectForm({ onSave }) {
         <h1 className="tk-display">
           Application tracker
         </h1>
-        <p className="mt-3 text-sm leading-relaxed tk-secondary">
+        <p className="mt-3 tk-body leading-relaxed tk-secondary">
           A pipeline tracker for job applications, synced across your devices. It runs
           on your own free Supabase database, so your data stays in an account you
           control. Setup takes about ten minutes, once.
@@ -1141,7 +1169,7 @@ function ConnectForm({ onSave }) {
             <p className="tk-micro tk-secondary">
               Step 1
             </p>
-            <p className="mt-1 text-sm leading-relaxed">
+            <p className="mt-1 tk-body leading-relaxed">
               Create a free project at{" "}
               <a
                 href="https://supabase.com/dashboard"
@@ -1159,7 +1187,7 @@ function ConnectForm({ onSave }) {
             <p className="tk-micro tk-secondary">
               Step 2
             </p>
-            <p className="mt-1 text-sm leading-relaxed">
+            <p className="mt-1 tk-body leading-relaxed">
               In your project, open <strong>SQL Editor</strong>, click{" "}
               <strong>New query</strong>, paste the script below and click{" "}
               <strong>Run</strong>. It creates one table and locks it to your account.
@@ -1168,19 +1196,19 @@ function ConnectForm({ onSave }) {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={copySql}
-                className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+                className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
               >
                 {copied ? "Copied" : "Copy SQL"}
               </button>
               <button
                 onClick={() => setShowSql((v) => !v)}
-                className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+                className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
               >
                 {showSql ? "Hide" : "Show"} SQL
               </button>
             </div>
             {showSql && (
-              <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 tk-mono tk-cap leading-relaxed">
+              <pre className="tk-code mt-3 max-h-72 overflow-auto tk-r3 p-3 tk-mono tk-cap leading-relaxed">
                 {SETUP_SQL}
               </pre>
             )}
@@ -1190,7 +1218,7 @@ function ConnectForm({ onSave }) {
             <p className="tk-micro tk-secondary">
               Step 3
             </p>
-            <p className="mt-1 text-sm leading-relaxed">
+            <p className="mt-1 tk-body leading-relaxed">
               Under <strong>Authentication &rarr; URL Configuration</strong>, set{" "}
               <strong>Site URL</strong> to this page&rsquo;s address and add it to{" "}
               <strong>Redirect URLs</strong> as well. Include the{" "}
@@ -1203,7 +1231,7 @@ function ConnectForm({ onSave }) {
             <p className="tk-micro tk-secondary">
               Step 4
             </p>
-            <p className="mt-1 text-sm leading-relaxed">
+            <p className="mt-1 tk-body leading-relaxed">
               Copy both values from <strong>Project Settings &rarr; API Keys</strong>{" "}
               and paste them here.
             </p>
@@ -1215,7 +1243,7 @@ function ConnectForm({ onSave }) {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://abcdefgh.supabase.co"
-              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 tk-mono tk-body"
+              className="tk-input tk-focus mt-1 w-full tk-r2 px-3 py-2 tk-mono tk-body"
             />
 
             <label className="mt-4 block tk-micro tk-secondary">
@@ -1225,12 +1253,12 @@ function ConnectForm({ onSave }) {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="sb_publishable_… or eyJhbGciOi…"
-              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 tk-mono tk-body"
+              className="tk-input tk-focus mt-1 w-full tk-r2 px-3 py-2 tk-mono tk-body"
             />
 
             {error && (
               <p
-                className="mt-3 rounded px-2 py-1 tk-micro"
+                className="mt-3 tk-r2 px-2 py-1 tk-micro"
                 style={{ background: "var(--cold)" }}
               >
                 {error}
@@ -1239,7 +1267,7 @@ function ConnectForm({ onSave }) {
 
             <button
               onClick={submit}
-              className="tk-btn tk-focus mt-4 rounded px-4 py-2 tk-micro transition-colors"
+              className="tk-btn tk-focus mt-4 tk-r2 px-4 py-2 tk-micro transition-colors"
             >
               Connect
             </button>
@@ -1306,7 +1334,7 @@ function SignIn({ cfgUrl, onReset }) {
 
         {state === "sent" || state === "verifying" ? (
           <>
-            <p className="mt-4 text-sm leading-relaxed">
+            <p className="mt-4 tk-body leading-relaxed">
               Check <strong>{email}</strong>. Click the link in the email, or type the
               six-digit code below if the link fails.
             </p>
@@ -1322,12 +1350,12 @@ function SignIn({ cfgUrl, onReset }) {
                 placeholder="123456"
                 onChange={(e) => setCode(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && verify()}
-                className="tk-input tk-focus w-full rounded px-3 py-2 tk-mono tk-body tracking-widest"
+                className="tk-input tk-focus w-full tk-r2 px-3 py-2 tk-mono tk-body tracking-widest"
               />
               <button
                 onClick={verify}
                 disabled={state === "verifying"}
-                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 tk-micro transition-colors"
+                className="tk-btn tk-focus shrink-0 tk-r2 px-4 py-2 tk-micro transition-colors"
               >
                 {state === "verifying" ? "Checking" : "Verify"}
               </button>
@@ -1339,14 +1367,14 @@ function SignIn({ cfgUrl, onReset }) {
                 setCode("");
                 setError("");
               }}
-              className="tk-focus mt-4 rounded tk-micro underline tk-secondary"
+              className="tk-focus mt-4 tk-r2 tk-micro underline tk-secondary"
             >
               Send another
             </button>
           </>
         ) : (
           <>
-            <p className="mt-3 text-sm leading-relaxed tk-secondary">
+            <p className="mt-3 tk-body leading-relaxed tk-secondary">
               Sign in with the same address on your laptop and your phone to see one
               pipeline on both.
             </p>
@@ -1358,12 +1386,12 @@ function SignIn({ cfgUrl, onReset }) {
                 placeholder="you@example.com"
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
-                className="tk-input tk-focus w-full rounded px-3 py-2 text-sm"
+                className="tk-input tk-focus w-full tk-r2 px-3 py-2 tk-body"
               />
               <button
                 onClick={send}
                 disabled={state === "sending"}
-                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 tk-micro transition-colors"
+                className="tk-btn tk-focus shrink-0 tk-r2 px-4 py-2 tk-micro transition-colors"
               >
                 {state === "sending" ? "Sending" : "Send link"}
               </button>
@@ -1374,14 +1402,14 @@ function SignIn({ cfgUrl, onReset }) {
         {error && (
           <>
             <p
-              className="mt-3 rounded px-2 py-1 tk-micro"
+              className="mt-3 tk-r2 px-2 py-1 tk-micro"
               style={{ background: "var(--cold)" }}
             >
               {error}
             </p>
             {/redirect|not allowed|requested path/i.test(error) && (
               <>
-                <p className="mt-3 text-sm leading-relaxed">
+                <p className="mt-3 tk-body leading-relaxed">
                   Supabase will only send people back to an address it has been
                   told about. Open <strong>Authentication &rarr; URL
                   Configuration</strong> and put this exact address in both{" "}
@@ -1391,13 +1419,13 @@ function SignIn({ cfgUrl, onReset }) {
               </>
             )}
             {/expired|invalid/i.test(error) && (
-              <p className="mt-3 text-sm leading-relaxed">
+              <p className="mt-3 tk-body leading-relaxed">
                 Links are single use, and mail providers sometimes open them while
                 scanning. Send another and use the six-digit code instead.
               </p>
             )}
             {/rate|limit|too many/i.test(error) && (
-              <p className="mt-3 text-sm leading-relaxed">
+              <p className="mt-3 tk-body leading-relaxed">
                 The built-in mail service allows only a handful of messages an
                 hour. Wait a few minutes, or connect your own SMTP under{" "}
                 <strong>Authentication &rarr; Emails</strong>.
@@ -1415,7 +1443,7 @@ function SignIn({ cfgUrl, onReset }) {
         </p>
         <button
           onClick={onReset}
-          className="tk-btn tk-focus mt-3 rounded px-3 py-1 tk-micro transition-colors"
+          className="tk-btn tk-focus mt-3 tk-r2 px-3 py-1 tk-micro transition-colors"
         >
           Change connection details
         </button>
@@ -1437,7 +1465,7 @@ function ThemeToggle() {
       }}
       title={`Switch to ${next} mode`}
       aria-label={`Switch to ${next} mode`}
-      className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
+      className="tk-btn tk-focus tk-r2 px-3 py-2 tk-micro transition-colors"
     >
       {theme === "dark" ? "☀ Light" : "☾ Dark"}
     </button>
@@ -1515,7 +1543,7 @@ function Dropdown({ label, value, items, onPick, on }) {
             show();
           }
         }}
-        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-2 tk-micro transition-colors ${
+        className={`tk-trigger tk-focus flex items-center gap-2 tk-r2 px-3 py-2 tk-micro transition-colors ${
           on ? "tk-trigger-on" : ""
         }`}
       >
@@ -1548,7 +1576,7 @@ function Dropdown({ label, value, items, onPick, on }) {
                 onPick(item.key);
                 hide(true);
               }}
-              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-3 py-2 text-left tk-micro transition-colors"
+              className="tk-menu-item flex w-full items-center justify-between gap-4 tk-r2 px-3 py-2 text-left tk-micro transition-colors"
             >
               <span className="truncate">{item.label}</span>
               {item.count != null && (
@@ -1580,14 +1608,14 @@ function UndoBar({ undo, onRun, onDismiss }) {
         </span>
         <button
           onClick={onRun}
-          className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+          className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
         >
           Undo
         </button>
         <button
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="tk-focus rounded px-1 leading-5 tk-tertiary"
+          className="tk-focus tk-r2 px-1 leading-5 tk-tertiary"
         >
           &times;
         </button>
@@ -1605,7 +1633,7 @@ function SyncChip({ status }) {
   const s = map[status] || map.offline;
   return (
     <span
-      className={`tk-noprint rounded px-2 py-1 tk-micro ${s.cls}`}
+      className={`tk-noprint tk-r2 px-2 py-1 tk-micro ${s.cls}`}
       style={{ background: s.bg }}
     >
       {s.label}
@@ -1613,46 +1641,19 @@ function SyncChip({ status }) {
   );
 }
 
-function AgeChip({ row }) {
-  if (!LIVE.includes(row.status)) return null;
-  const d = daysSince(row.activity);
-  let bg = "transparent";
-  let label = d === 0 ? "today" : `d+${d}`;
-  let cls = "tk-secondary";
-  if (d >= 14) {
-    bg = "var(--cold)";
-    label = `d+${d} · cold`;
-    cls = "";
-  } else if (d >= 7) {
-    bg = "var(--warn)";
-    label = `d+${d} · chase`;
-    cls = "";
-  }
-  return (
-    <span
-      className={`tk-data mt-2 inline-block rounded px-2 py-1 text-[.6875rem] font-semibold uppercase ${cls}`}
-      style={{ background: bg }}
-    >
-      {label}
-    </span>
-  );
-}
 
 function StatusCell({ row, onAdvance, cell }) {
   const s = stageOf(row.status);
   return (
-    <div>
-      <button
+    <button
         onClick={() => onAdvance(row.id)}
         title="Advance stage (Enter)"
         {...cell}
-        className="tk-pill tk-focus w-full rounded px-3 py-2 tk-micro transition-all"
+        className="tk-pill tk-focus w-full tk-r2 px-3 py-2 tk-micro transition-all"
         style={{ background: s.fill, border: `1px solid ${s.line}` }}
       >
-        {s.label}
-      </button>
-      <AgeChip row={row} />
-    </div>
+      {s.label}
+    </button>
   );
 }
 
@@ -1708,7 +1709,7 @@ function EditableCell({ value, placeholder, onChange, cell }) {
           if (e.key === "Escape") close(false, true);
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) close(true, true);
         }}
-        className="tk-edit w-full resize-y rounded p-2 text-sm leading-snug focus:outline-none"
+        className="tk-edit w-full resize-y tk-r2 p-2 tk-body leading-snug focus:outline-none"
       />
     );
   }
@@ -1718,7 +1719,7 @@ function EditableCell({ value, placeholder, onChange, cell }) {
       ref={btn}
       onClick={open}
       {...cell}
-      className="tk-cell tk-focus w-full rounded p-2 text-left text-sm leading-snug transition-colors"
+      className="tk-cell tk-focus w-full tk-r2 p-2 text-left tk-body leading-snug transition-colors"
     >
       {current ? current : <span className="tk-tertiary">{placeholder}</span>}
     </button>
@@ -1813,7 +1814,7 @@ function StepsCell({ value, onChange, cell }) {
         onBlur={(e) => {
           if (box.current && !box.current.contains(e.relatedTarget)) close(false);
         }}
-        className="tk-edit rounded p-2"
+        className="tk-edit tk-r2 p-2"
       >
         <ul className="space-y-2">
           {items.map((item, i) => (
@@ -1834,7 +1835,7 @@ function StepsCell({ value, onChange, cell }) {
                   setItems(items.map((it, k) => (k === i ? { ...it, text: e.target.value } : it)))
                 }
                 onKeyDown={(e) => onKey(e, i)}
-                className={`w-full bg-transparent text-sm leading-snug focus:outline-none ${
+                className={`w-full bg-transparent tk-body leading-snug focus:outline-none ${
                   item.done ? "tk-tertiary line-through" : ""
                 }`}
               />
@@ -1866,7 +1867,7 @@ function StepsCell({ value, onChange, cell }) {
           open(null);
         }
       }}
-      className="tk-cell tk-focus w-full cursor-text rounded p-2 text-left text-sm leading-snug transition-colors"
+      className="tk-cell tk-focus w-full cursor-text tk-r2 p-2 text-left tk-body leading-snug transition-colors"
     >
       {items.length === 0 ? (
         <span className="tk-tertiary">Set the next action</span>
@@ -1967,7 +1968,7 @@ function Rating({ label, value, onChange }) {
               aria-label={`${label}: ${n} out of 5`}
               aria-pressed={n <= value}
               title={value === n ? "Click again to clear" : `${n} of 5`}
-              className="tk-score tk-focus h-4 w-4 rounded-sm transition-colors"
+              className="tk-score tk-focus h-4 w-4 tk-r1 transition-colors"
               style={{ background: n <= value ? "var(--accent)" : "transparent" }}
             />
           ))}
@@ -1977,7 +1978,7 @@ function Rating({ label, value, onChange }) {
           onClick={() => onChange(0)}
           aria-label={`Clear ${label} rating`}
           title={`Clear ${label} rating`}
-          className={`tk-focus rounded px-1 tk-mono tk-cap leading-4 ${
+          className={`tk-focus tk-r2 px-1 tk-mono tk-cap leading-4 ${
             value ? "tk-tertiary" : "invisible"
           }`}
           tabIndex={value ? 0 : -1}
@@ -1999,7 +2000,7 @@ function Field({ label, value, onChange, type, placeholder }) {
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="tk-input tk-focus mt-1 w-full rounded px-2 py-2 text-sm"
+        className="tk-input tk-focus mt-1 w-full tk-r2 px-2 py-2 tk-body"
       />
     </label>
   );
@@ -2082,7 +2083,7 @@ function DateField({ label, value, onChange }) {
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="tk-input tk-focus mt-1 w-full rounded px-2 py-2 text-sm"
+        className="tk-input tk-focus mt-1 w-full tk-r2 px-2 py-2 tk-body"
       />
     </label>
   );
@@ -2106,7 +2107,7 @@ function DetailPanel({ row, onEdit, onClearScores }) {
               <button
                 onClick={() => onClearScores(row.id)}
                 title="Clear every facet rating for this company"
-                className="tk-focus rounded tk-micro underline tk-tertiary"
+                className="tk-focus tk-r2 tk-micro underline tk-tertiary"
               >
                 Clear all
               </button>
@@ -2167,7 +2168,7 @@ function DetailPanel({ row, onEdit, onClearScores }) {
             />
           </div>
         ) : (
-          <p className="text-sm leading-relaxed tk-tertiary">
+          <p className="tk-body leading-relaxed tk-tertiary">
             Salary, equity, start date and benefits appear here once this
             application reaches the Offer stage.
           </p>
@@ -2199,15 +2200,15 @@ function Funnel({ rows, open, onToggle }) {
   const inFunnel = steps.reduce((n, s) => n + s.count, 0);
 
   return (
-    <div className="tk-card rounded-lg p-4">
+    <div className="tk-card tk-r3 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <button
           onClick={onToggle}
           aria-expanded={open}
-          className="tk-focus flex items-center gap-2 rounded tk-micro tk-secondary"
+          className="tk-focus flex items-center gap-2 tk-r2 tk-micro tk-secondary"
         >
-          <span aria-hidden="true" className="tk-tertiary text-[9px]">
-            {open ? "▼" : "▶"}
+          <span aria-hidden="true" className="tk-glyph tk-tertiary" data-open={open}>
+            ▶
           </span>
           Funnel
         </button>
@@ -2253,7 +2254,7 @@ function Funnel({ rows, open, onToggle }) {
               {steps.map((s, i) => (
                 <React.Fragment key={s.key}>
                   {i > 0 && (
-                    <p className="pl-[7.75rem] tk-micro tk-tertiary">
+                    <p className="tk-interval tk-micro tk-tertiary">
                       {s.meanDays == null ? (
                         <span title="No transitions recorded yet for this step">
                           ↓ timing pending
@@ -2269,11 +2270,11 @@ function Funnel({ rows, open, onToggle }) {
                       )}
                     </p>
                   )}
-                  <div className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 tk-micro tk-secondary">
+                  <div className="tk-step -mx-2 flex items-center gap-4 px-2 py-2">
+                    <span className="w-24 shrink-0 tk-micro tk-secondary">
                       {s.label}
                     </span>
-                    <div className="tk-track h-3.5 flex-1">
+                    <div className="tk-track flex-1">
                       <div
                         className="tk-bar"
                         style={{
@@ -2430,7 +2431,7 @@ function ViewBar({
         <button
           onClick={onReset}
           title="Show every application again"
-          className="tk-focus rounded px-2 py-1 tk-micro underline tk-tertiary"
+          className="tk-focus tk-r2 px-2 py-1 tk-micro underline tk-tertiary"
         >
           Reset view
         </button>
@@ -2473,7 +2474,7 @@ function MigrationNotice({ onDismiss }) {
 
   return (
     <div
-      className="tk-noprint mb-6 rounded-lg p-4"
+      className="tk-noprint mb-6 tk-r3 p-4"
       style={{ background: "var(--warn)", border: "1px solid var(--warn-line)" }}
     >
       <div className="flex items-start justify-between gap-4">
@@ -2481,7 +2482,7 @@ function MigrationNotice({ onDismiss }) {
           <p className="tk-micro">
             Your database needs one update
           </p>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed">
+          <p className="mt-2 max-w-2xl tk-body leading-relaxed">
             This version adds company scoring, offer details and stage history.
             Run the script below in <strong>SQL Editor → New query</strong>, then
             reload. It only adds columns, so nothing you already have is touched.
@@ -2489,25 +2490,25 @@ function MigrationNotice({ onDismiss }) {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={copy}
-              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+              className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
             >
               {copied ? "Copied" : "Copy SQL"}
             </button>
             <button
               onClick={() => setShown((v) => !v)}
-              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+              className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
             >
               {shown ? "Hide" : "Show"} SQL
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+              className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
             >
               Reload
             </button>
           </div>
           {shown && (
-            <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 tk-mono tk-cap leading-relaxed">
+            <pre className="tk-code mt-3 max-h-72 overflow-auto tk-r3 p-3 tk-mono tk-cap leading-relaxed">
               {MIGRATION_SQL}
             </pre>
           )}
@@ -2515,7 +2516,7 @@ function MigrationNotice({ onDismiss }) {
         <button
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="tk-focus shrink-0 rounded px-2 leading-6"
+          className="tk-focus shrink-0 tk-r2 px-2 leading-6"
         >
           &times;
         </button>
@@ -2548,7 +2549,7 @@ function DesktopRow({ row, rowIndex, open, onToggle, onEdit, onDelete, onAdvance
             onClick={() => onDelete(row.id)}
             title="Delete application"
             aria-label={`Delete ${row.company || "application"}`}
-            className="tk-del tk-focus mt-2 shrink-0 rounded px-2 leading-5 transition-colors"
+            className="tk-del tk-focus mt-2 shrink-0 tk-r2 px-2 leading-5 transition-colors"
           >
             ×
           </button>
@@ -2614,13 +2615,13 @@ function ScoreCell({ row, open, onToggle, cell }) {
       aria-label={`${open ? "Hide" : "Show"} details for ${row.company || "this application"}`}
       title={mean == null ? "Not rated — click for details" : `Score ${mean.toFixed(1)} of 5`}
       {...cell}
-      className="tk-cell tk-focus flex w-full items-center justify-between gap-1 rounded p-2 text-left transition-colors"
+      className="tk-cell tk-focus flex w-full items-center justify-between gap-1 tk-r2 p-2 text-left transition-colors"
     >
       <span className="tk-data tk-strong">
         {mean == null ? <span className="tk-tertiary">–</span> : mean.toFixed(1)}
       </span>
-      <span aria-hidden="true" className="tk-noprint tk-tertiary text-[10px]">
-        {open ? "▲" : "▼"}
+      <span aria-hidden="true" className="tk-noprint tk-glyph tk-tertiary" data-open={open}>
+        ▶
       </span>
     </button>
   );
@@ -2629,7 +2630,7 @@ function ScoreCell({ row, open, onToggle, cell }) {
 function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearScores }) {
   const mean = aggregate(row);
   return (
-    <div className="tk-card rounded-lg p-4">
+    <div className="tk-card tk-r3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <EditableCell
@@ -2651,7 +2652,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
         <button
           onClick={() => onDelete(row.id)}
           aria-label={`Delete ${row.company || "application"}`}
-          className="tk-del tk-focus shrink-0 rounded px-2 py-1 tk-micro transition-colors"
+          className="tk-del tk-focus shrink-0 tk-r2 px-2 py-1 tk-micro transition-colors"
         >
           Delete
         </button>
@@ -2690,7 +2691,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
       <button
         onClick={() => onToggle(row.id)}
         aria-expanded={open}
-        className="tk-btn tk-focus mt-4 flex w-full items-center justify-between rounded px-3 py-2 tk-micro transition-colors"
+        className="tk-btn tk-focus mt-4 flex w-full items-center justify-between tk-r2 px-3 py-2 tk-micro transition-colors"
       >
         <span>Score &amp; offer</span>
         <span>
@@ -3091,7 +3092,7 @@ function Tracker({ session }) {
               {rows.length} tracked · {liveRows.length} live
             </span>
             <span
-              className={stale ? "rounded px-2 py-1" : "tk-secondary"}
+              className={stale ? "tk-r2 px-2 py-1" : "tk-secondary"}
               style={{ background: stale ? "var(--warn)" : "transparent" }}
             >
               {stale} awaiting chase
@@ -3102,14 +3103,14 @@ function Tracker({ session }) {
         <div className="tk-noprint flex flex-wrap gap-2">
           <button
             onClick={addRow}
-            className="tk-btn tk-focus rounded px-4 py-2 tk-micro transition-colors"
+            className="tk-btn tk-focus tk-r2 px-4 py-2 tk-micro transition-colors"
           >
             + Add application
           </button>
           <button
             onClick={() => window.print()}
             title="Opens your browser's print dialogue — choose Save as PDF"
-            className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
+            className="tk-btn tk-focus tk-r2 px-3 py-2 tk-micro transition-colors"
           >
             Share / Export
           </button>
@@ -3123,7 +3124,7 @@ function Tracker({ session }) {
               )
                 sb.auth.signOut();
             }}
-            className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
+            className="tk-btn tk-focus tk-r2 px-3 py-2 tk-micro transition-colors"
           >
             Sign out
           </button>
@@ -3144,7 +3145,7 @@ function Tracker({ session }) {
 
       {opError && (
         <div
-          className="tk-noprint mb-6 rounded-lg p-4"
+          className="tk-noprint mb-6 tk-r3 p-4"
           style={{ background: "var(--cold)", border: "1px solid var(--cold-line)" }}
         >
           <div className="flex items-start justify-between gap-4">
@@ -3159,7 +3160,7 @@ function Tracker({ session }) {
             <button
               onClick={() => setOpError("")}
               aria-label="Dismiss"
-              className="tk-focus shrink-0 rounded px-2 leading-6"
+              className="tk-focus shrink-0 tk-r2 px-2 leading-6"
             >
               &times;
             </button>
@@ -3268,13 +3269,13 @@ function Tracker({ session }) {
       </div>
 
       {visibleCount === 0 && (
-        <div className="tk-dash rounded-lg p-10 text-center">
+        <div className="tk-dash tk-r3 p-10 text-center">
           {rows.length === 0 ? (
             <>
               <p className="tk-secondary">No applications yet.</p>
               <button
                 onClick={addRow}
-                className="tk-focus mt-2 rounded tk-micro underline"
+                className="tk-focus mt-2 tk-r2 tk-micro underline"
               >
                 Add the first one
               </button>
@@ -3296,7 +3297,7 @@ function Tracker({ session }) {
               </p>
               <button
                 onClick={resetView}
-                className="tk-focus mt-2 rounded tk-micro underline"
+                className="tk-focus mt-2 tk-r2 tk-micro underline"
               >
                 Show all {rows.length} applications
               </button>
@@ -3306,7 +3307,7 @@ function Tracker({ session }) {
       )}
 
       {trash.length > 0 && (
-        <div className="tk-noprint tk-card mt-6 rounded-lg p-4">
+        <div className="tk-noprint tk-card mt-6 tk-r3 p-4">
           <p className="tk-micro tk-secondary">
             Recently deleted · {trash.length}
           </p>
@@ -3314,10 +3315,10 @@ function Tracker({ session }) {
             {trash.map((row) => (
               <li
                 key={row.id}
-                className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-3 py-2 tk-body"
               >
                 <span>
-                  <span className="font-medium">
+                  <span className="tk-strong">
                     {row.company || "Untitled application"}
                   </span>
                   {row.role && <span className="tk-secondary"> — {row.role}</span>}
@@ -3325,13 +3326,13 @@ function Tracker({ session }) {
                 <span className="flex gap-2">
                   <button
                     onClick={() => setDeleted(row.id, false)}
-                    className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
+                    className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
                   >
                     Restore
                   </button>
                   <button
                     onClick={() => purge(row.id)}
-                    className="tk-btn tk-del tk-focus rounded px-3 py-1 tk-micro transition-colors"
+                    className="tk-btn tk-del tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
                   >
                     Delete for good
                   </button>
@@ -3345,9 +3346,9 @@ function Tracker({ session }) {
       <div className="tk-noprint mt-10 space-y-3 tk-cap leading-relaxed tk-tertiary">
         <p className="tk-prose">
           Click a status to advance it: To apply → Applied → Replied → Interview → Offer
-          → Closed. Editing any cell resets that row's clock. Live rows untouched for 7
-          days flag for chase, 14 days flag cold. Every change syncs to your other
-          devices within a second.
+          → Closed. The count above treats anything live you have not touched for seven
+          days as awaiting chase, and editing any cell resets that row's clock. Every
+          change syncs to your other devices within a second.
         </p>
         <ul className="flex flex-wrap gap-x-5 gap-y-2">
           {[
@@ -3432,7 +3433,7 @@ function App() {
         <h1 className="tk-display">
           Supabase library did not load
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed">
+        <p className="mt-3 max-w-2xl tk-body leading-relaxed">
           The page could not fetch the Supabase client from its CDN. Check your
           connection and reload. On a managed school or work network, cdn.jsdelivr.net
           may be blocked.
@@ -3458,12 +3459,12 @@ function App() {
         <h1 className="tk-display">
           Could not reach your database
         </h1>
-        <pre className="tk-code mt-4 max-w-2xl overflow-x-auto whitespace-pre-wrap rounded-lg p-4 tk-mono tk-cap leading-relaxed">
+        <pre className="tk-code mt-4 max-w-2xl overflow-x-auto whitespace-pre-wrap tk-r3 p-4 tk-mono tk-cap leading-relaxed">
           {bootError}
         </pre>
         <button
           onClick={reset}
-          className="tk-btn tk-focus mt-4 rounded px-3 py-1 tk-micro transition-colors"
+          className="tk-btn tk-focus mt-4 tk-r2 px-3 py-1 tk-micro transition-colors"
         >
           Re-enter connection details
         </button>
