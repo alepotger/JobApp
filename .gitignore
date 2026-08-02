@@ -1,0 +1,39 @@
+# Secrets. A committed .env is how this repository leaked a live database
+# credential once already — it stays ignored, no exceptions but the template.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets.json
+service-account*.json
+credentials.json
+
+# Supabase CLI local state (contains project refs and local keys)
+.supabase/
+supabase/.temp/
+supabase/.branches/
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.next/
+out/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
