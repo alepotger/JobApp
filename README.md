@@ -4,7 +4,7 @@ A pipeline tracker for job applications. One page, no build step, synced across
 your devices. **Every user runs it on their own database**, so nobody's data
 passes through anyone else's account.
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/Officient)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/JobApp)
 
 ![Stages: To apply, Applied, Replied, Interview, Offer, Closed](https://img.shields.io/badge/stages-6-555)
 ![No build step](https://img.shields.io/badge/build-none-555)
@@ -99,7 +99,7 @@ same thing on screen — this is the version you can read first.
 
 ### 1. Get your own copy
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/Officient)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/alepotger/JobApp)
 
 Netlify forks this repo to your GitHub account and publishes it. There is no
 build step and nothing to configure — accept the defaults. You end up at an

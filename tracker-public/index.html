@@ -61,16 +61,42 @@
 
 <script>
   // If anything below fails, say so on screen instead of showing a blank page.
+  //
+  // Built as DOM nodes rather than an HTML string: msg carries a browser error
+  // message and a script URL, and concatenating those into innerHTML would let
+  // anything that reached an error message be parsed as markup. textContent
+  // cannot execute, whatever it contains.
   window.__bootError = function (msg) {
     var r = document.getElementById("root");
     if (!r || r.hasChildNodes()) return;
-    r.innerHTML =
-      '<div style="font-family:ui-monospace,monospace;color:var(--page-ink);padding:32px;max-width:760px">' +
-      '<p style="font-size:18px;font-weight:600;margin:0 0 12px">Something stopped the page loading</p>' +
-      '<pre style="background:var(--page-lift);border:1px solid var(--page-line);border-radius:8px;padding:16px;' +
-      'white-space:pre-wrap;font-size:12px;line-height:1.6;margin:0">' + msg + '</pre>' +
-      '<p style="font-size:12px;line-height:1.6;margin:16px 0 0;opacity:.85">' +
-      'Copy this message and send it back to Claude.</p></div>';
+
+    var node = function (tag, style, text) {
+      var el = document.createElement(tag);
+      el.setAttribute("style", style);
+      el.textContent = text;
+      return el;
+    };
+
+    var wrap = document.createElement("div");
+    wrap.setAttribute(
+      "style",
+      "font-family:ui-monospace,monospace;color:var(--page-ink);padding:32px;max-width:760px"
+    );
+    wrap.appendChild(
+      node("p", "font-size:18px;font-weight:600;margin:0 0 12px",
+        "Something stopped the page loading")
+    );
+    wrap.appendChild(
+      node("pre",
+        "background:var(--page-lift);border:1px solid var(--page-line);border-radius:8px;" +
+        "padding:16px;white-space:pre-wrap;font-size:12px;line-height:1.6;margin:0",
+        String(msg))
+    );
+    wrap.appendChild(
+      node("p", "font-size:12px;line-height:1.6;margin:16px 0 0;opacity:.85",
+        "Copy this message and send it back to Claude.")
+    );
+    r.appendChild(wrap);
   };
   window.addEventListener("error", function (e) {
     window.__bootError((e.message || "Unknown error") + "\n\n" + (e.filename || ""));
