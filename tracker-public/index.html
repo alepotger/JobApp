@@ -27,7 +27,7 @@
 </script>
 <style>
   :root { --page-bg:#f8f8f5; --page-ink:#1e1d18; --page-lift:#ffffff; --page-line:#e4e3df; }
-  :root[data-theme="dark"] { --page-bg:#0c0e13; --page-ink:#eef0f4; --page-lift:#1d2028; --page-line:#292d34; }
+  :root[data-theme="dark"] { --page-bg:#000000; --page-ink:#eaebee; --page-lift:#17191f; --page-line:#21242a; }
   html, body { background: var(--page-bg); margin: 0; }
   /* Set here as well as in the app so the boot screen is already on-scale. */
   body { font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text",
@@ -525,47 +525,47 @@ const CSS = `
   --fn-4:             #604200;
 }
 [data-theme="dark"] .tk-page {
-  --bg:               #0c0e13;
-  --surface:          #13161c;
-  --surface-2:        #191c22;
-  --lift:             #1d2028;
-  --hover:            #21252e;
-  --active:           #2b303b;
-  --line:             #292d34;
-  --line-soft:        #1d2027;
-  --line-strong:      #454a56;
-  --ink:              #eef0f4;
-  --ink-2:            #b1b4bb;
-  --ink-3:            #82868e;
+  --bg:               #000000;
+  --surface:          #090b0f;
+  --surface-2:        #101317;
+  --lift:             #17191f;
+  --hover:            #1d2027;
+  --active:           #282d36;
+  --line:             #21242a;
+  --line-soft:        #15171c;
+  --line-strong:      #3e424c;
+  --ink:              #eaebee;
+  --ink-2:            #abaeb4;
+  --ink-3:            #7e8289;
   --accent:           #e3b756;
   --accent-hover:     #fbcd68;
-  --accent-wash:      #201b11;
-  --warn:             #3b2b0d;
-  --warn-line:        #a97e2c;
-  --cold:             #462220;
-  --cold-line:        #bd615b;
-  --st-to-apply-fill: #20242c;
-  --st-to-apply-line: #3d424d;
-  --st-to-apply-mark: #9da5b5;
-  --st-applied-fill:  #12301e;
-  --st-applied-line:  #2b6241;
-  --st-applied-mark:  #65c98c;
-  --st-replied-fill:  #112b40;
-  --st-replied-line:  #2a597f;
-  --st-replied-mark:  #72b8f2;
-  --st-interview-fill:#362607;
-  --st-interview-line:#6c5019;
-  --st-interview-mark:#e8b458;
-  --st-offer-fill:    #2d233e;
-  --st-offer-line:    #5c4a7b;
-  --st-offer-mark:    #bd9ff2;
-  --st-closed-fill:   #1d1f24;
-  --st-closed-line:   #373b42;
-  --st-closed-mark:   #888c95;
-  --fn-1:             #7a5e28;
-  --fn-2:             #a48038;
-  --fn-3:             #cda454;
-  --fn-4:             #f2cb83;
+  --accent-wash:      #1a150b;
+  --warn:             #332307;
+  --warn-line:        #a27825;
+  --cold:             #3c1b19;
+  --cold-line:        #b75b55;
+  --st-to-apply-fill: #1a1d23;
+  --st-to-apply-line: #363b44;
+  --st-to-apply-mark: #979faf;
+  --st-applied-fill:  #0b2817;
+  --st-applied-line:  #24593a;
+  --st-applied-mark:  #62c689;
+  --st-replied-fill:  #0b2437;
+  --st-replied-line:  #235175;
+  --st-replied-mark:  #6fb5ef;
+  --st-interview-fill:#2e1f03;
+  --st-interview-line:#634811;
+  --st-interview-mark:#e4b154;
+  --st-offer-fill:    #251c35;
+  --st-offer-line:    #544371;
+  --st-offer-mark:    #ba9cef;
+  --st-closed-fill:   #16181c;
+  --st-closed-line:   #303339;
+  --st-closed-mark:   #82868f;
+  --fn-1:             #715621;
+  --fn-2:             #9d7a34;
+  --fn-3:             #c79e4d;
+  --fn-4:             #efc880;
 }
 @supports (color: oklch(0% 0 0)) {
   .tk-page {
@@ -612,47 +612,47 @@ const CSS = `
     --fn-4:             oklch(40% 0.090 82);
   }
   [data-theme="dark"] .tk-page {
-    --bg:               oklch(16.5% 0.011 265);
-    --surface:          oklch(20% 0.013 265);
-    --surface-2:        oklch(22.5% 0.014 265);
-    --lift:             oklch(24.5% 0.015 265);
-    --hover:            oklch(26.5% 0.017 265);
-    --active:           oklch(31% 0.021 265);
-    --line:             oklch(29.5% 0.015 265);
-    --line-soft:        oklch(24.5% 0.013 265);
-    --line-strong:      oklch(41% 0.020 265);
-    --ink:              oklch(95.5% 0.005 265);
-    --ink-2:            oklch(77% 0.011 265);
-    --ink-3:            oklch(62% 0.013 265);
+    --bg:               oklch(0% 0 0);
+    --surface:          oklch(15% 0.008 265);
+    --surface-2:        oklch(18.5% 0.010 265);
+    --lift:             oklch(21.5% 0.012 265);
+    --hover:            oklch(24.5% 0.014 265);
+    --active:           oklch(29.5% 0.018 265);
+    --line:             oklch(26% 0.012 265);
+    --line-soft:        oklch(20.5% 0.010 265);
+    --line-strong:      oklch(38% 0.018 265);
+    --ink:              oklch(94% 0.004 265);
+    --ink-2:            oklch(75% 0.010 265);
+    --ink-3:            oklch(60.5% 0.012 265);
     --accent:           oklch(80% 0.125 85);
     --accent-hover:     oklch(87% 0.130 85);
-    --accent-wash:      oklch(22.5% 0.020 85);
-    --warn:             oklch(30% 0.050 80);
-    --warn-line:        oklch(62% 0.110 80);
-    --cold:             oklch(30% 0.055 25);
-    --cold-line:        oklch(60% 0.120 25);
-    --st-to-apply-fill: oklch(26% 0.015 265);
-    --st-to-apply-line: oklch(38% 0.020 265);
-    --st-to-apply-mark: oklch(72% 0.025 265);
-    --st-applied-fill:  oklch(28% 0.050 155);
-    --st-applied-line:  oklch(45% 0.080 155);
-    --st-applied-mark:  oklch(76% 0.130 155);
-    --st-replied-fill:  oklch(28% 0.050 245);
-    --st-replied-line:  oklch(45% 0.080 245);
-    --st-replied-mark:  oklch(76% 0.110 245);
-    --st-interview-fill:oklch(28% 0.050 80);
-    --st-interview-line:oklch(45% 0.080 80);
-    --st-interview-mark:oklch(80% 0.125 80);
-    --st-offer-fill:    oklch(28% 0.050 300);
-    --st-offer-line:    oklch(45% 0.080 300);
-    --st-offer-mark:    oklch(76% 0.120 300);
-    --st-closed-fill:   oklch(24% 0.010 265);
-    --st-closed-line:   oklch(35% 0.014 265);
-    --st-closed-mark:   oklch(64% 0.014 265);
-    --fn-1:             oklch(50% 0.080 82);
-    --fn-2:             oklch(62% 0.100 82);
-    --fn-3:             oklch(74% 0.110 82);
-    --fn-4:             oklch(86% 0.100 82);
+    --accent-wash:      oklch(20% 0.020 85);
+    --warn:             oklch(27% 0.048 80);
+    --warn-line:        oklch(60% 0.110 80);
+    --cold:             oklch(27% 0.052 25);
+    --cold-line:        oklch(58% 0.120 25);
+    --st-to-apply-fill: oklch(23% 0.013 265);
+    --st-to-apply-line: oklch(35% 0.018 265);
+    --st-to-apply-mark: oklch(70% 0.025 265);
+    --st-applied-fill:  oklch(25% 0.048 155);
+    --st-applied-line:  oklch(42% 0.078 155);
+    --st-applied-mark:  oklch(75% 0.130 155);
+    --st-replied-fill:  oklch(25% 0.048 245);
+    --st-replied-line:  oklch(42% 0.078 245);
+    --st-replied-mark:  oklch(75% 0.110 245);
+    --st-interview-fill:oklch(25% 0.048 80);
+    --st-interview-line:oklch(42% 0.078 80);
+    --st-interview-mark:oklch(79% 0.125 80);
+    --st-offer-fill:    oklch(25% 0.048 300);
+    --st-offer-line:    oklch(42% 0.078 300);
+    --st-offer-mark:    oklch(75% 0.120 300);
+    --st-closed-fill:   oklch(21% 0.008 265);
+    --st-closed-line:   oklch(32% 0.012 265);
+    --st-closed-mark:   oklch(62% 0.014 265);
+    --fn-1:             oklch(47% 0.078 82);
+    --fn-2:             oklch(60% 0.098 82);
+    --fn-3:             oklch(72% 0.110 82);
+    --fn-4:             oklch(85% 0.100 82);
   }
 }
 
@@ -949,6 +949,26 @@ const CSS = `
   transition:width var(--d-3) var(--ease);
 }
 .tk-stat { }
+
+/* A genuinely two-way collapse. grid-template-rows 0fr->1fr is the only way
+   to ease an unknown height without measuring it in JS; it is a layout
+   animation, which the dossier warns about, but this fires once in a while
+   rather than on every keystroke, and the alternative is a panel that snaps.
+   visibility flips at the end of the close so the hidden content leaves the
+   tab order and the accessibility tree instead of lurking at zero height. */
+.tk-collapse {
+  display:grid; grid-template-rows:0fr; opacity:0; visibility:hidden;
+  transition:grid-template-rows var(--d-3) var(--ease),
+             opacity var(--d-2) var(--ease),
+             visibility 0s linear var(--d-3);
+}
+.tk-collapse[data-open="true"] {
+  grid-template-rows:1fr; opacity:1; visibility:visible;
+  transition:grid-template-rows var(--d-3) var(--ease),
+             opacity var(--d-2) var(--ease) 60ms,
+             visibility 0s;
+}
+.tk-collapse > * { overflow:hidden; min-height:0; }
 
 /* Entrance only, on transform and opacity — the two properties the dossier
    allows because they are GPU-composited and never thrash layout. */
@@ -1437,7 +1457,7 @@ function Dropdown({ label, value, items, onPick, on }) {
             show();
           }
         }}
-        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-1.5 tk-micro transition-colors ${
+        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-2 tk-micro transition-colors ${
           on ? "tk-trigger-on" : ""
         }`}
       >
@@ -1455,7 +1475,7 @@ function Dropdown({ label, value, items, onPick, on }) {
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKey}
-          className="tk-menu absolute left-0 z-20 mt-2 max-h-80 min-w-[15rem] overflow-auto p-1.5"
+          className="tk-menu absolute left-0 z-20 mt-2 max-h-80 min-w-[15rem] overflow-auto p-2"
         >
           {items.map((item, i) => (
             <button
@@ -1470,7 +1490,7 @@ function Dropdown({ label, value, items, onPick, on }) {
                 onPick(item.key);
                 hide(true);
               }}
-              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-2.5 py-1.5 text-left tk-micro transition-colors"
+              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-3 py-2 text-left tk-micro transition-colors"
             >
               <span className="truncate">{item.label}</span>
               {item.count != null && (
@@ -1493,7 +1513,7 @@ function UndoBar({ undo, onRun, onDismiss }) {
   return (
     <div className="tk-noprint fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div
-        className="tk-toast tk-card flex items-center gap-3 px-4 py-2.5"
+        className="tk-toast tk-card flex items-center gap-3 px-4 py-3"
         style={{ boxShadow: "var(--sh-3)" }}
         role="status"
       >
@@ -1527,7 +1547,7 @@ function SyncChip({ status }) {
   const s = map[status] || map.offline;
   return (
     <span
-      className={`tk-noprint rounded px-1.5 py-0.5 tk-micro ${s.cls}`}
+      className={`tk-noprint rounded px-2 py-1 tk-micro ${s.cls}`}
       style={{ background: s.bg }}
     >
       {s.label}
@@ -1552,7 +1572,7 @@ function AgeChip({ row }) {
   }
   return (
     <span
-      className={`mt-1 inline-block rounded px-1.5 py-0.5 tk-micro ${cls}`}
+      className={`mt-1 inline-block rounded px-2 py-1 tk-micro ${cls}`}
       style={{ background: bg }}
     >
       {label}
@@ -1568,7 +1588,7 @@ function StatusCell({ row, onAdvance, cell }) {
         onClick={() => onAdvance(row.id)}
         title="Advance stage (Enter)"
         {...cell}
-        className="tk-pill tk-focus w-full rounded px-3 py-1.5 tk-micro transition-all"
+        className="tk-pill tk-focus w-full rounded px-3 py-2 tk-micro transition-all"
         style={{ background: s.fill, border: `1px solid ${s.line}` }}
       >
         {s.label}
@@ -1737,7 +1757,7 @@ function StepsCell({ value, onChange, cell }) {
         }}
         className="tk-edit rounded p-2"
       >
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {items.map((item, i) => (
             <li key={i} className="flex items-center gap-2">
               <input
@@ -1793,7 +1813,7 @@ function StepsCell({ value, onChange, cell }) {
       {items.length === 0 ? (
         <span className="tk-tertiary">Set the next action</span>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {items.map((item, i) => (
             <li key={i} data-i={i} className="flex items-center gap-2">
               <input
@@ -1835,7 +1855,7 @@ function StageRail({ rows, filter, setFilter }) {
         <button
           onClick={() => setFilter(null)}
           aria-pressed={filter === null}
-          className={`tk-chip tk-focus flex items-center gap-2 px-3 py-1.5 tk-micro ${
+          className={`tk-chip tk-focus flex items-center gap-2 px-3 py-2 tk-micro ${
             filter === null ? "" : "tk-secondary"
           }`}
         >
@@ -1852,7 +1872,7 @@ function StageRail({ rows, filter, setFilter }) {
               onClick={() => setFilter(active ? null : s.key)}
               aria-pressed={active}
               title={active ? `Showing ${s.label} only — click to show all` : `Show only ${s.label}`}
-              className={`tk-chip tk-focus flex items-center gap-2 px-3 py-1.5 tk-micro ${
+              className={`tk-chip tk-focus flex items-center gap-2 px-3 py-2 tk-micro ${
                 active ? "" : "tk-secondary"
               }`}
             >
@@ -1921,7 +1941,7 @@ function Field({ label, value, onChange, type, placeholder }) {
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="tk-input tk-focus mt-1 w-full rounded px-2 py-1.5 text-sm"
+        className="tk-input tk-focus mt-1 w-full rounded px-2 py-2 text-sm"
       />
     </label>
   );
@@ -2004,7 +2024,7 @@ function DateField({ label, value, onChange }) {
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="tk-input tk-focus mt-1 w-full rounded px-2 py-1.5 text-sm"
+        className="tk-input tk-focus mt-1 w-full rounded px-2 py-2 text-sm"
       />
     </label>
   );
@@ -2106,7 +2126,7 @@ function Stat({ label, value, sub }) {
     <div>
       <p className={LABEL}>{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
-      {sub && <p className="mt-0.5 tk-mono tk-cap tk-tertiary">{sub}</p>}
+      {sub && <p className="mt-1 tk-mono tk-cap tk-tertiary">{sub}</p>}
     </div>
   );
 }
@@ -2148,9 +2168,9 @@ function Funnel({ rows, open, onToggle }) {
         )}
       </div>
 
-      {open && (
-        <>
-          <div className="tk-reveal mb-6 mt-5 grid grid-cols-2 gap-5 sm:grid-cols-4">
+      <div className="tk-collapse" data-open={open}>
+        <div>
+          <div className="mb-6 mt-5 grid grid-cols-2 gap-5 sm:grid-cols-4">
             {steps.map((s) => (
               <Stat
                 key={s.key}
@@ -2166,12 +2186,12 @@ function Funnel({ rows, open, onToggle }) {
           </div>
 
           {peak === 0 ? (
-            <p className="text-sm tk-tertiary">
+            <p className="tk-body tk-tertiary">
               Nothing is in the funnel yet. Move a row to Applied and it appears
               here.
             </p>
           ) : (
-            <div className="tk-reveal space-y-1.5">
+            <div className="space-y-2">
               {steps.map((s, i) => (
                 <React.Fragment key={s.key}>
                   {i > 0 && (
@@ -2216,8 +2236,8 @@ function Funnel({ rows, open, onToggle }) {
               ))}
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2470,7 +2490,7 @@ function DesktopRow({ row, rowIndex, open, onToggle, onEdit, onDelete, onAdvance
             onClick={() => onDelete(row.id)}
             title="Delete application"
             aria-label={`Delete ${row.company || "application"}`}
-            className="tk-del tk-focus mt-2 shrink-0 rounded px-1.5 leading-5 transition-colors"
+            className="tk-del tk-focus mt-2 shrink-0 rounded px-2 leading-5 transition-colors"
           >
             ×
           </button>
@@ -3013,7 +3033,7 @@ function Tracker({ session }) {
               {rows.length} tracked · {liveRows.length} live
             </span>
             <span
-              className={stale ? "rounded px-1.5 py-0.5" : "tk-secondary"}
+              className={stale ? "rounded px-2 py-1" : "tk-secondary"}
               style={{ background: stale ? "var(--warn)" : "transparent" }}
             >
               {stale} awaiting chase
@@ -3280,13 +3300,13 @@ function Tracker({ session }) {
             [["⌘", "Enter"], "save"],
             [["Esc"], "discard"],
           ].map(([keys, what]) => (
-            <li key={what} className="flex items-center gap-1.5">
+            <li key={what} className="flex items-center gap-2">
               {keys.map((k) => (
                 <span key={k} className="tk-kbd">
                   {k}
                 </span>
               ))}
-              <span className="ml-0.5">{what}</span>
+              <span className="ml-1">{what}</span>
             </li>
           ))}
         </ul>

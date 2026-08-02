@@ -37,10 +37,12 @@ Tracking tightens as type grows and loosens for small uppercase labels, data
 tables use tabular figures so numbers do not jitter between rows, and prose is
 held to a 66-character measure.
 
-Dark mode is a separate palette, not an inversion: elevation is expressed
-through lighter surfaces rather than heavier shadows, and neither end reaches
-pure black or pure white. Text contrast is deliberately stepped —
-roughly 16:1, 7:1 and 5:1 for primary, secondary and tertiary — so the eye is
+Dark mode is a separate palette, not an inversion. The ground is true black
+for OLED, so elevation is expressed entirely through lighter surfaces and
+hairline borders — a shadow cast on `#000` is invisible. Ink stops just short
+of pure white: the halation that plagues dark themes comes from black and
+white *paired*, not from black alone. Text contrast is deliberately stepped —
+roughly 16:1, 9:1 and 5:1 for primary, secondary and tertiary — so the eye is
 led rather than merely accommodated.
 
 Motion is confined to `transform` and `opacity`, stays under 300ms, and is
