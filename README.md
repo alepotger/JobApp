@@ -1,4 +1,4 @@
-# Officient
+# JobApp
 
 A pipeline tracker for job applications. One page, no build step, synced across
 your devices. **Every user runs it on their own database**, so nobody's data
