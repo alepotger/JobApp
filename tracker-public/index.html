@@ -26,9 +26,13 @@
   })();
 </script>
 <style>
-  :root { --page-bg:#f9f6ee; --page-ink:#545454; --page-lift:#fffdf7; --page-line:#ded7c5; }
-  :root[data-theme="dark"] { --page-bg:#0f172a; --page-ink:#e2e8f0; --page-lift:#1e293b; --page-line:#334155; }
+  :root { --page-bg:#f8f8f5; --page-ink:#1e1d18; --page-lift:#ffffff; --page-line:#e4e3df; }
+  :root[data-theme="dark"] { --page-bg:#0c0e13; --page-ink:#eef0f4; --page-lift:#1d2028; --page-line:#292d34; }
   html, body { background: var(--page-bg); margin: 0; }
+  /* Set here as well as in the app so the boot screen is already on-scale. */
+  body { font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+         "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+         -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 </style>
 </head>
 <body>
@@ -470,158 +474,244 @@ const SEED = [
 ];
 
 const CSS = `
+/* ============================ THE TOKEN LAYER ============================
+   Authored in OKLCH — the dossier's stated default for any colour system,
+   because equal numerical steps in L produce equal perceived change, which
+   HSL cannot promise. The hex block is a progressive-enhancement fallback:
+   it is the sRGB rendering of the OKLCH values below, computed by the
+   browser rather than hand-matched, so the two cannot drift.
+   ======================================================================== */
 .tk-page {
-  --bg:#f9f6ee; --surface:#f4f0e3; --lift:#fffdf7; --hover:#f1ebdc; --active:#efe8d7;
-  --line:#ded7c5; --line-soft:#e5dfd0; --line-strong:#cfc7b2;
-  --ink:#545454; --accent:#b08d3f;
-  --warn:#f3ddab; --warn-line:#c9a247; --cold:#eec9c2; --cold-line:#c08c82;
-  --shadow:rgba(90,78,50,.16);
-
-  --st-to-apply-fill:#ebe6d6;  --st-to-apply-line:#cfc7b2;  --st-to-apply-mark:#948871;
-  --st-applied-fill:#bfe0c8;   --st-applied-line:#6faa83;   --st-applied-mark:#4f8f68;
-  --st-replied-fill:#c6dbeb;   --st-replied-line:#7fa4c2;   --st-replied-mark:#4f7fa8;
-  --st-interview-fill:#f3ddab; --st-interview-line:#c9a247; --st-interview-mark:#a87e1c;
-  --st-offer-fill:#ddd0ec;     --st-offer-line:#a48ec4;     --st-offer-mark:#7d63a8;
-  --st-closed-fill:#e6e2d6;    --st-closed-line:#cdc6b4;    --st-closed-mark:#8a857a;
-
-  /* Funnel ramp. The stages are ordinal, so this is one hue stepping
-     light-to-dark with depth rather than four competing identities. Validated
-     for monotonic lightness and against the surface at both ends. */
-  --fn-1:#c4a25c; --fn-2:#a8853a; --fn-3:#836726; --fn-4:#54431a;
-
-  background:var(--bg); color:var(--ink);
+  --bg:               #f8f8f5;
+  --surface:          #fefdfc;
+  --surface-2:        #fafaf7;
+  --lift:             #ffffff;
+  --hover:            #f4f3f0;
+  --active:           #eeece6;
+  --line:             #e4e3df;
+  --line-soft:        #eeeeeb;
+  --line-strong:      #cccac5;
+  --ink:              #1e1d18;
+  --ink-2:            #595852;
+  --ink-3:            #706f69;
+  --accent:           #966c01;
+  --accent-hover:     #865a00;
+  --accent-wash:      #fbf7ee;
+  --warn:             #fce9c2;
+  --warn-line:        #c99d4e;
+  --cold:             #ffddd9;
+  --cold-line:        #d67069;
+  --st-to-apply-fill: #edebe4;
+  --st-to-apply-line: #d4d1c7;
+  --st-to-apply-mark: #848073;
+  --st-applied-fill:  #d4f1d8;
+  --st-applied-line:  #99cda3;
+  --st-applied-mark:  #33854a;
+  --st-replied-fill:  #d3ebff;
+  --st-replied-line:  #98c3e8;
+  --st-replied-mark:  #2b77b0;
+  --st-interview-fill:#fce5bf;
+  --st-interview-line:#deb775;
+  --st-interview-mark:#9e7112;
+  --st-offer-fill:    #ece2ff;
+  --st-offer-line:    #c4b4e5;
+  --st-offer-mark:    #7d5eaf;
+  --st-closed-fill:   #ecebe8;
+  --st-closed-line:   #d2d1cd;
+  --st-closed-mark:   #878681;
+  --fn-1:             #c6a66b;
+  --fn-2:             #aa863e;
+  --fn-3:             #8a650d;
+  --fn-4:             #604200;
 }
-
-/* Dark mode. A neutral slate rather than a darkened cream: the light theme's
-   own steps (bg → surface → lift, and the three border weights) are mirrored
-   rank for rank, so the depth hierarchy reads the same in both. Semantic hues
-   keep their meaning but gain saturation and lightness to carry on slate. */
 [data-theme="dark"] .tk-page {
-  --bg:#0f172a; --surface:#1a2334; --lift:#1e293b; --hover:#24304a; --active:#2c3a55;
-  --line:#334155; --line-soft:#273349; --line-strong:#47566d;
-  --ink:#e2e8f0; --accent:#e0b354;
-  --warn:#4d3c12; --warn-line:#d4a03c; --cold:#46232a; --cold-line:#c47b76;
-  --shadow:rgba(0,0,0,.6);
+  --bg:               #0c0e13;
+  --surface:          #13161c;
+  --surface-2:        #191c22;
+  --lift:             #1d2028;
+  --hover:            #21252e;
+  --active:           #2b303b;
+  --line:             #292d34;
+  --line-soft:        #1d2027;
+  --line-strong:      #454a56;
+  --ink:              #eef0f4;
+  --ink-2:            #b1b4bb;
+  --ink-3:            #82868e;
+  --accent:           #e3b756;
+  --accent-hover:     #fbcd68;
+  --accent-wash:      #201b11;
+  --warn:             #3b2b0d;
+  --warn-line:        #a97e2c;
+  --cold:             #462220;
+  --cold-line:        #bd615b;
+  --st-to-apply-fill: #20242c;
+  --st-to-apply-line: #3d424d;
+  --st-to-apply-mark: #9da5b5;
+  --st-applied-fill:  #12301e;
+  --st-applied-line:  #2b6241;
+  --st-applied-mark:  #65c98c;
+  --st-replied-fill:  #112b40;
+  --st-replied-line:  #2a597f;
+  --st-replied-mark:  #72b8f2;
+  --st-interview-fill:#362607;
+  --st-interview-line:#6c5019;
+  --st-interview-mark:#e8b458;
+  --st-offer-fill:    #2d233e;
+  --st-offer-line:    #5c4a7b;
+  --st-offer-mark:    #bd9ff2;
+  --st-closed-fill:   #1d1f24;
+  --st-closed-line:   #373b42;
+  --st-closed-mark:   #888c95;
+  --fn-1:             #7a5e28;
+  --fn-2:             #a48038;
+  --fn-3:             #cda454;
+  --fn-4:             #f2cb83;
+}
+@supports (color: oklch(0% 0 0)) {
+  .tk-page {
+    --bg:               oklch(97.8% 0.004 95);
+    --surface:          oklch(99.5% 0.002 95);
+    --surface-2:        oklch(98.4% 0.003 95);
+    --lift:             oklch(100% 0 0);
+    --hover:            oklch(96.5% 0.005 95);
+    --active:           oklch(94.2% 0.008 90);
+    --line:             oklch(91.5% 0.005 95);
+    --line-soft:        oklch(94.8% 0.004 95);
+    --line-strong:      oklch(84% 0.008 95);
+    --ink:              oklch(23% 0.010 95);
+    --ink-2:            oklch(46% 0.009 95);
+    --ink-3:            oklch(54% 0.009 95);
+    --accent:           oklch(56% 0.115 82);
+    --accent-hover:     oklch(50% 0.125 82);
+    --accent-wash:      oklch(97.6% 0.013 85);
+    --warn:             oklch(94% 0.055 85);
+    --warn-line:        oklch(72% 0.11 80);
+    --cold:             oklch(93% 0.045 25);
+    --cold-line:        oklch(66% 0.13 25);
+    --st-to-apply-fill: oklch(94% 0.010 95);
+    --st-to-apply-line: oklch(86% 0.014 95);
+    --st-to-apply-mark: oklch(60% 0.020 95);
+    --st-applied-fill:  oklch(93% 0.045 150);
+    --st-applied-line:  oklch(80% 0.080 150);
+    --st-applied-mark:  oklch(55% 0.120 150);
+    --st-replied-fill:  oklch(93% 0.040 245);
+    --st-replied-line:  oklch(80% 0.070 245);
+    --st-replied-mark:  oklch(55% 0.115 245);
+    --st-interview-fill:oklch(93% 0.055 80);
+    --st-interview-line:oklch(80% 0.095 80);
+    --st-interview-mark:oklch(58% 0.115 80);
+    --st-offer-fill:    oklch(93% 0.040 300);
+    --st-offer-line:    oklch(80% 0.070 300);
+    --st-offer-mark:    oklch(55% 0.125 300);
+    --st-closed-fill:   oklch(94% 0.004 95);
+    --st-closed-line:   oklch(86% 0.006 95);
+    --st-closed-mark:   oklch(62% 0.008 95);
+    --fn-1:             oklch(74% 0.085 82);
+    --fn-2:             oklch(64% 0.100 82);
+    --fn-3:             oklch(53% 0.105 82);
+    --fn-4:             oklch(40% 0.090 82);
+  }
+  [data-theme="dark"] .tk-page {
+    --bg:               oklch(16.5% 0.011 265);
+    --surface:          oklch(20% 0.013 265);
+    --surface-2:        oklch(22.5% 0.014 265);
+    --lift:             oklch(24.5% 0.015 265);
+    --hover:            oklch(26.5% 0.017 265);
+    --active:           oklch(31% 0.021 265);
+    --line:             oklch(29.5% 0.015 265);
+    --line-soft:        oklch(24.5% 0.013 265);
+    --line-strong:      oklch(41% 0.020 265);
+    --ink:              oklch(95.5% 0.005 265);
+    --ink-2:            oklch(77% 0.011 265);
+    --ink-3:            oklch(62% 0.013 265);
+    --accent:           oklch(80% 0.125 85);
+    --accent-hover:     oklch(87% 0.130 85);
+    --accent-wash:      oklch(22.5% 0.020 85);
+    --warn:             oklch(30% 0.050 80);
+    --warn-line:        oklch(62% 0.110 80);
+    --cold:             oklch(30% 0.055 25);
+    --cold-line:        oklch(60% 0.120 25);
+    --st-to-apply-fill: oklch(26% 0.015 265);
+    --st-to-apply-line: oklch(38% 0.020 265);
+    --st-to-apply-mark: oklch(72% 0.025 265);
+    --st-applied-fill:  oklch(28% 0.050 155);
+    --st-applied-line:  oklch(45% 0.080 155);
+    --st-applied-mark:  oklch(76% 0.130 155);
+    --st-replied-fill:  oklch(28% 0.050 245);
+    --st-replied-line:  oklch(45% 0.080 245);
+    --st-replied-mark:  oklch(76% 0.110 245);
+    --st-interview-fill:oklch(28% 0.050 80);
+    --st-interview-line:oklch(45% 0.080 80);
+    --st-interview-mark:oklch(80% 0.125 80);
+    --st-offer-fill:    oklch(28% 0.050 300);
+    --st-offer-line:    oklch(45% 0.080 300);
+    --st-offer-mark:    oklch(76% 0.120 300);
+    --st-closed-fill:   oklch(24% 0.010 265);
+    --st-closed-line:   oklch(35% 0.014 265);
+    --st-closed-mark:   oklch(64% 0.014 265);
+    --fn-1:             oklch(50% 0.080 82);
+    --fn-2:             oklch(62% 0.100 82);
+    --fn-3:             oklch(74% 0.110 82);
+    --fn-4:             oklch(86% 0.100 82);
+  }
+}
 
-  --st-to-apply-fill:#232b3a;  --st-to-apply-line:#3a465c;  --st-to-apply-mark:#8fa0bb;
-  --st-applied-fill:#14332a;   --st-applied-line:#2f6b53;   --st-applied-mark:#5cbf94;
-  --st-replied-fill:#132b3f;   --st-replied-line:#2d5f86;   --st-replied-mark:#62aee0;
-  --st-interview-fill:#3a2f10; --st-interview-line:#7d6522; --st-interview-mark:#e0b354;
-  --st-offer-fill:#2b2149;     --st-offer-line:#55427f;     --st-offer-mark:#b294e8;
-  --st-closed-fill:#1f2531;    --st-closed-line:#364052;    --st-closed-mark:#7f8a9c;
-
-  /* The ramp's anchor flips against a dark surface: deepest funnel step is
-     now the brightest, not the darkest. Revalidated against the slate. */
-  --fn-1:#8a6f28; --fn-2:#b8933c; --fn-3:#dcb257; --fn-4:#f2dc95;
-}
-.tk-page *, .tk-page *::placeholder { color:var(--ink); }
-/* Beats the blanket rule above on specificity, so example text reads as a
-   suggestion rather than as content already entered. */
-.tk-page input::placeholder, .tk-page textarea::placeholder {
-  color:var(--ink); opacity:.55; font-style:italic;
-}
-.tk-surface { background:var(--surface); }
-.tk-card { background:var(--surface); border:1px solid var(--line); }
-.tk-line-b { border-bottom:1px solid var(--line); }
-.tk-divide > * + * { border-top:1px solid var(--line-soft); }
-.tk-secondary { opacity:.85; }
-.tk-tertiary { opacity:.70; }
-.tk-btn { background:var(--surface); border:1px solid var(--line); }
-.tk-btn:hover { background:var(--active); border-color:var(--accent); }
-.tk-del { background:transparent; border:1px solid transparent; }
-.tk-del:hover { background:var(--cold); border-color:var(--cold-line); }
-.tk-pill:hover { filter:brightness(.965); }
-.tk-cell { border:1px solid transparent; }
-.tk-cell:hover { background:var(--hover); border-color:var(--line); }
-.tk-edit { background:var(--lift); border:1px solid var(--accent); }
-.tk-input { background:var(--lift); border:1px solid var(--line); }
-.tk-input:focus { border-color:var(--accent); outline:none; }
-.tk-focus:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-.tk-rail { background:var(--line-soft); }
-.tk-dash { border:1px dashed var(--line-strong); }
-.tk-code { background:var(--lift); border:1px solid var(--line); }
-
-/* Separated, card-like table rows. border-spacing gives each row its own
-   gap; the per-cell borders close the card up around it. */
-.tk-table { border-collapse:separate; border-spacing:0 10px; }
-.tk-rowcard > td {
-  background:var(--surface);
-  border-top:1px solid var(--line);
-  border-bottom:1px solid var(--line);
-  transition:background-color .15s ease;
-}
-.tk-rowcard > td:first-child {
-  border-left:1px solid var(--line);
-  border-top-left-radius:8px; border-bottom-left-radius:8px;
-}
-.tk-rowcard > td:last-child {
-  border-right:1px solid var(--line);
-  border-top-right-radius:8px; border-bottom-right-radius:8px;
-}
-.tk-rowcard:hover > td { background:var(--hover); }
-
-/* Dropdowns. The trigger reads as a quiet control until the view is actually
-   grouped, at which point it takes the accent border — so "not grouped" is a
-   visible resting state rather than one more button to compare against. */
-.tk-trigger { background:var(--surface); border:1px solid var(--line); }
-.tk-trigger:hover { background:var(--active); border-color:var(--accent); }
-.tk-trigger-on { background:var(--active); border-color:var(--accent); }
-.tk-menu {
-  background:var(--lift); border:1px solid var(--line-strong);
-  box-shadow:0 12px 32px var(--shadow);
-}
-.tk-menu-item { background:transparent; border:1px solid transparent; }
-.tk-menu-item:hover, .tk-menu-item:focus {
-  background:var(--hover); border-color:var(--line); outline:none;
-}
-.tk-menu-item[aria-checked="true"] { background:var(--active); border-color:var(--accent); }
-.tk-kbd {
-  background:var(--lift); border:1px solid var(--line);
-  border-radius:4px; padding:1px 5px;
-}
-
-/* Detail drawer. The accent edge ties it to the row it belongs to, which
-   border-spacing would otherwise leave floating. */
-.tk-detail > td {
-  background:var(--lift);
-  border:1px solid var(--line); border-left:3px solid var(--accent);
-  border-radius:8px;
-}
-.tk-panel { border:1px solid var(--line-soft); border-radius:8px; }
-
-.tk-check {
-  accent-color:var(--accent);
-  width:14px; height:14px; flex:none; cursor:pointer; margin:0;
-}
-
-/* Rating swatches: a 5-step meter, not five separate colours. */
-.tk-score { border:1px solid var(--line-strong); }
-.tk-score:hover { border-color:var(--accent); }
-
-/* Funnel bars. Thin marks, rounded only at the data end, anchored to a common
-   left baseline so the widths are comparable. */
-.tk-track { background:var(--line-soft); border-radius:4px; }
-.tk-bar { height:14px; border-radius:0 4px 4px 0; }
-
+/* Print re-declares the WHOLE light palette, not a chosen subset: a dark-mode
+   reader printing this must not get dark stage pills burned onto white paper.
+   Emitted from the same source as the light theme so no token can be missed. */
 @media print {
-  /* Force the light palette regardless of theme — this rule sits after the
-     dark block and matches it, so it wins on the printed page only. */
   .tk-page, [data-theme="dark"] .tk-page {
-    --bg:#fff; --surface:#fff; --lift:#fff; --hover:#fff; --active:#fff;
-    --line:#c4c4c4; --line-soft:#dcdcdc; --line-strong:#a8a8a8;
-    --ink:#1a1a1a; --accent:#8a6d28; --shadow:transparent;
-    --warn:#f3ddab; --cold:#eec9c2;
-    --st-to-apply-fill:#ebe6d6;  --st-applied-fill:#bfe0c8;
-    --st-replied-fill:#c6dbeb;   --st-interview-fill:#f3ddab;
-    --st-offer-fill:#ddd0ec;     --st-closed-fill:#e6e2d6;
-    --fn-1:#c4a25c; --fn-2:#a8853a; --fn-3:#836726; --fn-4:#54431a;
+    --bg:               #f8f8f5;
+    --surface:          #fefdfc;
+    --surface-2:        #fafaf7;
+    --lift:             #ffffff;
+    --hover:            #f4f3f0;
+    --active:           #eeece6;
+    --line:             #e4e3df;
+    --line-soft:        #eeeeeb;
+    --line-strong:      #cccac5;
+    --ink:              #1e1d18;
+    --ink-2:            #595852;
+    --ink-3:            #706f69;
+    --accent:           #966c01;
+    --accent-hover:     #865a00;
+    --accent-wash:      #fbf7ee;
+    --warn:             #fce9c2;
+    --warn-line:        #c99d4e;
+    --cold:             #ffddd9;
+    --cold-line:        #d67069;
+    --st-to-apply-fill: #edebe4;
+    --st-to-apply-line: #d4d1c7;
+    --st-to-apply-mark: #848073;
+    --st-applied-fill:  #d4f1d8;
+    --st-applied-line:  #99cda3;
+    --st-applied-mark:  #33854a;
+    --st-replied-fill:  #d3ebff;
+    --st-replied-line:  #98c3e8;
+    --st-replied-mark:  #2b77b0;
+    --st-interview-fill:#fce5bf;
+    --st-interview-line:#deb775;
+    --st-interview-mark:#9e7112;
+    --st-offer-fill:    #ece2ff;
+    --st-offer-line:    #c4b4e5;
+    --st-offer-mark:    #7d5eaf;
+    --st-closed-fill:   #ecebe8;
+    --st-closed-line:   #d2d1cd;
+    --st-closed-mark:   #878681;
+    --fn-1:             #c6a66b;
+    --fn-2:             #aa863e;
+    --fn-3:             #8a650d;
+    --fn-4:             #604200;
+    --bg:#fff; --surface:#fff; --surface-2:#fff; --lift:#fff;
+    --hover:#fff; --active:#fff;
+    --ink:#15150f; --ink-2:#4a4a44; --ink-3:#6e6e68;
+    --sh-1:none; --sh-2:none; --sh-3:none; --ring:none;
     padding:0 !important;
     -webkit-print-color-adjust:exact; print-color-adjust:exact;
   }
   .tk-noprint, .tk-del { display:none !important; }
   .tk-printonly { display:block !important; }
-  /* Controls keep their text but lose the affordances that imply clicking. */
-  .tk-cell, .tk-btn, .tk-trigger { border-color:transparent !important; }
+  .tk-cell, .tk-btn, .tk-trigger, .tk-card { border-color:transparent !important; box-shadow:none !important; }
   .tk-table { border-spacing:0 6px; }
   .tk-rowcard > td, .tk-detail > td { break-inside:avoid; }
   tr, .tk-card, .tk-panel { break-inside:avoid; }
@@ -629,15 +719,259 @@ const CSS = `
   a[href]::after { content:""; }
   @page { margin:14mm; }
 }
+
+/* ---------------------------- non-colour tokens ---------------------------
+   A named semantic scale derived from one base unit, per the dossier's note
+   that elite systems use tokens rather than raw pixels sprinkled per
+   component. Type is a tempered fourth: tracking tightens as size grows,
+   which is the difference between "correct" and "expensive" typography. */
+.tk-page {
+  --s-1:4px;  --s-2:8px;  --s-3:12px; --s-4:16px; --s-5:24px;
+  --s-6:32px; --s-7:48px; --s-8:64px; --s-9:96px;
+
+  --t-micro:.6875rem; --t-cap:.75rem;  --t-body:.8125rem;
+  --t-ui:.875rem;     --t-lead:1.0625rem;
+  --t-title:1.375rem; --t-display:2rem;
+
+  --lh-tight:1.15; --lh-snug:1.35; --lh-body:1.55;
+  --tr-display:-.022em; --tr-title:-.015em; --tr-ui:-.006em; --tr-micro:.08em;
+
+  --r-1:6px; --r-2:8px; --r-3:10px; --r-4:14px;
+
+  /* Layered ambient + direct, never a single flat blur. */
+  --sh-1:0 1px 2px rgb(0 0 0/.04), 0 1px 1px rgb(0 0 0/.03);
+  --sh-2:0 2px 4px rgb(0 0 0/.04), 0 6px 16px rgb(0 0 0/.06);
+  --sh-3:0 12px 32px rgb(0 0 0/.10), 0 2px 8px rgb(0 0 0/.06);
+  --ring:0 0 0 3px rgb(150 108 1/.22);
+
+  /* Dossier motion guardrails: ease-out for entrances, everything under
+     300ms, exits slower than entrances (instant in, graceful out). */
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --d-1:120ms; --d-2:180ms; --d-3:280ms; --d-exit:150ms;
+
+  --font-ui:'Inter var',Inter,-apple-system,BlinkMacSystemFont,'SF Pro Text',
+            'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  font-size:var(--t-ui);
+  line-height:var(--lh-body);
+  letter-spacing:var(--tr-ui);
+  font-optical-sizing:auto;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* Elevation in dark mode comes from lighter surfaces, not heavier shadows —
+   the dossier is explicit that you cannot simply invert a light theme. The
+   hairline top highlight is what reads as a raised edge on a dark ground. */
+[data-theme="dark"] .tk-page {
+  --sh-1:0 1px 2px rgb(0 0 0/.30);
+  --sh-2:0 2px 6px rgb(0 0 0/.35), 0 8px 24px rgb(0 0 0/.25);
+  --sh-3:0 16px 40px rgb(0 0 0/.45), 0 2px 8px rgb(0 0 0/.30);
+  --ring:0 0 0 3px rgb(227 183 86/.28);
+}
+
+/* Zero-specificity reset so form controls inherit the type system without
+   outranking the utility classes on the elements themselves. */
+.tk-page :where(input,textarea,button,select) {
+  color:inherit; font-family:inherit; letter-spacing:inherit;
+}
+.tk-page input::placeholder, .tk-page textarea::placeholder {
+  color:var(--ink-3); opacity:1; font-style:italic;
+}
+
+/* ------------------------------- typography ------------------------------ */
+.tk-display { font-size:var(--t-display); line-height:var(--lh-tight);
+              letter-spacing:var(--tr-display); font-weight:640; }
+.tk-title   { font-size:var(--t-title); line-height:var(--lh-snug);
+              letter-spacing:var(--tr-title); font-weight:600; }
+.tk-lead    { font-size:var(--t-lead); line-height:var(--lh-snug); font-weight:560; }
+.tk-body    { font-size:var(--t-body); line-height:var(--lh-body); }
+.tk-cap     { font-size:var(--t-cap); line-height:var(--lh-snug); }
+.tk-micro   { font-size:var(--t-micro); line-height:var(--lh-snug); font-weight:560;
+              text-transform:uppercase; letter-spacing:var(--tr-micro); }
+/* Mandated by the dossier for every data table: figures that do not jitter
+   between rows is effort the reader cannot name but the brain registers. */
+.tk-num, .tk-table, .tk-stat { font-variant-numeric:tabular-nums; }
+.tk-prose { max-width:66ch; }          /* Bringhurst's measure */
+.tk-secondary { color:var(--ink-2); }
+.tk-tertiary  { color:var(--ink-3); }
+.tk-mono { font-family:var(--font-mono); }
+
+/* ------------------------------- surfaces -------------------------------- */
+.tk-surface { background:var(--surface); }
+.tk-card {
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r-4); box-shadow:var(--sh-1);
+}
+.tk-line-b { border-bottom:1px solid var(--line); }
+.tk-divide > * + * { border-top:1px solid var(--line-soft); }
+.tk-rail { background:var(--line-soft); }
+.tk-dash { border:1px dashed var(--line-strong); border-radius:var(--r-4); }
+.tk-code {
+  background:var(--surface-2); border:1px solid var(--line);
+  border-radius:var(--r-2); font-family:var(--font-mono);
+}
+
+/* -------------------------------- controls ------------------------------- */
+.tk-btn {
+  background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r-2); box-shadow:var(--sh-1);
+  transition:background-color var(--d-1) var(--ease),
+             border-color var(--d-1) var(--ease),
+             box-shadow var(--d-1) var(--ease),
+             transform var(--d-1) var(--ease);
+}
+.tk-btn:hover { background:var(--hover); border-color:var(--line-strong); box-shadow:var(--sh-2); }
+.tk-btn:active { transform:translateY(1px); box-shadow:none; }
+
+.tk-del { background:transparent; border:1px solid transparent; border-radius:var(--r-1);
+          transition:background-color var(--d-1) var(--ease), color var(--d-1) var(--ease); }
+.tk-del:hover { background:var(--cold); border-color:var(--cold-line); }
+
+.tk-pill {
+  border-radius:var(--r-2);
+  transition:filter var(--d-1) var(--ease), transform var(--d-1) var(--ease),
+             box-shadow var(--d-1) var(--ease);
+}
+.tk-pill:hover { filter:brightness(1.03) saturate(1.05); box-shadow:var(--sh-1); }
+.tk-pill:active { transform:translateY(1px); }
+
+.tk-cell {
+  border:1px solid transparent; border-radius:var(--r-2);
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease);
+}
+.tk-cell:hover { background:var(--hover); border-color:var(--line); }
+.tk-edit { background:var(--lift); border:1px solid var(--accent);
+           border-radius:var(--r-2); box-shadow:var(--ring); }
+.tk-input {
+  background:var(--lift); border:1px solid var(--line); border-radius:var(--r-2);
+  transition:border-color var(--d-1) var(--ease), box-shadow var(--d-1) var(--ease);
+}
+.tk-input:focus { border-color:var(--accent); box-shadow:var(--ring); outline:none; }
+.tk-focus:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-2); }
+
+.tk-chip {
+  border-radius:var(--r-full,999px); border:1px solid var(--line);
+  background:transparent;
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease),
+             color var(--d-1) var(--ease);
+}
+.tk-chip:hover { background:var(--hover); border-color:var(--line-strong); }
+.tk-chip[aria-pressed="true"] { background:var(--accent-wash); border-color:var(--accent); color:var(--ink); }
+
+/* --------------------------------- table --------------------------------- */
+/* Not a data grid: each row is its own quiet card, separated by real space
+   rather than divided by rules. Tufte's data-ink argument applied to a table
+   — the gridlines were redundant ink. */
+.tk-table { border-collapse:separate; border-spacing:0 10px; width:100%; }
+.tk-th {
+  padding:0 var(--s-3) var(--s-2);
+  text-align:left; font-weight:560; color:var(--ink-3);
+  font-size:var(--t-micro); text-transform:uppercase; letter-spacing:var(--tr-micro);
+}
+.tk-rowcard > td {
+  background:var(--surface);
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:var(--s-3) var(--s-2);
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease);
+}
+.tk-rowcard > td:first-child {
+  border-left:1px solid var(--line);
+  border-top-left-radius:var(--r-3); border-bottom-left-radius:var(--r-3);
+  padding-left:var(--s-3);
+}
+.tk-rowcard > td:last-child {
+  border-right:1px solid var(--line);
+  border-top-right-radius:var(--r-3); border-bottom-right-radius:var(--r-3);
+  padding-right:var(--s-3);
+}
+.tk-rowcard:hover > td { background:var(--hover); border-color:var(--line-strong); }
+
+/* -------------------------------- dropdown ------------------------------- */
+.tk-trigger {
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r-2);
+  box-shadow:var(--sh-1);
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease),
+             box-shadow var(--d-1) var(--ease);
+}
+.tk-trigger:hover { background:var(--hover); border-color:var(--line-strong); box-shadow:var(--sh-2); }
+.tk-trigger-on { background:var(--accent-wash); border-color:var(--accent); }
+/* Deliberately not animated. The dossier's counter-move: high-frequency,
+   low-novelty surfaces (menus opened dozens of times a day) read as faster
+   without an entrance. */
+.tk-menu {
+  background:var(--lift); border:1px solid var(--line);
+  border-radius:var(--r-3); box-shadow:var(--sh-3);
+}
+.tk-menu-item {
+  background:transparent; border:1px solid transparent; border-radius:var(--r-1);
+  transition:background-color var(--d-1) var(--ease);
+}
+.tk-menu-item:hover, .tk-menu-item:focus { background:var(--hover); outline:none; }
+.tk-menu-item[aria-checked="true"] { background:var(--accent-wash); color:var(--ink); }
+
+.tk-kbd {
+  background:var(--surface-2); border:1px solid var(--line);
+  border-bottom-width:2px; border-radius:var(--r-1);
+  padding:1px 6px; font-family:var(--font-mono); font-size:var(--t-micro);
+  color:var(--ink-2);
+}
+
+/* ------------------------------ detail drawer ---------------------------- */
+.tk-detail > td {
+  background:var(--surface-2);
+  border:1px solid var(--line); border-left:2px solid var(--accent);
+  border-radius:var(--r-3);
+  padding:var(--s-4);
+}
+.tk-panel { border:1px solid var(--line-soft); border-radius:var(--r-3); background:var(--surface); }
+/* The offer half is the payoff of the whole pipeline, so it is the one place
+   the accent is allowed to tint a surface. */
+.tk-panel-offer { background:var(--accent-wash); border-color:var(--accent); }
+
+.tk-check { accent-color:var(--accent); width:15px; height:15px; flex:none; cursor:pointer; margin:0; }
+.tk-score {
+  border:1px solid var(--line-strong); border-radius:3px;
+  transition:background-color var(--d-1) var(--ease), border-color var(--d-1) var(--ease),
+             transform var(--d-1) var(--ease-spring);
+}
+.tk-score:hover { border-color:var(--accent); transform:scale(1.12); }
+
+/* --------------------------------- funnel -------------------------------- */
+.tk-track { background:var(--line-soft); border-radius:var(--r-full,999px); }
+.tk-bar {
+  height:10px; border-radius:var(--r-full,999px);
+  transition:width var(--d-3) var(--ease);
+}
+.tk-stat { }
+
+/* Entrance only, on transform and opacity — the two properties the dossier
+   allows because they are GPU-composited and never thrash layout. */
+@keyframes tk-rise { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+@keyframes tk-pop  { from { opacity:0; transform:translateY(10px) scale(.97); } to { opacity:1; transform:none; } }
+.tk-reveal { animation:tk-rise var(--d-3) var(--ease) both; }
+.tk-toast  { animation:tk-pop var(--d-3) var(--ease-spring) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-page *, .tk-page *::before, .tk-page *::after {
+    animation-duration:1ms !important; animation-iteration-count:1 !important;
+    transition-duration:1ms !important;
+  }
+}
 `;
 
 /* ---------------------------------- shell --------------------------------- */
 
 function Shell({ children, right }) {
   return (
-    <div className="tk-page min-h-screen p-4 sm:p-8">
+    <div className="tk-page min-h-screen px-5 py-8 sm:px-8 sm:py-12 lg:px-12">
       <style>{CSS}</style>
-      <div className="mx-auto max-w-7xl">{children}</div>
+      <div className="mx-auto max-w-[1400px]">{children}</div>
     </div>
   );
 }
@@ -648,7 +982,7 @@ function CopyValue({ value }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <code className="tk-code break-all rounded p-2 font-mono text-[11px]">{value}</code>
+      <code className="tk-code break-all rounded p-2 tk-mono tk-cap">{value}</code>
       <button
         onClick={async () => {
           try {
@@ -659,7 +993,7 @@ function CopyValue({ value }) {
             /* Clipboard blocked. The value is on screen either way. */
           }
         }}
-        className="tk-btn tk-focus shrink-0 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        className="tk-btn tk-focus shrink-0 rounded px-3 py-1 tk-micro transition-colors"
       >
         {copied ? "Copied" : "Copy"}
       </button>
@@ -715,7 +1049,7 @@ function ConnectForm({ onSave }) {
   return (
     <Shell>
       <div className="mx-auto max-w-2xl pt-8 sm:pt-16">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="tk-display">
           Application tracker
         </h1>
         <p className="mt-3 text-sm leading-relaxed tk-secondary">
@@ -726,7 +1060,7 @@ function ConnectForm({ onSave }) {
 
         <ol className="tk-divide mt-8">
           <li className="py-4">
-            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <p className="tk-micro tk-secondary">
               Step 1
             </p>
             <p className="mt-1 text-sm leading-relaxed">
@@ -744,7 +1078,7 @@ function ConnectForm({ onSave }) {
           </li>
 
           <li className="py-4">
-            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <p className="tk-micro tk-secondary">
               Step 2
             </p>
             <p className="mt-1 text-sm leading-relaxed">
@@ -756,26 +1090,26 @@ function ConnectForm({ onSave }) {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={copySql}
-                className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
               >
                 {copied ? "Copied" : "Copy SQL"}
               </button>
               <button
                 onClick={() => setShowSql((v) => !v)}
-                className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
               >
                 {showSql ? "Hide" : "Show"} SQL
               </button>
             </div>
             {showSql && (
-              <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+              <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 tk-mono tk-cap leading-relaxed">
                 {SETUP_SQL}
               </pre>
             )}
           </li>
 
           <li className="py-4">
-            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <p className="tk-micro tk-secondary">
               Step 3
             </p>
             <p className="mt-1 text-sm leading-relaxed">
@@ -788,7 +1122,7 @@ function ConnectForm({ onSave }) {
           </li>
 
           <li className="py-4">
-            <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <p className="tk-micro tk-secondary">
               Step 4
             </p>
             <p className="mt-1 text-sm leading-relaxed">
@@ -796,29 +1130,29 @@ function ConnectForm({ onSave }) {
               and paste them here.
             </p>
 
-            <label className="mt-4 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <label className="mt-4 block tk-micro tk-secondary">
               Project URL
             </label>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://abcdefgh.supabase.co"
-              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 font-mono text-sm"
+              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 tk-mono tk-body"
             />
 
-            <label className="mt-4 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <label className="mt-4 block tk-micro tk-secondary">
               Publishable or anon key
             </label>
             <input
               value={key}
               onChange={(e) => setKey(e.target.value)}
               placeholder="sb_publishable_… or eyJhbGciOi…"
-              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 font-mono text-sm"
+              className="tk-input tk-focus mt-1 w-full rounded px-3 py-2 tk-mono tk-body"
             />
 
             {error && (
               <p
-                className="mt-3 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider"
+                className="mt-3 rounded px-2 py-1 tk-micro"
                 style={{ background: "var(--cold)" }}
               >
                 {error}
@@ -827,14 +1161,14 @@ function ConnectForm({ onSave }) {
 
             <button
               onClick={submit}
-              className="tk-btn tk-focus mt-4 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+              className="tk-btn tk-focus mt-4 rounded px-4 py-2 tk-micro transition-colors"
             >
               Connect
             </button>
           </li>
         </ol>
 
-        <p className="mt-6 font-mono text-[11px] leading-relaxed tk-tertiary">
+        <p className="mt-6 tk-mono tk-cap leading-relaxed tk-tertiary">
           Never paste a service_role or sb_secret key here. Those bypass every security
           policy and belong on a server. The publishable key is designed to be public;
           the row-level security policy in the script is what keeps your data private.
@@ -888,7 +1222,7 @@ function SignIn({ cfgUrl, onReset }) {
   return (
     <Shell>
       <div className="mx-auto max-w-md pt-8 sm:pt-16">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="tk-display">
           Application tracker
         </h1>
 
@@ -899,7 +1233,7 @@ function SignIn({ cfgUrl, onReset }) {
               six-digit code below if the link fails.
             </p>
 
-            <label className="mt-6 block font-mono text-[11px] uppercase tracking-wider tk-secondary">
+            <label className="mt-6 block tk-micro tk-secondary">
               Six-digit code
             </label>
             <div className="mt-1 flex flex-col gap-3 sm:flex-row">
@@ -910,12 +1244,12 @@ function SignIn({ cfgUrl, onReset }) {
                 placeholder="123456"
                 onChange={(e) => setCode(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && verify()}
-                className="tk-input tk-focus w-full rounded px-3 py-2 font-mono text-sm tracking-widest"
+                className="tk-input tk-focus w-full rounded px-3 py-2 tk-mono tk-body tracking-widest"
               />
               <button
                 onClick={verify}
                 disabled={state === "verifying"}
-                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 tk-micro transition-colors"
               >
                 {state === "verifying" ? "Checking" : "Verify"}
               </button>
@@ -927,7 +1261,7 @@ function SignIn({ cfgUrl, onReset }) {
                 setCode("");
                 setError("");
               }}
-              className="tk-focus mt-4 rounded font-mono text-[11px] uppercase tracking-wider underline tk-secondary"
+              className="tk-focus mt-4 rounded tk-micro underline tk-secondary"
             >
               Send another
             </button>
@@ -951,7 +1285,7 @@ function SignIn({ cfgUrl, onReset }) {
               <button
                 onClick={send}
                 disabled={state === "sending"}
-                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+                className="tk-btn tk-focus shrink-0 rounded px-4 py-2 tk-micro transition-colors"
               >
                 {state === "sending" ? "Sending" : "Send link"}
               </button>
@@ -962,7 +1296,7 @@ function SignIn({ cfgUrl, onReset }) {
         {error && (
           <>
             <p
-              className="mt-3 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider"
+              className="mt-3 rounded px-2 py-1 tk-micro"
               style={{ background: "var(--cold)" }}
             >
               {error}
@@ -995,15 +1329,15 @@ function SignIn({ cfgUrl, onReset }) {
         )}
 
         <div className="tk-line-b mt-8 pb-4" />
-        <p className="font-mono text-[11px] uppercase leading-relaxed tracking-wider tk-tertiary">
+        <p className="tk-mono tk-cap uppercase leading-relaxed tracking-wider tk-tertiary">
           Connected to
         </p>
-        <p className="mt-1 break-all font-mono text-[11px] leading-relaxed tk-secondary">
+        <p className="mt-1 break-all tk-mono tk-cap leading-relaxed tk-secondary">
           {cfgUrl}
         </p>
         <button
           onClick={onReset}
-          className="tk-btn tk-focus mt-3 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+          className="tk-btn tk-focus mt-3 rounded px-3 py-1 tk-micro transition-colors"
         >
           Change connection details
         </button>
@@ -1025,7 +1359,7 @@ function ThemeToggle() {
       }}
       title={`Switch to ${next} mode`}
       aria-label={`Switch to ${next} mode`}
-      className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+      className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
     >
       {theme === "dark" ? "☀ Light" : "☾ Dark"}
     </button>
@@ -1103,7 +1437,7 @@ function Dropdown({ label, value, items, onPick, on }) {
             show();
           }
         }}
-        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+        className={`tk-trigger tk-focus flex items-center gap-2 rounded px-3 py-1.5 tk-micro transition-colors ${
           on ? "tk-trigger-on" : ""
         }`}
       >
@@ -1121,7 +1455,7 @@ function Dropdown({ label, value, items, onPick, on }) {
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKey}
-          className="tk-menu absolute left-0 z-20 mt-1 max-h-72 min-w-[14rem] overflow-auto rounded-lg p-1"
+          className="tk-menu absolute left-0 z-20 mt-2 max-h-80 min-w-[15rem] overflow-auto p-1.5"
         >
           {items.map((item, i) => (
             <button
@@ -1136,7 +1470,7 @@ function Dropdown({ label, value, items, onPick, on }) {
                 onPick(item.key);
                 hide(true);
               }}
-              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-2.5 py-1.5 text-left font-mono text-[11px] uppercase tracking-wider transition-colors"
+              className="tk-menu-item flex w-full items-center justify-between gap-4 rounded px-2.5 py-1.5 text-left tk-micro transition-colors"
             >
               <span className="truncate">{item.label}</span>
               {item.count != null && (
@@ -1159,16 +1493,16 @@ function UndoBar({ undo, onRun, onDismiss }) {
   return (
     <div className="tk-noprint fixed inset-x-0 bottom-4 z-30 flex justify-center px-4">
       <div
-        className="tk-card flex items-center gap-3 rounded-lg px-3 py-2"
-        style={{ boxShadow: "0 12px 32px var(--shadow)" }}
+        className="tk-toast tk-card flex items-center gap-3 px-4 py-2.5"
+        style={{ boxShadow: "var(--sh-3)" }}
         role="status"
       >
-        <span className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+        <span className="tk-micro tk-secondary">
           {undo.label}
         </span>
         <button
           onClick={onRun}
-          className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+          className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
         >
           Undo
         </button>
@@ -1193,7 +1527,7 @@ function SyncChip({ status }) {
   const s = map[status] || map.offline;
   return (
     <span
-      className={`tk-noprint rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${s.cls}`}
+      className={`tk-noprint rounded px-1.5 py-0.5 tk-micro ${s.cls}`}
       style={{ background: s.bg }}
     >
       {s.label}
@@ -1218,7 +1552,7 @@ function AgeChip({ row }) {
   }
   return (
     <span
-      className={`mt-1 inline-block rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${cls}`}
+      className={`mt-1 inline-block rounded px-1.5 py-0.5 tk-micro ${cls}`}
       style={{ background: bg }}
     >
       {label}
@@ -1234,7 +1568,7 @@ function StatusCell({ row, onAdvance, cell }) {
         onClick={() => onAdvance(row.id)}
         title="Advance stage (Enter)"
         {...cell}
-        className="tk-pill tk-focus w-full rounded px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-all"
+        className="tk-pill tk-focus w-full rounded px-3 py-1.5 tk-micro transition-all"
         style={{ background: s.fill, border: `1px solid ${s.line}` }}
       >
         {s.label}
@@ -1429,7 +1763,7 @@ function StepsCell({ value, onChange, cell }) {
             </li>
           ))}
         </ul>
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-wider tk-tertiary">
+        <p className="mt-2 tk-micro tk-tertiary">
           Return adds a step · Esc finishes
         </p>
       </div>
@@ -1482,7 +1816,7 @@ function StageRail({ rows, filter, setFilter }) {
   const total = rows.length || 1;
   return (
     <div>
-      <div className="tk-rail flex h-2 w-full overflow-hidden rounded-full">
+      <div className="tk-rail flex h-1.5 w-full overflow-hidden rounded-full">
         {STAGES.map((s) => {
           const n = rows.filter((r) => r.status === s.key).length;
           if (!n) return null;
@@ -1501,14 +1835,12 @@ function StageRail({ rows, filter, setFilter }) {
         <button
           onClick={() => setFilter(null)}
           aria-pressed={filter === null}
-          className="tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
-          style={{
-            background: filter === null ? "var(--active)" : "transparent",
-            border: `1px solid ${filter === null ? "var(--accent)" : "var(--line)"}`,
-          }}
+          className={`tk-chip tk-focus flex items-center gap-2 px-3 py-1.5 tk-micro ${
+            filter === null ? "" : "tk-secondary"
+          }`}
         >
           All
-          <span className={filter === null ? "" : "tk-secondary"}>{rows.length}</span>
+          <span className="tk-num">{rows.length}</span>
         </button>
 
         {STAGES.map((s) => {
@@ -1520,17 +1852,16 @@ function StageRail({ rows, filter, setFilter }) {
               onClick={() => setFilter(active ? null : s.key)}
               aria-pressed={active}
               title={active ? `Showing ${s.label} only — click to show all` : `Show only ${s.label}`}
-              className={`tk-focus flex items-center gap-2 rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+              className={`tk-chip tk-focus flex items-center gap-2 px-3 py-1.5 tk-micro ${
                 active ? "" : "tk-secondary"
               }`}
-              style={{
-                background: active ? "var(--active)" : "transparent",
-                border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
-              }}
             >
-              <span className="h-2 w-2 rounded-sm" style={{ background: s.mark }} />
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: s.mark }}
+              />
               {s.label}
-              <span>{n}</span>
+              <span className="tk-num">{n}</span>
             </button>
           );
         })}
@@ -1539,12 +1870,11 @@ function StageRail({ rows, filter, setFilter }) {
   );
 }
 
-const TH =
-  "px-3 py-2 text-left font-mono text-[11px] font-normal uppercase tracking-wider tk-secondary";
+const TH = "tk-th";
 
 /* ---------------------------- scoring & offers ---------------------------- */
 
-const LABEL = "font-mono text-[11px] uppercase tracking-wider tk-secondary";
+const LABEL = "tk-micro tk-tertiary";
 
 function Rating({ label, value, onChange }) {
   return (
@@ -1569,7 +1899,7 @@ function Rating({ label, value, onChange }) {
           onClick={() => onChange(0)}
           aria-label={`Clear ${label} rating`}
           title={`Clear ${label} rating`}
-          className={`tk-focus rounded px-1 font-mono text-xs leading-4 ${
+          className={`tk-focus rounded px-1 tk-mono tk-cap leading-4 ${
             value ? "tk-tertiary" : "invisible"
           }`}
           tabIndex={value ? 0 : -1}
@@ -1688,17 +2018,17 @@ function DetailPanel({ row, onEdit, onClearScores }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <section className="tk-panel p-3">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
+      <section className="tk-panel p-4">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
           <p className={LABEL}>Company score</p>
-          <p className="flex items-baseline gap-3 font-mono text-sm">
+          <p className="flex items-baseline gap-3 tk-mono tk-body">
             {mean == null ? <span className="tk-tertiary">Not rated</span> : mean.toFixed(1)}
             {mean != null && <span className="tk-tertiary">/ 5</span>}
             {mean != null && (
               <button
                 onClick={() => onClearScores(row.id)}
                 title="Clear every facet rating for this company"
-                className="tk-focus rounded font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
+                className="tk-focus rounded tk-micro underline tk-tertiary"
               >
                 Clear all
               </button>
@@ -1723,14 +2053,14 @@ function DetailPanel({ row, onEdit, onClearScores }) {
             placeholder="e.g. careers@company.com"
             onChange={(v) => onEdit(row.id, "contactEmail", v)}
           />
-          <p className="mt-1 font-mono text-[10px] leading-relaxed tk-tertiary">
+          <p className="mt-2 tk-cap leading-relaxed tk-tertiary">
             Replies from this address file themselves against this row.
           </p>
         </div>
       </section>
 
-      <section className="tk-panel p-3">
-        <p className={`${LABEL} mb-3`}>Offer</p>
+      <section className="tk-panel tk-panel-offer p-4">
+        <p className={`${LABEL} mb-4`}>Offer</p>
         {atOffer ? (
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1776,7 +2106,7 @@ function Stat({ label, value, sub }) {
     <div>
       <p className={LABEL}>{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
-      {sub && <p className="mt-0.5 font-mono text-[11px] tk-tertiary">{sub}</p>}
+      {sub && <p className="mt-0.5 tk-mono tk-cap tk-tertiary">{sub}</p>}
     </div>
   );
 }
@@ -1796,7 +2126,7 @@ function Funnel({ rows, open, onToggle }) {
         <button
           onClick={onToggle}
           aria-expanded={open}
-          className="tk-focus flex items-center gap-2 rounded font-mono text-[11px] uppercase tracking-wider tk-secondary"
+          className="tk-focus flex items-center gap-2 rounded tk-micro tk-secondary"
         >
           <span aria-hidden="true" className="tk-tertiary text-[9px]">
             {open ? "▼" : "▶"}
@@ -1804,11 +2134,11 @@ function Funnel({ rows, open, onToggle }) {
           Funnel
         </button>
         {open ? (
-          <p className="font-mono text-[11px] tk-tertiary">
+          <p className="tk-mono tk-cap tk-tertiary">
             Live count of where each application sits now
           </p>
         ) : (
-          <p className="font-mono text-[11px] tk-secondary">
+          <p className="tk-mono tk-cap tk-secondary">
             {inFunnel} live in the funnel ·{" "}
             {steps
               .filter((s) => s.count)
@@ -1820,7 +2150,7 @@ function Funnel({ rows, open, onToggle }) {
 
       {open && (
         <>
-          <div className="mb-5 mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="tk-reveal mb-6 mt-5 grid grid-cols-2 gap-5 sm:grid-cols-4">
             {steps.map((s) => (
               <Stat
                 key={s.key}
@@ -1841,11 +2171,11 @@ function Funnel({ rows, open, onToggle }) {
               here.
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="tk-reveal space-y-1.5">
               {steps.map((s, i) => (
                 <React.Fragment key={s.key}>
                   {i > 0 && (
-                    <p className="pl-[7.75rem] font-mono text-[10px] uppercase tracking-wider tk-tertiary">
+                    <p className="pl-[7.75rem] tk-micro tk-tertiary">
                       {s.meanDays == null ? (
                         <span title="No transitions recorded yet for this step">
                           ↓ timing pending
@@ -1862,7 +2192,7 @@ function Funnel({ rows, open, onToggle }) {
                     </p>
                   )}
                   <div className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-wider tk-secondary">
+                    <span className="w-28 shrink-0 tk-micro tk-secondary">
                       {s.label}
                     </span>
                     <div className="tk-track h-3.5 flex-1">
@@ -1878,7 +2208,7 @@ function Funnel({ rows, open, onToggle }) {
                         title={`${s.label}: ${s.count} of ${rows.length} tracked`}
                       />
                     </div>
-                    <span className="w-8 shrink-0 text-right font-mono text-sm">
+                    <span className="w-8 shrink-0 text-right tk-mono tk-body">
                       {s.count}
                     </span>
                   </div>
@@ -2022,7 +2352,7 @@ function ViewBar({
         <button
           onClick={onReset}
           title="Show every application again"
-          className="tk-focus rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider underline tk-tertiary"
+          className="tk-focus rounded px-2 py-1 tk-micro underline tk-tertiary"
         >
           Reset view
         </button>
@@ -2033,7 +2363,7 @@ function ViewBar({
 
 function GroupHeading({ section, columns }) {
   const text = (
-    <span className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+    <span className="tk-micro tk-secondary">
       {section.label} · {section.items.length}
     </span>
   );
@@ -2070,7 +2400,7 @@ function MigrationNotice({ onDismiss }) {
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-wider">
+          <p className="tk-micro">
             Your database needs one update
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed">
@@ -2081,25 +2411,25 @@ function MigrationNotice({ onDismiss }) {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={copy}
-              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
             >
               {copied ? "Copied" : "Copy SQL"}
             </button>
             <button
               onClick={() => setShown((v) => !v)}
-              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
             >
               {shown ? "Hide" : "Show"} SQL
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+              className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
             >
               Reload
             </button>
           </div>
           {shown && (
-            <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+            <pre className="tk-code mt-3 max-h-72 overflow-auto rounded-lg p-3 tk-mono tk-cap leading-relaxed">
               {MIGRATION_SQL}
             </pre>
           )}
@@ -2208,7 +2538,7 @@ function ScoreCell({ row, open, onToggle, cell }) {
       {...cell}
       className="tk-cell tk-focus flex w-full items-center justify-between gap-1 rounded p-2 text-left transition-colors"
     >
-      <span className="font-mono text-sm">
+      <span className="tk-mono tk-body">
         {mean == null ? <span className="tk-tertiary">–</span> : mean.toFixed(1)}
       </span>
       <span aria-hidden="true" className="tk-noprint tk-tertiary text-[10px]">
@@ -2243,7 +2573,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
         <button
           onClick={() => onDelete(row.id)}
           aria-label={`Delete ${row.company || "application"}`}
-          className="tk-del tk-focus shrink-0 rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+          className="tk-del tk-focus shrink-0 rounded px-2 py-1 tk-micro transition-colors"
         >
           Delete
         </button>
@@ -2260,7 +2590,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
           ["Notes", "notes", "Angle, contact, ATS"],
         ].map(([label, field, placeholder]) => (
           <div key={field}>
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-wider tk-secondary">
+            <p className="mb-1 tk-micro tk-secondary">
               {label}
             </p>
             {field === "nextSteps" ? (
@@ -2282,7 +2612,7 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
       <button
         onClick={() => onToggle(row.id)}
         aria-expanded={open}
-        className="tk-btn tk-focus mt-4 flex w-full items-center justify-between rounded px-3 py-2 font-mono text-[11px] uppercase tracking-wider transition-colors"
+        className="tk-btn tk-focus mt-4 flex w-full items-center justify-between rounded px-3 py-2 tk-micro transition-colors"
       >
         <span>Score &amp; offer</span>
         <span>
@@ -2664,7 +2994,7 @@ function Tracker({ session }) {
   if (loading) {
     return (
       <Shell>
-        <p className="pt-10 font-mono text-xs uppercase tracking-wider tk-secondary">
+        <p className="pt-10 tk-micro tk-secondary">
           Loading pipeline…
         </p>
       </Shell>
@@ -2675,10 +3005,10 @@ function Tracker({ session }) {
     <Shell>
       <header className="tk-line-b mb-6 flex flex-wrap items-end justify-between gap-4 pb-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h1 className="tk-display">
             Application tracker
           </h1>
-          <p className="mt-2 flex flex-wrap items-center gap-2 font-mono text-xs">
+          <p className="mt-2 flex flex-wrap items-center gap-2 tk-mono tk-cap">
             <span className="tk-secondary">
               {rows.length} tracked · {liveRows.length} live
             </span>
@@ -2694,14 +3024,14 @@ function Tracker({ session }) {
         <div className="tk-noprint flex flex-wrap gap-2">
           <button
             onClick={addRow}
-            className="tk-btn tk-focus rounded px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+            className="tk-btn tk-focus rounded px-4 py-2 tk-micro transition-colors"
           >
             + Add application
           </button>
           <button
             onClick={() => window.print()}
             title="Opens your browser's print dialogue — choose Save as PDF"
-            className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+            className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
           >
             Share / Export
           </button>
@@ -2715,7 +3045,7 @@ function Tracker({ session }) {
               )
                 sb.auth.signOut();
             }}
-            className="tk-btn tk-focus rounded px-3 py-2 font-mono text-xs uppercase tracking-wider transition-colors"
+            className="tk-btn tk-focus rounded px-3 py-2 tk-micro transition-colors"
           >
             Sign out
           </button>
@@ -2723,7 +3053,7 @@ function Tracker({ session }) {
       </header>
 
       {/* Only ever visible on paper: says what the export is and when. */}
-      <p className="tk-printonly mb-6 hidden font-mono text-[11px] uppercase tracking-wider tk-secondary">
+      <p className="tk-printonly mb-6 hidden tk-micro tk-secondary">
         Pipeline export · {new Date().toLocaleDateString()} · {visibleCount} of {rows.length}{" "}
         applications
         {filter ? ` · stage: ${stageOf(filter).label}` : ""}
@@ -2741,10 +3071,10 @@ function Tracker({ session }) {
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-wider">
+              <p className="tk-micro">
                 Database error
               </p>
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-xs leading-relaxed">
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap tk-mono tk-cap leading-relaxed">
                 {opError}
               </pre>
             </div>
@@ -2866,7 +3196,7 @@ function Tracker({ session }) {
               <p className="tk-secondary">No applications yet.</p>
               <button
                 onClick={addRow}
-                className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
+                className="tk-focus mt-2 rounded tk-micro underline"
               >
                 Add the first one
               </button>
@@ -2880,7 +3210,7 @@ function Tracker({ session }) {
                 {hiding.length > 0 && (
                   <>
                     {" "}
-                    <span className="font-mono text-[11px] uppercase tracking-wider tk-tertiary">
+                    <span className="tk-micro tk-tertiary">
                       {hiding.join(" · ")}
                     </span>
                   </>
@@ -2888,7 +3218,7 @@ function Tracker({ session }) {
               </p>
               <button
                 onClick={resetView}
-                className="tk-focus mt-2 rounded font-mono text-xs uppercase tracking-wider underline"
+                className="tk-focus mt-2 rounded tk-micro underline"
               >
                 Show all {rows.length} applications
               </button>
@@ -2899,7 +3229,7 @@ function Tracker({ session }) {
 
       {trash.length > 0 && (
         <div className="tk-noprint tk-card mt-6 rounded-lg p-4">
-          <p className="font-mono text-[11px] uppercase tracking-wider tk-secondary">
+          <p className="tk-micro tk-secondary">
             Recently deleted · {trash.length}
           </p>
           <ul className="tk-divide mt-3">
@@ -2917,13 +3247,13 @@ function Tracker({ session }) {
                 <span className="flex gap-2">
                   <button
                     onClick={() => setDeleted(row.id, false)}
-                    className="tk-btn tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                    className="tk-btn tk-focus rounded px-3 py-1 tk-micro transition-colors"
                   >
                     Restore
                   </button>
                   <button
                     onClick={() => purge(row.id)}
-                    className="tk-btn tk-del tk-focus rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+                    className="tk-btn tk-del tk-focus rounded px-3 py-1 tk-micro transition-colors"
                   >
                     Delete for good
                   </button>
@@ -2934,8 +3264,8 @@ function Tracker({ session }) {
         </div>
       )}
 
-      <div className="tk-noprint mt-6 space-y-2 font-mono text-[11px] leading-relaxed tk-tertiary">
-        <p>
+      <div className="tk-noprint mt-10 space-y-3 tk-cap leading-relaxed tk-tertiary">
+        <p className="tk-prose">
           Click a status to advance it: To apply → Applied → Replied → Interview → Offer
           → Closed. Editing any cell resets that row's clock. Live rows untouched for 7
           days flag for chase, 14 days flag cold. Every change syncs to your other
@@ -3021,7 +3351,7 @@ function App() {
   if (!LIB_READY) {
     return (
       <Shell>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="tk-display">
           Supabase library did not load
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed">
@@ -3047,15 +3377,15 @@ function App() {
   if (bootError) {
     return (
       <Shell>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="tk-display">
           Could not reach your database
         </h1>
-        <pre className="tk-code mt-4 max-w-2xl overflow-x-auto whitespace-pre-wrap rounded-lg p-4 font-mono text-xs leading-relaxed">
+        <pre className="tk-code mt-4 max-w-2xl overflow-x-auto whitespace-pre-wrap rounded-lg p-4 tk-mono tk-cap leading-relaxed">
           {bootError}
         </pre>
         <button
           onClick={reset}
-          className="tk-btn tk-focus mt-4 rounded px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors"
+          className="tk-btn tk-focus mt-4 rounded px-3 py-1 tk-micro transition-colors"
         >
           Re-enter connection details
         </button>
@@ -3066,7 +3396,7 @@ function App() {
   if (!checked) {
     return (
       <Shell>
-        <p className="pt-10 font-mono text-xs uppercase tracking-wider tk-secondary">
+        <p className="pt-10 tk-micro tk-secondary">
           Checking session
         </p>
       </Shell>
