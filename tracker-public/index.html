@@ -178,6 +178,27 @@ function saveFunnelOpen(open) {
   }
 }
 
+/* Whether the "these rows are examples" banner has been waved away. Remembered
+   so it is not argued with on every reload, but it says nothing about whether
+   the example rows still exist — that is read from the rows themselves. */
+const EXAMPLES_KEY = "tracker.examplesDismissed";
+
+const loadExamplesDismissed = () => {
+  try {
+    return window.localStorage.getItem(EXAMPLES_KEY) === "yes";
+  } catch (e) {
+    return false;
+  }
+};
+
+function saveExamplesDismissed() {
+  try {
+    window.localStorage.setItem(EXAMPLES_KEY, "yes");
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 const SETUP_SQL = `create table if not exists public.applications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
@@ -462,6 +483,9 @@ function funnelStats(rows) {
   return steps;
 }
 
+/* Three made-up rows, written on first sign-in so the page is not a blank
+   table with no way to learn what a row does. Everything here is invented —
+   the companies do not exist. */
 const SEED = [
   {
     company: "Example Consulting",
@@ -470,7 +494,9 @@ const SEED = [
     status: "applied",
     replies: "Automated acknowledgement received. Nothing from the hiring manager yet.",
     nextSteps: "- [ ] Follow up directly if there is no reply within a week.",
-    notes: "Sample row. Edit or delete it once you add your own.",
+    notes:
+      "MADE-UP EXAMPLE, not one of your applications. Type over any cell to " +
+      "make it yours, or use Remove the examples at the top of the page.",
     offsetDays: 9,
   },
   {
@@ -482,7 +508,8 @@ const SEED = [
     nextSteps:
       "- [x] Tailor the first CV bullet to the job description\n" +
       "- [ ] Submit before Friday",
-    notes: "Sample row. Click any cell to edit it.",
+    notes:
+      "MADE-UP EXAMPLE, not one of your applications. Click any cell to edit it.",
     offsetDays: 2,
   },
   {
@@ -494,10 +521,20 @@ const SEED = [
     nextSteps:
       "- [ ] Prepare three examples of operational problem solving\n" +
       "- [ ] Re-read the job description the night before",
-    notes: "Sample row. Use the status pill to move a row through the pipeline.",
+    notes:
+      "MADE-UP EXAMPLE, not one of your applications. Click the status pill " +
+      "to move a row along the pipeline.",
     offsetDays: 1,
   },
 ];
+
+/* A seeded row is recognised by the identity it shipped with, so the instant
+   someone types over the company or the role it stops being flagged — which
+   is exactly the moment it stops being an example and starts being theirs.
+   Nothing is stored to track this, so a second device agrees without having
+   to be told. */
+const isExample = (row) =>
+  SEED.some((s) => s.company === row.company && s.role === row.role);
 
 const CSS = `
 /* ============================ THE TOKEN LAYER ============================
@@ -1028,8 +1065,6 @@ const CSS = `
 .tk-panel { border:1px solid var(--line-soft); border-radius:var(--r-3); background:var(--surface); }
 /* The offer half is the payoff of the whole pipeline, so it is the one place
    the accent is allowed to tint a surface. */
-.tk-panel-offer { background:var(--accent-wash); border-color:var(--accent); }
-
 .tk-check { accent-color:var(--accent); width:15px; height:15px; flex:none; cursor:pointer; margin:0; }
 .tk-score {
   border:1px solid var(--line-strong); border-radius:3px;
@@ -1110,6 +1145,40 @@ function Shell({ children, right }) {
 
 /* Setup asks you to copy this page's own address into two Supabase fields, and
    a mistyped character there is the single commonest reason sign-in fails. */
+/* Setup happens in a different tab, in software the reader has never opened
+   before, and a step that half-worked is invisible from here. So every step
+   ends by naming the thing on screen that proves it worked — the reader can
+   check themselves instead of finding out four steps later. */
+function Checkpoint({ children }) {
+  return (
+    <p
+      className="mt-3 tk-r2 px-3 py-2 tk-cap leading-relaxed"
+      style={{
+        background: "var(--st-applied-fill)",
+        border: "1px solid var(--st-applied-line)",
+        color: "var(--st-applied-text)",
+      }}
+    >
+      <strong>You have done this right when: </strong>
+      {children}
+    </p>
+  );
+}
+
+function Step({ n, title, minutes, children }) {
+  return (
+    <li className="py-5">
+      <p className="tk-micro tk-secondary">
+        Step {n} of 4 · about {minutes} minute{minutes === 1 ? "" : "s"}
+      </p>
+      <p className="mt-1 tk-body tk-strong">{title}</p>
+      {children}
+    </li>
+  );
+}
+
+const STEP_LIST = "mt-3 list-decimal space-y-2 pl-5 tk-body leading-relaxed";
+
 function CopyValue({ value }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -1190,77 +1259,195 @@ function ConnectForm({ onSave }) {
           control. Setup takes about ten minutes, once.
         </p>
 
-        <ol className="tk-divide mt-8">
-          <li className="py-4">
-            <p className="tk-micro tk-secondary">
-              Step 1
-            </p>
-            <p className="mt-1 tk-body leading-relaxed">
-              Create a free project at{" "}
-              <a
-                href="https://supabase.com/dashboard"
-                target="_blank"
-                rel="noreferrer"
-                className="underline"
-              >
-                supabase.com
-              </a>
-              . Any region, any name.
-            </p>
-          </li>
+        <div className="tk-panel mt-6 tk-r3 p-4">
+          <p className="tk-micro tk-secondary">Before you start</p>
+          <p className="mt-2 tk-body leading-relaxed">
+            This page is only the screen. Your applications have to live
+            somewhere, so the four steps below make you a free database of your
+            own at a company called <strong>Supabase</strong>, and then hand this
+            page the two details it needs to reach it.
+          </p>
+          <p className="mt-2 tk-body leading-relaxed">
+            <strong>You will need:</strong> an email address you can open right
+            now, and this tab kept open — you will be copying things back and
+            forth between here and Supabase. There is nothing to pay and no card
+            to enter. You do this once, ever.
+          </p>
+        </div>
 
-          <li className="py-4">
-            <p className="tk-micro tk-secondary">
-              Step 2
-            </p>
-            <p className="mt-1 tk-body leading-relaxed">
-              In your project, open <strong>SQL Editor</strong>, click{" "}
-              <strong>New query</strong>, paste the script below and click{" "}
-              <strong>Run</strong>. It creates one table and locks it to your account.
-              Running it twice is harmless.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={copySql}
-                className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
-              >
-                {copied ? "Copied" : "Copy SQL"}
-              </button>
-              <button
-                onClick={() => setShowSql((v) => !v)}
-                className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
-              >
-                {showSql ? "Hide" : "Show"} SQL
-              </button>
-            </div>
-            {showSql && (
-              <pre className="tk-code mt-3 max-h-72 overflow-auto tk-r3 p-3 tk-mono tk-cap leading-relaxed">
-                {SETUP_SQL}
-              </pre>
-            )}
-          </li>
+        <ol className="tk-divide mt-6">
+          <Step n={1} minutes={3} title="Make yourself a free Supabase project">
+            <ol className={STEP_LIST}>
+              <li>
+                Open Supabase in a <strong>second tab</strong>, so this page stays
+                where it is.
+                <div className="mt-2">
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="tk-btn tk-focus inline-block tk-r2 px-3 py-1 tk-micro transition-colors"
+                  >
+                    Open Supabase ↗
+                  </a>
+                </div>
+              </li>
+              <li>
+                Sign in. Use <strong>GitHub</strong> if you have an account there;
+                otherwise choose the email option and follow it through.
+              </li>
+              <li>
+                Click the green <strong>New project</strong> button. If it asks you
+                to create an <strong>organisation</strong> first, do that — the name
+                does not matter, your own name is fine.
+              </li>
+              <li>
+                <strong>Project name:</strong> type anything you like.
+                &ldquo;job tracker&rdquo; will do.
+              </li>
+              <li>
+                <strong>Database password:</strong> click{" "}
+                <strong>Generate a password</strong>, then copy it and paste it
+                somewhere safe — a notes app, an email to yourself. You will not
+                need it for JobApp, but Supabase will never show it to you again.
+              </li>
+              <li>
+                <strong>Region:</strong> pick the one nearest to you. Nothing
+                breaks if you choose wrong.
+              </li>
+              <li>
+                Click <strong>Create new project</strong>, then wait. Building it
+                takes a minute or two.
+              </li>
+            </ol>
+            <Checkpoint>
+              the waiting has finished and you are looking at your project, with a
+              column of icons running down the left-hand side of the window.
+            </Checkpoint>
+          </Step>
 
-          <li className="py-4">
-            <p className="tk-micro tk-secondary">
-              Step 3
+          <Step n={2} minutes={2} title="Create the table your applications live in">
+            <p className="mt-2 tk-body leading-relaxed tk-secondary">
+              You are going to paste in a block of instructions that builds the
+              table. You do not need to understand it, and you cannot break
+              anything: it only ever adds, never deletes.
             </p>
-            <p className="mt-1 tk-body leading-relaxed">
-              Under <strong>Authentication &rarr; URL Configuration</strong>, set{" "}
-              <strong>Site URL</strong> to this page&rsquo;s address and add it to{" "}
-              <strong>Redirect URLs</strong> as well. Include the{" "}
-              <code>https://</code> prefix or sign-in links will break.
-            </p>
-            <CopyValue value={window.location.origin} />
-          </li>
+            <ol className={STEP_LIST}>
+              <li>
+                In that left-hand column of icons, click <strong>SQL Editor</strong>.
+              </li>
+              <li>
+                Click <strong>New query</strong>. A large empty box appears.
+              </li>
+              <li>
+                Come back to this tab and click <strong>Copy SQL</strong> below.
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    onClick={copySql}
+                    className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+                  >
+                    {copied ? "Copied" : "Copy SQL"}
+                  </button>
+                  <button
+                    onClick={() => setShowSql((v) => !v)}
+                    className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+                  >
+                    {showSql ? "Hide" : "Show"} SQL
+                  </button>
+                </div>
+                {showSql && (
+                  <pre className="tk-code mt-3 max-h-72 overflow-auto tk-r3 p-3 tk-mono tk-cap leading-relaxed">
+                    {SETUP_SQL}
+                  </pre>
+                )}
+              </li>
+              <li>
+                Back in Supabase, click inside that large empty box and paste:{" "}
+                <strong>Ctrl</strong>+<strong>V</strong>, or{" "}
+                <strong>⌘</strong>+<strong>V</strong> on a Mac.
+              </li>
+              <li>
+                Click the green <strong>Run</strong> button at the bottom right of
+                the box.
+              </li>
+            </ol>
+            <Checkpoint>
+              a message reads <strong>&ldquo;Success. No rows returned&rdquo;</strong>.
+              That is the right answer, not an error — it means the table was built
+              and there was simply nothing to show you. Running it a second time is
+              harmless, so if you are unsure, just run it again.
+            </Checkpoint>
+          </Step>
 
-          <li className="py-4">
-            <p className="tk-micro tk-secondary">
-              Step 4
+          <Step n={3} minutes={2} title="Tell Supabase where this page lives">
+            <p className="mt-2 tk-body leading-relaxed tk-secondary">
+              This is the step people skip, and it is the reason almost every
+              failed sign-in fails. Supabase will refuse to send you back to a page
+              it has not been told about, so please do not skip it.
             </p>
-            <p className="mt-1 tk-body leading-relaxed">
-              Copy both values from <strong>Project Settings &rarr; API Keys</strong>{" "}
-              and paste them here.
-            </p>
+            <ol className={STEP_LIST}>
+              <li>
+                In the left-hand column, click <strong>Authentication</strong>.
+              </li>
+              <li>
+                In the menu that opens, click <strong>URL Configuration</strong>.
+              </li>
+              <li>
+                Copy this page&rsquo;s address:
+                <CopyValue value={window.location.origin} />
+              </li>
+              <li>
+                Paste it into the <strong>Site URL</strong> box. Delete whatever
+                was in there first — it usually says{" "}
+                <code>http://localhost:3000</code>. Click <strong>Save</strong>.
+              </li>
+              <li>
+                Just below, find <strong>Redirect URLs</strong>, click{" "}
+                <strong>Add URL</strong>, paste the same address again, and save
+                that too.
+              </li>
+            </ol>
+            <Checkpoint>
+              both boxes read exactly <code>{window.location.origin}</code> —
+              including the <code>{window.location.protocol}//</code> at the
+              front, and with no slash on the end. Half of it is not enough;
+              Supabase compares the whole thing, character for character.
+            </Checkpoint>
+          </Step>
+
+          <Step n={4} minutes={2} title="Copy your two details into this page">
+            <ol className={STEP_LIST}>
+              <li>
+                In the left-hand column, click <strong>Project Settings</strong> —
+                it is the cog, usually right at the bottom.
+              </li>
+              <li>
+                Click <strong>API Keys</strong>. On an older project this section is
+                called just <strong>API</strong>.
+              </li>
+              <li>
+                Copy <strong>Project URL</strong> and paste it into the first box
+                below. It looks like <code>https://abcdefgh.supabase.co</code>.
+              </li>
+              <li>
+                Copy the <strong>Publishable key</strong> — on an older project, the
+                one labelled <strong>anon</strong> <strong>public</strong> — and
+                paste it into the second box. It starts{" "}
+                <code>sb_publishable_</code> or <code>eyJ</code>.
+                <p
+                  className="mt-2 tk-r2 px-3 py-2 tk-cap leading-relaxed"
+                  style={{
+                    background: "var(--warn)",
+                    border: "1px solid var(--warn-line)",
+                  }}
+                >
+                  Do <strong>not</strong> copy anything labelled{" "}
+                  <strong>secret</strong> or <strong>service_role</strong>. Those
+                  keys ignore every security rule, and this page never needs one.
+                </p>
+              </li>
+              <li>Fill both boxes in, then press <strong>Connect</strong>.</li>
+            </ol>
 
             <label className="mt-4 block tk-micro tk-secondary">
               Project URL
@@ -1297,8 +1484,45 @@ function ConnectForm({ onSave }) {
             >
               Connect
             </button>
-          </li>
+
+            <Checkpoint>
+              this page stops asking for keys and asks for your email address
+              instead. That is the last of the setup — from there you are signing
+              in.
+            </Checkpoint>
+          </Step>
         </ol>
+
+        <div className="tk-panel mt-6 tk-r3 p-4">
+          <p className="tk-micro tk-secondary">If something is not right</p>
+          <dl className="mt-3 space-y-3 tk-body leading-relaxed">
+            <div>
+              <dt className="tk-strong">
+                A button or a menu is not where this page says it is
+              </dt>
+              <dd className="tk-secondary">
+                Supabase moves things around from time to time. Look for the
+                wording rather than the position — the one mentioning{" "}
+                <strong>SQL</strong>, or <strong>URL</strong>, or{" "}
+                <strong>API</strong> — and it will be the right one.
+              </dd>
+            </div>
+            <div>
+              <dt className="tk-strong">The SQL box shows red text</dt>
+              <dd className="tk-secondary">
+                Almost always a half-paste. Select everything in the box, delete
+                it, click <strong>Copy SQL</strong> here again and paste once more.
+              </dd>
+            </div>
+            <div>
+              <dt className="tk-strong">You closed the tab partway through</dt>
+              <dd className="tk-secondary">
+                Nothing is lost. Sign back in at Supabase, pick your project from
+                the list, and carry on from whichever step you had reached.
+              </dd>
+            </div>
+          </dl>
+        </div>
 
         <p className="mt-6 tk-mono tk-cap leading-relaxed tk-tertiary">
           Never paste a service_role or sb_secret key here. Those bypass every security
@@ -1361,9 +1585,21 @@ function SignIn({ cfgUrl, onReset }) {
         {state === "sent" || state === "verifying" ? (
           <>
             <p className="mt-4 tk-body leading-relaxed">
-              Check <strong>{email}</strong>. Click the link in the email, or type the
-              six-digit code below if the link fails.
+              An email is on its way to <strong>{email}</strong>. It usually
+              arrives within a minute.
             </p>
+            <ul className="mt-3 space-y-2 tk-body leading-relaxed">
+              <li>
+                <strong>Reading that email on this device?</strong> Open it and
+                click the link. You land back here, signed in, and there is
+                nothing else to do.
+              </li>
+              <li>
+                <strong>Reading it on your phone instead?</strong> The link will
+                not work — a link only works in the browser that asked for it.
+                Type the six-digit code from the email into the box below.
+              </li>
+            </ul>
 
             <label className="mt-6 block tk-micro tk-secondary">
               Six-digit code
@@ -1387,6 +1623,14 @@ function SignIn({ cfgUrl, onReset }) {
               </button>
             </div>
 
+            <p className="mt-4 tk-cap leading-relaxed tk-tertiary">
+              Nothing after a couple of minutes? Look in your spam folder, then
+              send another. If the email arrives with a link but no six-digit
+              code, the code has to be switched on once, in Supabase, under
+              Authentication → Emails → Magic Link: add{" "}
+              <code>{"{{ .Token }}"}</code> somewhere in the message.
+            </p>
+
             <button
               onClick={() => {
                 setState("idle");
@@ -1400,8 +1644,13 @@ function SignIn({ cfgUrl, onReset }) {
           </>
         ) : (
           <>
-            <p className="mt-3 tk-body leading-relaxed tk-secondary">
-              Sign in with the same address on your laptop and your phone to see one
+            <p className="mt-3 tk-body leading-relaxed">
+              The setup is done. Type the email address you want to use and we
+              will send you a way in — there is no password to invent or
+              remember.
+            </p>
+            <p className="mt-2 tk-body leading-relaxed tk-secondary">
+              Use the same address on your laptop and your phone and you see one
               pipeline on both.
             </p>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
@@ -2164,7 +2413,7 @@ function DetailPanel({ row, onEdit, onClearScores }) {
         </div>
       </section>
 
-      <section className="tk-panel tk-panel-offer p-4">
+      <section className="tk-panel p-4">
         <p className={`${LABEL} mb-4`}>Offer</p>
         {atOffer ? (
           <div className="space-y-3">
@@ -2551,7 +2800,71 @@ function MigrationNotice({ onDismiss }) {
   );
 }
 
+/* The first thing a brand-new account sees is three rows it did not create,
+   and the natural reading of that is "whose applications are these?". So the
+   page says whose they are before anyone has to wonder, and puts the way out
+   in the same breath. */
+function ExampleNotice({ count, onRemove, onDismiss }) {
+  const them = count === 1 ? "it" : "them";
+  return (
+    <div
+      className="tk-noprint mb-6 tk-r3 p-4"
+      style={{ background: "var(--accent-wash)", border: "1px solid var(--accent)" }}
+    >
+      <p className="tk-micro">
+        {count === 1
+          ? "One row below is an example"
+          : `The ${count} rows marked “Example” below are not real`}
+      </p>
+      <p className="mt-2 max-w-2xl tk-body leading-relaxed">
+        JobApp invented {them} so your first visit would not be an empty table.{" "}
+        <strong>
+          These are not your applications, and they are not anybody else&rsquo;s
+          either
+        </strong>{" "}
+        — the companies do not exist. Your pipeline lives in your own database
+        and started completely empty, and nobody else can see it. Type over any
+        cell to turn an example into a real application, or clear all{" "}
+        {count === 1 ? "of it" : count} out and start from scratch.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={onRemove}
+          className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+        >
+          Remove the example{count === 1 ? "" : "s"}
+        </button>
+        <button
+          onClick={onDismiss}
+          className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+        >
+          Keep {them} for now
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------- rows ----------------------------------- */
+
+/* Sits against the company name on every seeded row. The banner explains the
+   examples once; this is what stops a row being mistaken for real data after
+   the banner has been dismissed or scrolled past. */
+function ExampleTag() {
+  return (
+    <span
+      title="Made up by JobApp so the page would not start empty. Not one of your applications."
+      className="tk-r1 shrink-0 px-1 py-0.5 tk-micro"
+      style={{
+        background: "var(--warn)",
+        border: "1px solid var(--warn-line)",
+        color: "var(--ink)",
+      }}
+    >
+      Example
+    </span>
+  );
+}
 
 function DesktopRow({ row, rowIndex, open, onToggle, onEdit, onDelete, onAdvance }) {
   /* Coordinates the keyboard handler on the table reads to move focus. */
@@ -2565,12 +2878,19 @@ function DesktopRow({ row, rowIndex, open, onToggle, onEdit, onDelete, onAdvance
     <tr className="tk-rowcard align-top">
       <td className="w-52 px-2 py-3">
         <div className="flex items-start justify-between gap-1">
-          <EditableCell
-            value={row.company}
-            placeholder="Company"
-            cell={cell(0)}
-            onChange={(v) => onEdit(row.id, "company", v)}
-          />
+          <div className="min-w-0 flex-1">
+            {isExample(row) && (
+              <div className="mb-1 pl-2">
+                <ExampleTag />
+              </div>
+            )}
+            <EditableCell
+              value={row.company}
+              placeholder="Company"
+              cell={cell(0)}
+              onChange={(v) => onEdit(row.id, "company", v)}
+            />
+          </div>
           <button
             onClick={() => onDelete(row.id)}
             title="Delete application"
@@ -2659,6 +2979,11 @@ function MobileCard({ row, open, onToggle, onEdit, onDelete, onAdvance, onClearS
     <div className="tk-card tk-r3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
+          {isExample(row) && (
+            <div className="mb-1 pl-2">
+              <ExampleTag />
+            </div>
+          )}
           <EditableCell
             value={row.company}
             placeholder="Company"
@@ -2751,6 +3076,7 @@ function Tracker({ session }) {
   const [loading, setLoading] = useState(true);
   const [opError, setOpError] = useState("");
   const [needsMigration, setNeedsMigration] = useState(false);
+  const [examplesDismissed, setExamplesDismissed] = useState(loadExamplesDismissed);
   const pending = useRef(0);
 
   const report = (label, error) => {
@@ -3003,6 +3329,22 @@ function Tracker({ session }) {
     );
   };
 
+  /* Clearing the examples is one gesture, so it gets one undo rather than one
+     per row — and it goes through the same soft delete as everything else, so
+     the rows are recoverable from the trash panel afterwards either way. */
+  const removeExamples = () => {
+    const targets = all.filter((r) => !r.deleted && isExample(r));
+    if (!targets.length) return;
+    const clocks = targets.map((r) => [r.id, r.activity]);
+    targets.forEach((r) => setDeleted(r.id, true));
+    setExamplesDismissed(true);
+    saveExamplesDismissed();
+    offerUndo(
+      targets.length === 1 ? "Removed the example" : `Removed ${targets.length} examples`,
+      () => clocks.forEach(([id, at]) => patch(id, { deleted: false }, { deleted: false }, at))
+    );
+  };
+
   const purge = async (id) => {
     if (!window.confirm("Delete this application permanently? This cannot be undone.")) return;
     setAll((prev) => prev.filter((r) => r.id !== id));
@@ -3014,6 +3356,7 @@ function Tracker({ session }) {
 
   const rows = all.filter((r) => !r.deleted);
   const trash = all.filter((r) => r.deleted);
+  const examples = rows.filter(isExample);
   const liveRows = rows.filter((r) => LIVE.includes(r.status));
   const stale = liveRows.filter((r) => daysSince(r.activity) >= 7).length;
 
@@ -3117,6 +3460,14 @@ function Tracker({ session }) {
             <span className="tk-secondary">
               {rows.length} tracked · {liveRows.length} live
             </span>
+            {/* "3 tracked" is the most misleading line on the page while all
+                three are ours, so the count says which of them are not real. */}
+            {examples.length > 0 && (
+              <span className="tk-tertiary">
+                · {examples.length} of {rows.length} still{" "}
+                {examples.length === 1 ? "an example" : "examples"}
+              </span>
+            )}
             <span
               className={stale ? "tk-r2 px-2 py-1" : "tk-secondary"}
               style={{ background: stale ? "var(--warn)" : "transparent" }}
@@ -3167,6 +3518,17 @@ function Tracker({ session }) {
 
       {needsMigration && (
         <MigrationNotice onDismiss={() => setNeedsMigration(false)} />
+      )}
+
+      {examples.length > 0 && !examplesDismissed && (
+        <ExampleNotice
+          count={examples.length}
+          onRemove={removeExamples}
+          onDismiss={() => {
+            setExamplesDismissed(true);
+            saveExamplesDismissed();
+          }}
+        />
       )}
 
       {opError && (

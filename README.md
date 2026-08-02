@@ -72,6 +72,12 @@ writing.
 - **Export to PDF.** *Share / Export* opens the print dialogue against a print
   stylesheet: controls, delete buttons and the sync chip drop away, the palette
   forces back to light even in dark mode, and rows avoid splitting across pages.
+- **The examples announce themselves.** The three rows a new account starts
+  with are tagged **Example**, counted separately in the header, and introduced
+  by a banner that says outright they are not your applications and not anyone
+  else's. **Remove the examples** clears them in one click, with an undo. Type
+  over a company or a role and that row stops being an example on the keystroke
+  — which is exactly when it stops being one.
 - **Nothing is a dead end.** Every narrowing control has a visible way out —
   an **All** chip on the stage rail, **Reset view** whenever anything is
   filtered, and an empty table that names what is hiding rows rather than
@@ -96,6 +102,13 @@ script, and point the page at it. That means:
 
 Four steps, about ten minutes, once. The deployed page walks you through the
 same thing on screen — this is the version you can read first.
+
+> **The rows you see on your first visit are made up.** A brand-new account
+> opens on three invented applications, so the page is not a blank table with
+> nothing to learn from. Each one is tagged **Example**, a banner across the top
+> says so in as many words, and **Remove the examples** clears them all in one
+> click. None of them is anybody's real data — the tracker has no shared
+> backend, so nobody else's applications can ever reach your screen.
 
 ### 1. Get your own copy
 
@@ -127,14 +140,21 @@ to match. Rename first if you are going to.
 
 ### 2. Create the database
 
-1. Sign up at [supabase.com](https://supabase.com/dashboard) and create a
-   project. Any region, any name. The free tier is plenty.
-2. Open **SQL Editor → New query**, paste all of
+1. Sign up at [supabase.com](https://supabase.com/dashboard) — GitHub or email,
+   free, no card — and click **New project**. If it asks you to make an
+   organisation first, the name does not matter.
+2. Name the project anything. When it offers to **generate a database
+   password**, copy it somewhere safe: you will not need it for this tracker,
+   but Supabase will not show it to you again. Any region will do.
+3. Wait a minute or two while the project is built. You are ready when you are
+   looking at the project with a column of icons down the left.
+4. Open **SQL Editor → New query**, paste all of
    [`tracker-public/supabase/setup.sql`](tracker-public/supabase/setup.sql), and
    click **Run**.
 
-That creates one table and locks it to your account. Running it twice is
-harmless.
+**It worked if it says "Success. No rows returned."** That is the correct
+result, not an error — it means the table was built and there was nothing to
+print. Running it twice is harmless, so re-run it if you are unsure.
 
 ### 3. Tell Supabase where your page lives
 
@@ -149,9 +169,10 @@ In your Supabase project, go to **Authentication → URL Configuration** and set
 | **Site URL** | `https://your-site.netlify.app` |
 | **Redirect URLs** | `https://your-site.netlify.app` |
 
-Include the `https://` and leave off any trailing slash. If the address here
-does not match your page exactly, Supabase refuses to send you back to it and
-the sign-in link fails.
+Include the `https://` and leave off any trailing slash. **Supabase compares
+the whole thing, character for character** — if the address here does not match
+your page exactly, it refuses to send you back and the sign-in link fails. The
+**Site URL** box usually starts out saying `http://localhost:3000`; replace it.
 
 ### 4. Connect and sign in
 
