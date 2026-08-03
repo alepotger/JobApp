@@ -1081,7 +1081,10 @@ computed value and the first 8px of falloff are pixel-identical:
 | funnel card | .7253 | .7644 | .8206 | .8510 | .8504 | .8586 |
 | application row | .7253 | .7721 | .8206 | .8510 | .8504 | **cut** |
 
-**Column alignment is not at risk. We keep the table.**
+**Column alignment is not at risk.** *(This originally read "We keep the
+table." It was right about the shadow and wrong about the table — see R1b,
+which supersedes it. Column alignment is still not at risk; the reason is now
+subgrid rather than `<table>`.)*
 
 Two causes, on different rows:
 
@@ -1160,22 +1163,93 @@ the shadow's upward extent is 2px (10px offset against a 24px blur), and the
 matching negative top margin keeps the table's position unchanged.
 
 **Expanded rows read as one card, not two.** Two stacked shadows 1px apart is
-the "shadow inside a shadow" failure C.6 already forbids. The mechanism is
-*not* "the row drops its shadow and the pair carries one" — a `<tr>` cannot
-cast a shadow around a sibling `<tr>`, and the 28px row gap sits between them.
-Instead the gap is **bridged at cell level**, which works because cell
-backgrounds paint above row-level shadows:
+the "shadow inside a shadow" failure C.6 forbids. Under R1b this needs no
+mechanism at all: the drawer is a block *inside* the row element, so the pair is
+one box by construction — one background, one radius, one ring, one shadow, and
+no junction to conceal. The cell-level bridge this section previously specified,
+and the three shadow copies that carried its hairlines, are deleted.
+
+## R1b — Square corners: the row stops being a table row
+
+### Symptom
+
+Every application cell rendered with a square corner protruding past its curve,
+at all four corners, with the shadow tracing the square rather than the curve.
+
+### Root cause
+
+**The radius and background were on a different element from the shadow.**
+`border-radius` and `background` were on each `<td>`; `box-shadow` was on the
+`<tr>`, which has no radius of its own. The cells drew a curve; the row cast a
+square. Checked and excluded: `border-collapse` was already `separate`, there
+was no nested background wrapper, and nothing was hardcoded `#fff` — the
+protruding colour was `--surface`, which is why it read as white in light mode
+and as a dark notch in dark.
+
+This is the same fault as the earlier shadow defect only in the sense that both
+came from the shadow living on the `<tr>`. The gap diagnosis in R1 stands
+unchanged and every number in it re-measured identically after this rebuild.
+
+### Why it could not be fixed in place
+
+One element must own background, radius and shadow. Inside a table, none can.
+Each of these was built and measured, not reasoned about:
+
+| Element | Result |
+|---|---|
+| `<td>` | Clips its background to the radius correctly, but a per-cell shadow falls on the neighbouring cell and draws a vertical seam. Clipping each cell's shadow to its own column removes the overlap and leaves a hard vertical step in the shadow instead. Both visible. |
+| `<tr>` | Applies the radius to its **shadow** but paints its **background** square. |
+| `<tbody>` | Same — and it spans an expanded pair, which looked like the answer. Built, measured, abandoned. |
+
+In the separated-borders model a radius on a row or a row group shapes what it
+*casts*, not what it *fills*. The invariant is unsatisfiable in a table.
+
+### The change, and what it costs
+
+Rows are now grid rows. The container is a grid; each row is a grid item
+spanning all columns with `grid-template-columns: subgrid`.
 
 ```css
-tr.is-drawer td{ box-shadow: 0 calc(var(--space-loose) * -1) 0 var(--surface) }
+.tk2{display:grid}
+.tk2 > *{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
+.tk2-row{background:var(--surface);border-radius:var(--r-md);
+         box-shadow:var(--shadow-rest), inset 0 0 0 1px var(--line)}
 ```
 
-Both rows keep `--shadow-rest`; the bridge covers the part of each that would
-otherwise render between them, so the pair meets page ground only on its
-outside. Two additional 1px copies, offset ∓1px in `--line`, carry the side
-hairlines across the bridge. Measured: the 28px between row and drawer reads a
-**flat 1.000** for all 28 rows of pixels — no gradient — with the hairline
-present at 0.850 on the outer edge.
+**Column alignment is preserved.** Subgrid sizes the tracks once, across all
+rows at once — the same thing a table does. **Measured: 17 grids, 42 rows,
+zero misaligned**, header and multi-line rows included.
+
+The hairline becomes an inset ring rather than four cell borders, because a ring
+follows a radius and four borders never did.
+
+**What else this affects**, stated plainly:
+
+- **`index.html` is not yet changed.** This is preview and proposal only. The
+  same conversion has to be made there and is a larger job than a CSS edit.
+- **Semantics.** The table's implicit roles are gone and must be replaced with
+  explicit `role="table" / "row" / "columnheader" / "cell"`. Not yet done in the
+  preview; it must be done before this ships.
+- **Keyboard grid navigation** in `index.html` walks `td`/`tr` via a ref. It
+  will need to walk the new elements. The key model itself does not change.
+- **Browser support.** Subgrid is Chrome 117+, Safari 16+, Firefox 71+. Fine for
+  current browsers; there is no fallback, and on an older engine the columns
+  would not align.
+- **The drawer** stops being a `colspan` row and becomes a block inside the row
+  with `grid-column: 1/-1` — which is what removes the pair problem entirely.
+- **Print styles** that assume table semantics need re-checking.
+
+### Verified
+
+At 4× on all four corners of the first row, two adjacent rows, the hovered row,
+the selected row, a multi-line row, the last row, the expanded pair, and the
+mobile card collapsed and expanded — in light and dark, against the `.record`
+`<div>` as a known-good control. The shadow follows the curve continuously with
+no straight segment and no gap.
+
+Everything R1 claimed still holds after the rebuild: visible falloff **9 / 19 /
+29px** at gaps 8 / 18 / 28, and the row's side-shadow depth **0.1330**, which is
+the reference card's depth to four decimals.
 
 ## R2 — Dropdowns: label vs value
 

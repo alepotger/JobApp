@@ -165,24 +165,47 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   border-radius:var(--r-sm);padding:1px var(--space-snug);
   font-size:var(--t--2);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 
-/* table */
-table.tk{width:100%;border-collapse:separate;border-spacing:0 var(--space-base)}
-table.tk th{text-align:left;font-size:var(--t--2);text-transform:uppercase;
-  letter-spacing:.075em;font-weight:600;color:var(--ink-3);
-  padding:0 var(--space-cosy) var(--space-tight)}
-table.tk td{background:var(--surface);border-top:1px solid var(--line);
-  border-bottom:1px solid var(--line);padding:var(--space-cosy);
-  vertical-align:top;font-size:var(--t--1);line-height:var(--lh-cell)}
-table.tk td:first-child{border-left:1px solid var(--line);
-  border-radius:var(--r-md) 0 0 var(--r-md);padding-left:calc(var(--space-cosy) + 1px)}
-table.tk td:last-child{border-right:1px solid var(--line);
-  border-radius:0 var(--r-md) var(--r-md) 0}
-/* The shadow goes on the row, never on each cell: with 0 horizontal
-   border-spacing the cells are flush, so per-cell shadows cast onto their
-   neighbours and draw vertical seams between the columns. */
-table.tk tbody tr{box-shadow:var(--shadow-rest)}
-table.tk tbody tr:hover{box-shadow:var(--shadow-raise)}
-table.tk tr:hover td{background:var(--sunken)}
+/* ── THE ROW IS THE CARD ─────────────────────────────────────────────
+   background, border-radius and box-shadow are declared on ONE element:
+   .tk2-row. This is not a preference — inside a <table> it is impossible.
+   Measured, on a minimal case:
+     · <td>  clips its background to border-radius, but a per-cell shadow
+       falls on the neighbouring cell and draws a vertical seam. Clipping
+       each cell's shadow to its own column removes the overlap and leaves
+       a hard vertical step in the shadow instead. Both visible.
+     · <tr> and <tbody> DO apply border-radius to their box-shadow, but
+       neither clips its BACKGROUND to it — both paint square. That was
+       the defect: radius+background on the cells, shadow on the row, so a
+       square corner protruded past the curve on all four corners.
+   No arrangement of table elements puts all three on one box, so the row
+   stops being a table row. Grid keeps what the table was buying us.
+
+   Column alignment is preserved by subgrid: every row is a grid item
+   spanning all columns and re-uses the PARENT's tracks, so the tracks are
+   sized once, across all rows at once — exactly what a table does.
+   Verified: identical column edges on the header and every row. ── */
+.tk2{display:grid;align-items:start}
+.tk2 > *{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
+.tk2-head{font-size:var(--t--2);text-transform:uppercase;letter-spacing:.075em;
+  font-weight:600;color:var(--ink-3)}
+.tk2-head > *{padding:0 var(--space-cosy) var(--space-tight)}
+.tk2-row{background:var(--surface);border-radius:var(--r-md);
+  box-shadow:var(--shadow-rest), inset 0 0 0 1px var(--line)}
+.tk2-row > *{padding:var(--space-cosy);font-size:var(--t--1);
+  line-height:var(--lh-cell);min-width:0}
+.tk2-row:hover{background:var(--sunken);
+  box-shadow:var(--shadow-raise), inset 0 0 0 1px var(--line)}
+/* The drawer is inside the row, so the pair is one box by construction —
+   one background, one radius, one ring, one shadow, no junction. */
+.tk2-drawer{grid-column:1/-1;padding:0 var(--space-cosy) var(--space-cosy)}
+
+/* Forced states. A static file cannot hover or focus itself. */
+.tk2-row.is-hover{background:var(--sunken);
+  box-shadow:var(--shadow-raise), inset 0 0 0 1px var(--line)}
+.tk2-row.is-sel{background:var(--accent-wash);
+  box-shadow:var(--shadow-raise),
+             inset 0 0 0 1px color-mix(in oklch,var(--accent) 55%,transparent)}
+
 .cell{display:block;width:100%;border:0;background:transparent;
   font:inherit;color:inherit;text-align:left;padding:var(--space-tight);
   border-radius:var(--r-sm);cursor:text}
@@ -231,7 +254,7 @@ table.tk tr:hover td{background:var(--sunken)}
 .record .adder{border-top:1px solid var(--line-soft);padding:var(--space-base) var(--space-cosy)}
 @container (max-width:44rem){
   .record{display:block}
-  table.tk{display:none}
+  .tk2{display:none}
 }
 
 /* notices */
@@ -281,11 +304,8 @@ table.tk tr:hover td{background:var(--sunken)}
 
 /* ── R1 · row rhythm. The gap is the sole limiter on the shadow: measured
    visible falloff == border-spacing, exactly, at 8/12/16/20/24. ── */
-/* table.tk already sets border-spacing at (0,0,1,1), so these must match
-   its specificity to win — a bare .tk--g28 silently loses. */
-table.tk.tk--g8 {border-spacing:0 var(--space-base)}
-table.tk.tk--g18{border-spacing:0 var(--space-room)}
-table.tk.tk--g28{border-spacing:0 var(--space-loose)}   /* chosen */
+/* Row gap is now a real gap, not border-spacing. Each converted grid
+   carries its own row-gap inline, taken from the table it replaced. */
 /* cause B: one non-visible overflow axis makes the other compute to auto,
    so overflow-x:auto clips BOTH axes. padding-bottom alone recovers the
    last row and leaves every row's side shadow still cut at the table's
@@ -301,36 +321,13 @@ table.tk.tk--g28{border-spacing:0 var(--space-loose)}   /* chosen */
 
 /* Forced states. A static file cannot hover or focus itself, so the
    specimens below paint the state on. These classes exist only here. */
-tr.is-hover{box-shadow:var(--shadow-raise)}
-tr.is-hover td{background:var(--sunken)}
-tr.is-sel{box-shadow:var(--shadow-raise)}
-tr.is-sel td{background:var(--accent-wash);
-  border-top-color:color-mix(in oklch,var(--accent) 50%,transparent);
-  border-bottom-color:color-mix(in oklch,var(--accent) 50%,transparent)}
-tr.is-sel td:first-child{border-left-color:color-mix(in oklch,var(--accent) 50%,transparent)}
-tr.is-sel td:last-child{border-right-color:color-mix(in oklch,var(--accent) 50%,transparent)}
-
-/* An expanded row and its drawer are one card. The shadow must never
-   render *between* them, so the row gap is bridged at cell level — cell
-   backgrounds paint above row-level shadows, so the bridge covers both.
-   The two extra 1px copies carry the side hairlines across the bridge. */
-tr.is-open td{border-bottom-color:transparent}
-tr.is-open td:first-child{border-bottom-left-radius:0}
-tr.is-open td:last-child {border-bottom-right-radius:0}
-tr.is-drawer td{border-top-color:transparent;
-  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface)}
-tr.is-drawer td:first-child{border-top-left-radius:0;
-  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
-            -1px calc(var(--space-loose) * -1) 0 var(--line)}
-tr.is-drawer td:last-child{border-top-right-radius:0;
-  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
-             1px calc(var(--space-loose) * -1) 0 var(--line)}
-/* a full-width drawer cell is both first and last, so it needs both sides */
-tr.is-drawer td:first-child:last-child{
-  border-radius:0 0 var(--r-md) var(--r-md);
-  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
-            -1px calc(var(--space-loose) * -1) 0 var(--line),
-             1px calc(var(--space-loose) * -1) 0 var(--line)}
+tbody:has(tr.is-hover){background:var(--sunken);
+  box-shadow:var(--shadow-raise), inset 0 0 0 1px var(--line)}
+tbody:has(tr.is-sel){background:var(--accent-wash);
+  box-shadow:var(--shadow-raise),
+             inset 0 0 0 1px color-mix(in oklch,var(--accent) 55%,transparent)}
+tbody:has(tr.is-hover) tr + tr td,
+tbody:has(tr.is-sel) tr + tr td{background:transparent;box-shadow:none}
 
 /* ── R2 · dropdown triggers. Rank by contrast (4.93:1 label vs 15.45:1
    value) with case as the supporting lever. min-width in ch per control
@@ -418,16 +415,14 @@ tr.is-drawer td:first-child:last-child{
 </style>
 </head>
 <body>
-
 <div class="banner">
-  <strong>DESIGN PREVIEW — NOT FOR DEPLOYMENT.</strong> Static mock-up with
+<strong>DESIGN PREVIEW — NOT FOR DEPLOYMENT.</strong> Static mock-up with
   hardcoded sample data. No Supabase client, no auth, no network, no working
   controls. Nothing here reads or writes real data. This file must never be
   published; it exists only so the typography, colour and spacing of the
   proposal can be judged directly. <code>tracker-public/index.html</code> is
   untouched.
 </div>
-
 <h1 style="font-size:var(--t-display)">JobApp — presentation rebuild</h1>
 <p class="note" style="max-width:66ch;color:var(--ink-2);margin-top:var(--space-base)">
   Inter Variable with the optical-size axis, inlined. Colour in OKLCH, one
@@ -435,1170 +430,940 @@ tr.is-drawer td:first-child:last-child{
   the theme to compare — light is the proposed default.
 </p>
 <p style="margin-top:var(--space-cosy)">
-  <button class="btn" onclick="document.documentElement.dataset.theme=
+<button class="btn" onclick="document.documentElement.dataset.theme=
     document.documentElement.dataset.theme==='dark'?'light':'dark'">Toggle light / dark</button>
 </p>
-
 <!-- ══════════ FOUNDATIONS ══════════ -->
 <section class="sec">
-  <h2>Foundations — colour</h2>
-  <p class="note">Every swatch is OKLCH. Ratios beneath text pairs are measured,
+<h2>Foundations — colour</h2>
+<p class="note">Every swatch is OKLCH. Ratios beneath text pairs are measured,
     not asserted.</p>
-  <div class="swatchrow">
-    <div class="sw"><i style="background:var(--page)"></i><b>page</b><span>98.6% L</span></div>
-    <div class="sw"><i style="background:var(--surface)"></i><b>surface</b><span>100% L</span></div>
-    <div class="sw"><i style="background:var(--sunken)"></i><b>sunken</b><span>96.8% L</span></div>
-    <div class="sw"><i style="background:var(--line-soft)"></i><b>line-soft</b><span>93.5% L</span></div>
-    <div class="sw"><i style="background:var(--line)"></i><b>line</b><span>88.5% L</span></div>
-    <div class="sw"><i style="background:var(--line-strong)"></i><b>line-strong</b><span>65% L</span></div>
-    <div class="sw"><i style="background:var(--ink-3)"></i><b>ink-3</b><span>54.5% L</span></div>
-    <div class="sw"><i style="background:var(--ink-2)"></i><b>ink-2</b><span>47.5% L</span></div>
-    <div class="sw"><i style="background:var(--ink)"></i><b>ink</b><span>26% L</span></div>
-    <div class="sw"><i style="background:var(--accent)"></i><b>accent</b><span>52% L</span></div>
-  </div>
-  <div class="card" style="margin-top:var(--space-room);max-width:66ch">
-    <p style="color:var(--ink)">Primary ink on a row card — <span class="num">15.45:1</span></p>
-    <p style="color:var(--ink-2)" class="sec-ink">Secondary label — <span class="num">6.67:1</span></p>
-    <p style="color:var(--ink-3)">Tertiary hint and placeholder — <span class="num">4.93:1</span></p>
-    <p style="color:var(--accent-ink)">Accent / link text — <span class="num">7.96:1</span></p>
-    <p class="note" style="margin-top:var(--space-base)">The three ink levels sit
+<div class="swatchrow">
+<div class="sw"><i style="background:var(--page)"></i><b>page</b><span>98.6% L</span></div>
+<div class="sw"><i style="background:var(--surface)"></i><b>surface</b><span>100% L</span></div>
+<div class="sw"><i style="background:var(--sunken)"></i><b>sunken</b><span>96.8% L</span></div>
+<div class="sw"><i style="background:var(--line-soft)"></i><b>line-soft</b><span>93.5% L</span></div>
+<div class="sw"><i style="background:var(--line)"></i><b>line</b><span>88.5% L</span></div>
+<div class="sw"><i style="background:var(--line-strong)"></i><b>line-strong</b><span>65% L</span></div>
+<div class="sw"><i style="background:var(--ink-3)"></i><b>ink-3</b><span>54.5% L</span></div>
+<div class="sw"><i style="background:var(--ink-2)"></i><b>ink-2</b><span>47.5% L</span></div>
+<div class="sw"><i style="background:var(--ink)"></i><b>ink</b><span>26% L</span></div>
+<div class="sw"><i style="background:var(--accent)"></i><b>accent</b><span>52% L</span></div>
+</div>
+<div class="card" style="margin-top:var(--space-room);max-width:66ch">
+<p style="color:var(--ink)">Primary ink on a row card — <span class="num">15.45:1</span></p>
+<p class="sec-ink" style="color:var(--ink-2)">Secondary label — <span class="num">6.67:1</span></p>
+<p style="color:var(--ink-3)">Tertiary hint and placeholder — <span class="num">4.93:1</span></p>
+<p style="color:var(--accent-ink)">Accent / link text — <span class="num">7.96:1</span></p>
+<p class="note" style="margin-top:var(--space-base)">The three ink levels sit
       at roughly 15 : 6.7 : 4.9 — a ~2.2× step each, so rank is readable without
       reading. §2.3 contrast as a compositional tool.</p>
-  </div>
+</div>
 </section>
-
 <section class="sec">
-  <h2>Foundations — type</h2>
-  <p class="note">Modular scale 1.2 (minor third), base 0.9375rem. Display is
+<h2>Foundations — type</h2>
+<p class="note">Modular scale 1.2 (minor third), base 0.9375rem. Display is
     fluid via clamp(). Figures are tabular wherever data appears.</p>
-  <dl class="spec" style="margin-top:var(--space-room)">
-    <dt>t-3</dt><dd style="font-size:var(--t-3);line-height:var(--lh-display)">Application tracker</dd>
-    <dt>t-2</dt><dd style="font-size:var(--t-2)">Funnel and analytics</dd>
-    <dt>t-1</dt><dd style="font-size:var(--t-1)">Section heading</dd>
-    <dt>t-0</dt><dd>Body — the default reading size for prose and cells</dd>
-    <dt>t--1</dt><dd style="font-size:var(--t--1)">Table cell and secondary copy</dd>
-    <dt>t--2</dt><dd class="caps">Uppercase micro-label</dd>
-  </dl>
-  <div class="card" style="margin-top:var(--space-room);max-width:70ch">
-    <p class="caps">Tabular figures, enforced</p>
-    <p class="num" style="margin-top:var(--space-base);font-size:var(--t-1)">
-      1,111,111 &nbsp; 0000000 &nbsp; 4.0 &nbsp; 12 days &nbsp; £52,000 &nbsp; 01/09/2026</p>
-    <p class="num" style="font-size:var(--t-1)">
-      8,888,888 &nbsp; 9999999 &nbsp; 4.8 &nbsp; 09 days &nbsp; £60,000 &nbsp; 30/11/2026</p>
-    <p class="note" style="margin-top:var(--space-base)">Columns of figures do not
+<dl class="spec" style="margin-top:var(--space-room)">
+<dt>t-3</dt><dd style="font-size:var(--t-3);line-height:var(--lh-display)">Application tracker</dd>
+<dt>t-2</dt><dd style="font-size:var(--t-2)">Funnel and analytics</dd>
+<dt>t-1</dt><dd style="font-size:var(--t-1)">Section heading</dd>
+<dt>t-0</dt><dd>Body — the default reading size for prose and cells</dd>
+<dt>t--1</dt><dd style="font-size:var(--t--1)">Table cell and secondary copy</dd>
+<dt>t--2</dt><dd class="caps">Uppercase micro-label</dd>
+</dl>
+<div class="card" style="margin-top:var(--space-room);max-width:70ch">
+<p class="caps">Tabular figures, enforced</p>
+<p class="num" style="margin-top:var(--space-base);font-size:var(--t-1)">
+      1,111,111   0000000   4.0   12 days   £52,000   01/09/2026</p>
+<p class="num" style="font-size:var(--t-1)">
+      8,888,888   9999999   4.8   09 days   £60,000   30/11/2026</p>
+<p class="note" style="margin-top:var(--space-base)">Columns of figures do not
       jitter between rows — every digit occupies the same advance width, and zero
       is slashed. §2.2.</p>
-  </div>
+</div>
 </section>
-
 <section class="sec">
-  <h2>Foundations — space</h2>
-  <p class="note">Base 0.25rem, ratio 1.5 from 0.5rem, snapped to even pixels.
+<h2>Foundations — space</h2>
+<p class="note">Base 0.25rem, ratio 1.5 from 0.5rem, snapped to even pixels.
     Named, never numeric.</p>
-  <div style="margin-top:var(--space-room)">
-    <div style="display:flex;align-items:flex-end;gap:var(--space-base)">
-      <div><div style="width:var(--space-tight);height:var(--space-tight);background:var(--accent)"></div><b class="caps">tight 4</b></div>
-      <div><div style="width:var(--space-base);height:var(--space-base);background:var(--accent)"></div><b class="caps">base 8</b></div>
-      <div><div style="width:var(--space-cosy);height:var(--space-cosy);background:var(--accent)"></div><b class="caps">cosy 12</b></div>
-      <div><div style="width:var(--space-room);height:var(--space-room);background:var(--accent)"></div><b class="caps">room 18</b></div>
-      <div><div style="width:var(--space-loose);height:var(--space-loose);background:var(--accent)"></div><b class="caps">loose 28</b></div>
-      <div><div style="width:var(--space-open);height:var(--space-open);background:var(--accent)"></div><b class="caps">open 42</b></div>
-      <div><div style="width:var(--space-vast);height:var(--space-vast);background:var(--accent)"></div><b class="caps">vast 64</b></div>
-    </div>
-  </div>
+<div style="margin-top:var(--space-room)">
+<div style="display:flex;align-items:flex-end;gap:var(--space-base)">
+<div><div style="width:var(--space-tight);height:var(--space-tight);background:var(--accent)"></div><b class="caps">tight 4</b></div>
+<div><div style="width:var(--space-base);height:var(--space-base);background:var(--accent)"></div><b class="caps">base 8</b></div>
+<div><div style="width:var(--space-cosy);height:var(--space-cosy);background:var(--accent)"></div><b class="caps">cosy 12</b></div>
+<div><div style="width:var(--space-room);height:var(--space-room);background:var(--accent)"></div><b class="caps">room 18</b></div>
+<div><div style="width:var(--space-loose);height:var(--space-loose);background:var(--accent)"></div><b class="caps">loose 28</b></div>
+<div><div style="width:var(--space-open);height:var(--space-open);background:var(--accent)"></div><b class="caps">open 42</b></div>
+<div><div style="width:var(--space-vast);height:var(--space-vast);background:var(--accent)"></div><b class="caps">vast 64</b></div>
+</div>
+</div>
 </section>
-
 <!-- ══════════ SETUP ══════════ -->
 <section class="sec">
-  <h2>1–2 · Connect / setup, 5 steps &amp; SQL block</h2>
-  <p class="note">Measure 62ch. Checkpoints are the only green surface in the app.</p>
-  <div class="card" style="margin-top:var(--space-room);max-width:74ch">
-    <p class="caps">Step 4 of 5 · about 1 minute</p>
-    <p style="font-weight:600;margin-top:var(--space-tight)">Copy your Project URL</p>
-    <p style="color:var(--ink-2);max-width:62ch;line-height:var(--lh-prose);margin-top:var(--space-base)">
+<h2>1–2 · Connect / setup, 5 steps &amp; SQL block</h2>
+<p class="note">Measure 62ch. Checkpoints are the only green surface in the app.</p>
+<div class="card" style="margin-top:var(--space-room);max-width:74ch">
+<p class="caps">Step 4 of 5 · about 1 minute</p>
+<p style="font-weight:600;margin-top:var(--space-tight)">Copy your Project URL</p>
+<p style="color:var(--ink-2);max-width:62ch;line-height:var(--lh-prose);margin-top:var(--space-base)">
       The two things this page needs live on <b>two different pages</b> of the
       Supabase dashboard. This is the first. Do not go looking for the key here.</p>
-    <ol style="margin:var(--space-cosy) 0 0 var(--space-room);max-width:62ch;
+<ol style="margin:var(--space-cosy) 0 0 var(--space-room);max-width:62ch;
       line-height:var(--lh-prose);list-style:decimal">
-      <li>In the left-hand column, click <b>Integrations</b>, then <b>Data API</b>.</li>
-      <li>Copy the URL shown there and paste it into <b>Project URL</b> below.</li>
-    </ol>
-    <div class="notice n-warn" style="margin-top:var(--space-cosy);font-size:var(--t--1);
+<li>In the left-hand column, click <b>Integrations</b>, then <b>Data API</b>.</li>
+<li>Copy the URL shown there and paste it into <b>Project URL</b> below.</li>
+</ol>
+<div class="notice n-warn" style="margin-top:var(--space-cosy);font-size:var(--t--1);
       line-height:var(--lh-prose)">
       What Supabase shows is the REST endpoint, ending <code>/rest/v1/</code>.
       <b>Paste it whole — this page trims it for you.</b>
-    </div>
-    <div class="notice n-good" style="margin-top:var(--space-cosy)">
-      <b>You have done this right when:</b> a message reads “Success. No rows
+</div>
+<div class="notice n-good" style="margin-top:var(--space-cosy)">
+<b>You have done this right when:</b> a message reads “Success. No rows
       returned”. That is the right answer, not an error.
     </div>
-    <div class="well" style="margin-top:var(--space-cosy)">create table if not exists public.applications (
+<div class="well" style="margin-top:var(--space-cosy)">create table if not exists public.applications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null default auth.uid(),
   company     text not null default '',
   ...
 );</div>
-    <p style="margin-top:var(--space-cosy)">
-      <button class="btn">Copy SQL</button>
-      <button class="btn">Show SQL</button></p>
-  </div>
+<p style="margin-top:var(--space-cosy)">
+<button class="btn">Copy SQL</button>
+<button class="btn">Show SQL</button></p>
+</div>
 </section>
-
 <!-- ══════════ SIGN-IN ══════════ -->
 <section class="sec">
-  <h2>3–7 · Sign-in — all states</h2>
-  <div class="grid2">
-    <div class="frame"><p class="caps">Email entry</p>
-      <div class="card">
-        <p style="max-width:54ch;line-height:var(--lh-prose)">The setup is done.
+<h2>3–7 · Sign-in — all states</h2>
+<div class="grid2">
+<div class="frame"><p class="caps">Email entry</p>
+<div class="card">
+<p style="max-width:54ch;line-height:var(--lh-prose)">The setup is done.
           Type the email address you want to use — there is no password to invent.</p>
-        <div style="display:flex;gap:var(--space-base);margin-top:var(--space-cosy)">
-          <input class="input" placeholder="you@example.com" />
-          <button class="btn btn-primary" style="white-space:nowrap">Send link</button>
-        </div>
-      </div></div>
-
-    <div class="frame"><p class="caps">Link sent — two routes</p>
-      <div class="card">
-        <p style="max-width:54ch">An email is on its way to <b>you@example.com</b>.</p>
-        <ul style="margin-top:var(--space-base);max-width:54ch;line-height:var(--lh-prose)">
-          <li style="margin-bottom:var(--space-base)"><b>On this device?</b> Click the link.</li>
-          <li><b>On your phone instead?</b> Type the six-digit code below.</li>
-        </ul>
-        <p class="caps" style="margin-top:var(--space-cosy)">Six-digit code</p>
-        <div style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
-          <input class="input mono" placeholder="123456" style="letter-spacing:.25em" />
-          <button class="btn">Verify</button>
-        </div>
-      </div></div>
-
-    <div class="frame"><p class="caps">Error + concrete recovery</p>
-      <div class="card">
-        <div class="notice n-danger" style="font-size:var(--t--1);line-height:var(--lh-prose)">
-          <b>Supabase refused to send you back here.</b> The address it has on
+<div style="display:flex;gap:var(--space-base);margin-top:var(--space-cosy)">
+<input class="input" placeholder="you@example.com"/>
+<button class="btn btn-primary" style="white-space:nowrap">Send link</button>
+</div>
+</div></div>
+<div class="frame"><p class="caps">Link sent — two routes</p>
+<div class="card">
+<p style="max-width:54ch">An email is on its way to <b>you@example.com</b>.</p>
+<ul style="margin-top:var(--space-base);max-width:54ch;line-height:var(--lh-prose)">
+<li style="margin-bottom:var(--space-base)"><b>On this device?</b> Click the link.</li>
+<li><b>On your phone instead?</b> Type the six-digit code below.</li>
+</ul>
+<p class="caps" style="margin-top:var(--space-cosy)">Six-digit code</p>
+<div style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+<input class="input mono" placeholder="123456" style="letter-spacing:.25em"/>
+<button class="btn">Verify</button>
+</div>
+</div></div>
+<div class="frame"><p class="caps">Error + concrete recovery</p>
+<div class="card">
+<div class="notice n-danger" style="font-size:var(--t--1);line-height:var(--lh-prose)">
+<b>Supabase refused to send you back here.</b> The address it has on
           file does not match this page.</div>
-        <p style="margin-top:var(--space-cosy);max-width:56ch;font-size:var(--t--1);
+<p style="margin-top:var(--space-cosy);max-width:56ch;font-size:var(--t--1);
           line-height:var(--lh-prose)">Put this exact address in both <b>Site URL</b>
           and <b>Redirect URLs</b>:</p>
-        <div style="display:flex;gap:var(--space-base);margin-top:var(--space-base);align-items:center">
-          <code class="well" style="flex:1;padding:var(--space-base) var(--space-cosy);
+<div style="display:flex;gap:var(--space-base);margin-top:var(--space-base);align-items:center">
+<code class="well" style="flex:1;padding:var(--space-base) var(--space-cosy);
             max-height:none">https://willowy-platypus-7b589d.netlify.app</code>
-          <button class="btn">Copy</button>
-        </div>
-        <p class="note" style="margin-top:var(--space-base)">Your email address is
+<button class="btn">Copy</button>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Your email address is
           still in the field above — input is preserved. §3.3</p>
-      </div></div>
-
-    <div class="frame"><p class="caps">Is this your database?</p>
-      <div class="card" style="background:var(--raised)">
-        <p class="caps">Is this your database?</p>
-        <p class="mono" style="margin-top:var(--space-base);font-size:var(--t--1)">
+</div></div>
+<div class="frame"><p class="caps">Is this your database?</p>
+<div class="card" style="background:var(--raised)">
+<p class="caps">Is this your database?</p>
+<p class="mono" style="margin-top:var(--space-base);font-size:var(--t--1)">
           https://abcdefgh.supabase.co</p>
-        <p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-3);
+<p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-3);
           line-height:var(--lh-prose)">Signing in creates your account inside this
           Supabase project. If you do not recognise it, stop.</p>
-        <button class="btn" style="margin-top:var(--space-cosy)">Use a different database</button>
-      </div></div>
-  </div>
+<button class="btn" style="margin-top:var(--space-cosy)">Use a different database</button>
+</div></div>
+</div>
 </section>
-
 <!-- ══════════ LOADING ══════════ -->
 <section class="sec">
-  <h2>8–9 · Session check &amp; pipeline loading</h2>
-  <p class="note">Below 1s: <b>nothing at all</b> (§3.3). Past 1s the skeleton is
+<h2>8–9 · Session check &amp; pipeline loading</h2>
+<p class="note">Below 1s: <b>nothing at all</b> (§3.3). Past 1s the skeleton is
     the real table with blocks in the cells, so replacing blocks with text shifts
     no box — CLS is 0 by construction.</p>
-  <div class="scrollpad" style="margin-top:var(--space-room)">
-  <table class="tk">
-    <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
-      <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
-    <tbody>
-      <tr><td><span class="skel" style="width:70%"></span></td>
-        <td><span class="skel" style="width:80%"></span></td>
-        <td><span class="skel" style="width:50%"></span></td>
-        <td><span class="skel" style="width:64px;height:22px;border-radius:999px"></span></td>
-        <td><span class="skel" style="width:90%"></span></td>
-        <td><span class="skel" style="width:75%"></span></td>
-        <td><span class="skel" style="width:60%"></span></td>
-        <td><span class="skel" style="width:2rem"></span></td></tr>
-      <tr><td><span class="skel" style="width:55%"></span></td>
-        <td><span class="skel" style="width:70%"></span></td>
-        <td><span class="skel" style="width:40%"></span></td>
-        <td><span class="skel" style="width:64px;height:22px;border-radius:999px"></span></td>
-        <td><span class="skel" style="width:65%"></span></td>
-        <td><span class="skel" style="width:85%"></span></td>
-        <td><span class="skel" style="width:45%"></span></td>
-        <td><span class="skel" style="width:2rem"></span></td></tr>
-    </tbody>
-  </table>
-  </div>
+<div class="scrollpad" style="margin-top:var(--space-room)">
+<div class="tk2" style="grid-template-columns:auto auto auto 7.5rem auto auto auto 5rem;row-gap:var(--space-base)"><div class="tk2-head"><div class="tk2-h">Company</div><div class="tk2-h">Role</div><div class="tk2-h">Location</div><div class="tk2-h">Status</div><div class="tk2-h">Replies</div><div class="tk2-h">Next steps</div><div class="tk2-h">Notes</div><div class="tk2-h">Score</div></div><div class="tk2-row"><div class="tk2-c"><span class="skel" style="width:70%"></span></div><div class="tk2-c"><span class="skel" style="width:80%"></span></div><div class="tk2-c"><span class="skel" style="width:50%"></span></div><div class="tk2-c"><span class="skel" style="width:64px;height:22px;border-radius:999px"></span></div><div class="tk2-c"><span class="skel" style="width:90%"></span></div><div class="tk2-c"><span class="skel" style="width:75%"></span></div><div class="tk2-c"><span class="skel" style="width:60%"></span></div><div class="tk2-c"><span class="skel" style="width:2rem"></span></div></div><div class="tk2-row"><div class="tk2-c"><span class="skel" style="width:55%"></span></div><div class="tk2-c"><span class="skel" style="width:70%"></span></div><div class="tk2-c"><span class="skel" style="width:40%"></span></div><div class="tk2-c"><span class="skel" style="width:64px;height:22px;border-radius:999px"></span></div><div class="tk2-c"><span class="skel" style="width:65%"></span></div><div class="tk2-c"><span class="skel" style="width:85%"></span></div><div class="tk2-c"><span class="skel" style="width:45%"></span></div><div class="tk2-c"><span class="skel" style="width:2rem"></span></div></div></div>
+</div>
 </section>
-
 <!-- ══════════ EMPTY STATE ══════════ -->
 <section class="sec">
-  <h2>10 · Empty state as the onboarding surface</h2>
-  <p class="note">§3.3 — the first-run empty state is the best onboarding surface.
+<h2>10 · Empty state as the onboarding surface</h2>
+<p class="note">§3.3 — the first-run empty state is the best onboarding surface.
     One ghost row in the <b>real table geometry</b>, each cell carrying its own
     instruction, primary button aligned to the Company column.</p>
-  <p style="max-width:48ch;margin-top:var(--space-room);font-size:var(--t-1);
+<p style="max-width:48ch;margin-top:var(--space-room);font-size:var(--t-1);
     line-height:var(--lh-prose)">Add your first application. Every cell is
     editable — click one and type.</p>
-  <p style="margin-top:var(--space-cosy)"><button class="btn btn-primary">+ Add application</button></p>
-  <div class="scrollpad" style="margin-top:var(--space-cosy)">
-  <table class="tk">
-    <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
-      <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
-    <tbody><tr style="opacity:.75">
-      <td class="muted">Company</td><td class="muted">Role</td><td class="muted">City</td>
-      <td><span class="pill s1">To apply</span></td>
-      <td class="muted">Log the reply</td><td class="muted">Set the next action</td>
-      <td class="muted">Angle, contact</td><td class="muted num">–</td></tr></tbody>
-  </table>
-  </div>
+<p style="margin-top:var(--space-cosy)"><button class="btn btn-primary">+ Add application</button></p>
+<div class="scrollpad" style="margin-top:var(--space-cosy)">
+<div class="tk2" style="grid-template-columns:auto auto auto 7.5rem auto auto auto 5rem;row-gap:var(--space-base)"><div class="tk2-head"><div class="tk2-h">Company</div><div class="tk2-h">Role</div><div class="tk2-h">Location</div><div class="tk2-h">Status</div><div class="tk2-h">Replies</div><div class="tk2-h">Next steps</div><div class="tk2-h">Notes</div><div class="tk2-h">Score</div></div><div class="tk2-row" style="opacity:.75"><div class="tk2-c">Company</div><div class="tk2-c">Role</div><div class="tk2-c">City</div><div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c">Log the reply</div><div class="tk2-c">Set the next action</div><div class="tk2-c">Angle, contact</div><div class="tk2-c">–</div></div></div>
+</div>
 </section>
-
 <!-- ══════════ DESKTOP TABLE ══════════ -->
 <section class="sec">
-  <h2>11, 13–19 · Desktop table, stage rail, pills, tags, chase</h2>
-  <p class="note">Rows are cards on the page ground. Elevation is surface
+<h2>11, 13–19 · Desktop table, stage rail, pills, tags, chase</h2>
+<p class="note">Rows are cards on the page ground. Elevation is surface
     lightness, not shadow (§2.3, S3). Hairlines at 1.42:1 — deliberately below
     the 3:1 UI floor because a divider identifies nothing (D5).</p>
-
-  <div style="margin-top:var(--space-room);display:flex;align-items:baseline;
+<div style="margin-top:var(--space-room);display:flex;align-items:baseline;
     gap:var(--space-cosy);flex-wrap:wrap">
-    <span style="font-size:var(--t-display);font-weight:600;letter-spacing:-.025em">JobApp</span>
-    <span class="num sec-ink" style="font-size:var(--t--1)">4 tracked · 2 live</span>
-    <span class="num" style="font-size:var(--t--1);color:var(--ink-3)">· 3 of 4 still examples</span>
-    <span class="tag" style="background:var(--warn-wash);color:var(--warn-ink)">1 awaiting chase</span>
-    <span class="caps" style="color:var(--ink-3)">● live</span>
-  </div>
-
-  <div class="notice n-accent" style="margin:var(--space-cosy) 0;max-width:66ch">
-    <p class="caps" style="color:var(--ink)">The 3 rows marked “Example” are not real</p>
-    <p style="margin-top:var(--space-base);font-size:var(--t--1);line-height:var(--lh-prose)">
+<span style="font-size:var(--t-display);font-weight:600;letter-spacing:-.025em">JobApp</span>
+<span class="num sec-ink" style="font-size:var(--t--1)">4 tracked · 2 live</span>
+<span class="num" style="font-size:var(--t--1);color:var(--ink-3)">· 3 of 4 still examples</span>
+<span class="tag" style="background:var(--warn-wash);color:var(--warn-ink)">1 awaiting chase</span>
+<span class="caps" style="color:var(--ink-3)">● live</span>
+</div>
+<div class="notice n-accent" style="margin:var(--space-cosy) 0;max-width:66ch">
+<p class="caps" style="color:var(--ink)">The 3 rows marked “Example” are not real</p>
+<p style="margin-top:var(--space-base);font-size:var(--t--1);line-height:var(--lh-prose)">
       JobApp invented them so your first visit would not be an empty table.
       <b>These are not your applications, and not anybody else’s.</b></p>
-    <p style="margin-top:var(--space-cosy)">
-      <button class="btn">Remove the examples</button>
-      <button class="btn">Keep them for now</button></p>
-  </div>
-
-  <div class="rail">
-    <i style="width:16%;background:var(--st1i);opacity:.35"></i>
-    <i style="width:25%;background:var(--st2i)"></i>
-    <i style="width:8%;background:var(--st3i)"></i>
-    <i style="width:25%;background:var(--st4i)"></i>
-    <i style="width:26%;background:var(--st5i)"></i>
-  </div>
-  <div class="chips">
-    <button class="chip" aria-pressed="true">All <span class="num">4</span></button>
-    <button class="chip">To apply <span class="num">1</span></button>
-    <button class="chip">Applied <span class="num">1</span></button>
-    <button class="chip">Replied <span class="num">0</span></button>
-    <button class="chip">Interview <span class="num">1</span></button>
-    <button class="chip">Offer <span class="num">1</span></button>
-    <button class="chip">Closed <span class="num">0</span></button>
-  </div>
-
-  <div class="scrollpad" style="margin-top:var(--space-room)">
-  <table class="tk">
-    <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
-      <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><span class="tag">Example</span>
-          <div class="cell" style="margin-top:var(--space-tight)">Example Consulting</div></td>
-        <td><div class="cell">Analyst, Strategy</div></td>
-        <td><div class="cell">London</div></td>
-        <td><span class="pill s2">Applied</span></td>
-        <td><div class="cell">Automated acknowledgement received.</div></td>
-        <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
-            <input type="checkbox" checked style="accent-color:var(--accent)" />
-            <s style="color:var(--ink-3)">Send the CV</s></label>
-            <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
-            <input type="checkbox" style="accent-color:var(--accent)" />
-            Follow up next week</label></div></td>
-        <td><div class="cell">Warm intro via alumni list.</div></td>
-        <td><div class="cell num" style="font-weight:600">4.0 <span class="muted">▸</span></div></td>
-      </tr>
-      <tr>
-        <td><div class="cell">Northwind</div></td>
-        <td><div class="cell">Analyst, Strategy</div></td>
-        <td><div class="cell">London</div></td>
-        <td><span class="pill s1">To apply</span></td>
-        <td><div class="cell muted">Log the reply</div></td>
-        <td><div class="cell muted">Set the next action</div></td>
-        <td><div class="cell muted">Angle, contact</div></td>
-        <td><div class="cell num" style="font-weight:600">2.0 <span class="muted">▸</span></div></td>
-      </tr>
-      <tr>
-        <td><span class="tag">Example</span>
-          <div class="cell" style="margin-top:var(--space-tight)">Example Studio</div></td>
-        <td><div class="cell">Business Development Associate</div></td>
-        <td><div class="cell">Remote</div></td>
-        <td><span class="pill s4">Interview</span></td>
-        <td><div class="cell">First round scheduled, 30 minutes, video.</div></td>
-        <td><div class="cell">Prepare three examples</div></td>
-        <td><div class="cell">Warm lead.</div></td>
-        <td><div class="cell num" style="font-weight:600">4.8 <span class="muted">▸</span></div></td>
-      </tr>
-      <tr>
-        <td><span class="tag">Example</span>
-          <div class="cell" style="margin-top:var(--space-tight)">Example Foundation</div></td>
-        <td><div class="cell">Programme Operations Assistant</div></td>
-        <td><div class="cell muted">City</div></td>
-        <td><span class="pill s5">Offer</span></td>
-        <td><div class="cell muted">Log the reply</div></td>
-        <td><div class="cell muted">Set the next action</div></td>
-        <td><div class="cell muted">Angle, contact</div></td>
-        <td><div class="cell num" style="font-weight:600">3.0 <span class="muted">▾</span></div></td>
-      </tr>
-    </tbody>
-  </table>
-  </div>
-
-  <p class="caps" style="margin-top:var(--space-room)">All six stages</p>
-  <div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-base)">
-    <span class="pill s1">To apply</span><span class="pill s2">Applied</span>
-    <span class="pill s3">Replied</span><span class="pill s4">Interview</span>
-    <span class="pill s5">Offer</span><span class="pill s6">Closed</span>
-  </div>
-  <p class="note" style="margin-top:var(--space-base)">Each pairing measured ≥4.5:1
+<p style="margin-top:var(--space-cosy)">
+<button class="btn">Remove the examples</button>
+<button class="btn">Keep them for now</button></p>
+</div>
+<div class="rail">
+<i style="width:16%;background:var(--st1i);opacity:.35"></i>
+<i style="width:25%;background:var(--st2i)"></i>
+<i style="width:8%;background:var(--st3i)"></i>
+<i style="width:25%;background:var(--st4i)"></i>
+<i style="width:26%;background:var(--st5i)"></i>
+</div>
+<div class="chips">
+<button aria-pressed="true" class="chip">All <span class="num">4</span></button>
+<button class="chip">To apply <span class="num">1</span></button>
+<button class="chip">Applied <span class="num">1</span></button>
+<button class="chip">Replied <span class="num">0</span></button>
+<button class="chip">Interview <span class="num">1</span></button>
+<button class="chip">Offer <span class="num">1</span></button>
+<button class="chip">Closed <span class="num">0</span></button>
+</div>
+<div class="scrollpad" style="margin-top:var(--space-room)">
+<div class="tk2" style="grid-template-columns:auto auto auto 7.5rem auto auto auto 5rem;row-gap:var(--space-base)"><div class="tk2-head"><div class="tk2-h">Company</div><div class="tk2-h">Role</div><div class="tk2-h">Location</div><div class="tk2-h">Status</div><div class="tk2-h">Replies</div><div class="tk2-h">Next steps</div><div class="tk2-h">Notes</div><div class="tk2-h">Score</div></div><div class="tk2-row"><div class="tk2-c"><span class="tag">Example</span>
+<div class="cell" style="margin-top:var(--space-tight)">Example Consulting</div></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c"><div class="cell">Automated acknowledgement received.</div></div><div class="tk2-c"><div class="cell"><label style="display:flex;gap:var(--space-base)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send the CV</s></label>
+<label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+<input style="accent-color:var(--accent)" type="checkbox"/>
+            Follow up next week</label></div></div><div class="tk2-c"><div class="cell">Warm intro via alumni list.</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">4.0 <span class="muted">▸</span></div></div></div><div class="tk2-row"><div class="tk2-c"><div class="cell">Northwind</div></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c"><div class="cell muted">Log the reply</div></div><div class="tk2-c"><div class="cell muted">Set the next action</div></div><div class="tk2-c"><div class="cell muted">Angle, contact</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">2.0 <span class="muted">▸</span></div></div></div><div class="tk2-row"><div class="tk2-c"><span class="tag">Example</span>
+<div class="cell" style="margin-top:var(--space-tight)">Example Studio</div></div><div class="tk2-c"><div class="cell">Business Development Associate</div></div><div class="tk2-c"><div class="cell">Remote</div></div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c"><div class="cell">First round scheduled, 30 minutes, video.</div></div><div class="tk2-c"><div class="cell">Prepare three examples</div></div><div class="tk2-c"><div class="cell">Warm lead.</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">4.8 <span class="muted">▸</span></div></div></div><div class="tk2-row"><div class="tk2-c"><span class="tag">Example</span>
+<div class="cell" style="margin-top:var(--space-tight)">Example Foundation</div></div><div class="tk2-c"><div class="cell">Programme Operations Assistant</div></div><div class="tk2-c"><div class="cell muted">City</div></div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c"><div class="cell muted">Log the reply</div></div><div class="tk2-c"><div class="cell muted">Set the next action</div></div><div class="tk2-c"><div class="cell muted">Angle, contact</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">3.0 <span class="muted">▾</span></div></div></div></div>
+</div>
+<p class="caps" style="margin-top:var(--space-room)">All six stages</p>
+<div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-base)">
+<span class="pill s1">To apply</span><span class="pill s2">Applied</span>
+<span class="pill s3">Replied</span><span class="pill s4">Interview</span>
+<span class="pill s5">Offer</span><span class="pill s6">Closed</span>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Each pairing measured ≥4.5:1
     against its own fill. <b>Zero transition</b> — ~40 clicks a session, §3.1.</p>
 </section>
-
 <!-- ══════════ DETAIL DRAWER ══════════ -->
 <section class="sec">
-  <h2>21–23 · Detail drawer — scoring &amp; offer</h2>
-  <p class="note">Both panels are the same surface. No accent tint on either.</p>
-  <div class="grid2">
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <p class="caps">Company score</p>
-        <p class="num" style="font-weight:600">3.0 <span class="muted">/ 5</span>
-          <button class="btn" style="border:0;background:none;padding:0;
+<h2>21–23 · Detail drawer — scoring &amp; offer</h2>
+<p class="note">Both panels are the same surface. No accent tint on either.</p>
+<div class="grid2">
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<p class="caps">Company score</p>
+<p class="num" style="font-weight:600">3.0 <span class="muted">/ 5</span>
+<button class="btn" style="border:0;background:none;padding:0;
             text-decoration:underline;color:var(--ink-3);font-weight:400">Clear all</button></p>
-      </div>
-      <div style="margin-top:var(--space-cosy);display:grid;gap:var(--space-base)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="caps">Salary</span>
-          <span><i style="display:inline-block;width:15px;height:15px;border-radius:3px;
+</div>
+<div style="margin-top:var(--space-cosy);display:grid;gap:var(--space-base)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span class="caps">Salary</span>
+<span><i style="display:inline-block;width:15px;height:15px;border-radius:3px;
             background:var(--accent);margin-right:3px"></i><i style="display:inline-block;
             width:15px;height:15px;border-radius:3px;background:var(--accent);margin-right:3px"></i>
-            <i style="display:inline-block;width:15px;height:15px;border-radius:3px;
+<i style="display:inline-block;width:15px;height:15px;border-radius:3px;
             background:var(--accent);margin-right:3px"></i><i style="display:inline-block;
             width:15px;height:15px;border-radius:3px;border:1px solid var(--line-strong);
             margin-right:3px"></i><i style="display:inline-block;width:15px;height:15px;
             border-radius:3px;border:1px solid var(--line-strong)"></i>
-            <span class="muted" style="margin-left:var(--space-base)">×</span></span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="caps">Growth</span><span class="muted">– – – – –</span></div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="caps">Culture</span><span class="muted">– – – – –</span></div>
-      </div>
-      <div style="border-top:1px solid var(--line-soft);margin-top:var(--space-cosy);
+<span class="muted" style="margin-left:var(--space-base)">×</span></span>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span class="caps">Growth</span><span class="muted">– – – – –</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span class="caps">Culture</span><span class="muted">– – – – –</span></div>
+</div>
+<div style="border-top:1px solid var(--line-soft);margin-top:var(--space-cosy);
         padding-top:var(--space-cosy)">
-        <p class="caps">Contact email</p>
-        <input class="input" style="margin-top:var(--space-tight)" placeholder="careers@company.com" />
-      </div>
-    </div>
-    <div class="card">
-      <p class="caps">Offer</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-cosy);
+<p class="caps">Contact email</p>
+<input class="input" placeholder="careers@company.com" style="margin-top:var(--space-tight)"/>
+</div>
+</div>
+<div class="card">
+<p class="caps">Offer</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-cosy);
         margin-top:var(--space-cosy)">
-        <label><span class="caps">Salary</span>
-          <input class="input num" value="£52,000" style="margin-top:var(--space-tight)" /></label>
-        <label><span class="caps">Equity</span>
-          <input class="input num" value="0.1%" style="margin-top:var(--space-tight)" /></label>
-      </div>
-      <label style="display:block;margin-top:var(--space-cosy)"><span class="caps">Start date</span>
-        <input class="input num" value="01/09/2026" style="margin-top:var(--space-tight)" /></label>
-    </div>
-  </div>
+<label><span class="caps">Salary</span>
+<input class="input num" style="margin-top:var(--space-tight)" value="£52,000"/></label>
+<label><span class="caps">Equity</span>
+<input class="input num" style="margin-top:var(--space-tight)" value="0.1%"/></label>
+</div>
+<label style="display:block;margin-top:var(--space-cosy)"><span class="caps">Start date</span>
+<input class="input num" style="margin-top:var(--space-tight)" value="01/09/2026"/></label>
+</div>
+</div>
 </section>
-
 <!-- ══════════ FUNNEL ══════════ -->
 <section class="sec">
-  <h2>20 · Funnel — stat tiles removed (S4)</h2>
-  <p class="note">The four stat tiles duplicated the four numbers already on the
+<h2>20 · Funnel — stat tiles removed (S4)</h2>
+<p class="note">The four stat tiles duplicated the four numbers already on the
     bars. Erased per §4.1 Tufte. Data-ink is now the bar and its figure.</p>
-  <div class="card" style="margin-top:var(--space-room)">
-    <div style="display:flex;justify-content:space-between;align-items:baseline">
-      <p class="caps">▾ Funnel</p>
-      <p class="caps" style="text-transform:none;letter-spacing:0">Live count of where each application sits now</p>
-    </div>
-    <div style="margin-top:var(--space-room)">
-      <div class="fbar"><span class="caps">Applied</span>
-        <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
-        <span class="num" style="text-align:right;font-weight:600">1</span></div>
-      <div class="fmeta num">↓ 8 days avg (n=2)</div>
-      <div class="fbar"><span class="caps">Replied</span>
-        <div class="ftrack"><div class="ffill" style="width:0%;background:var(--st3i)"></div></div>
-        <span class="num" style="text-align:right;font-weight:600">0</span></div>
-      <div class="fmeta num">↓ 9 days avg (n=2)</div>
-      <div class="fbar"><span class="caps">Interview</span>
-        <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st4i);opacity:.75"></div></div>
-        <span class="num" style="text-align:right;font-weight:600">1</span></div>
-      <div class="fmeta num">↓ 15 days avg (n=1)</div>
-      <div class="fbar"><span class="caps">Offer</span>
-        <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st5i)"></div></div>
-        <span class="num" style="text-align:right;font-weight:600">1</span></div>
-    </div>
-  </div>
+<div class="card" style="margin-top:var(--space-room)">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<p class="caps">▾ Funnel</p>
+<p class="caps" style="text-transform:none;letter-spacing:0">Live count of where each application sits now</p>
+</div>
+<div style="margin-top:var(--space-room)">
+<div class="fbar"><span class="caps">Applied</span>
+<div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
+<span class="num" style="text-align:right;font-weight:600">1</span></div>
+<div class="fmeta num">↓ 8 days avg (n=2)</div>
+<div class="fbar"><span class="caps">Replied</span>
+<div class="ftrack"><div class="ffill" style="width:0%;background:var(--st3i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">0</span></div>
+<div class="fmeta num">↓ 9 days avg (n=2)</div>
+<div class="fbar"><span class="caps">Interview</span>
+<div class="ftrack"><div class="ffill" style="width:100%;background:var(--st4i);opacity:.75"></div></div>
+<span class="num" style="text-align:right;font-weight:600">1</span></div>
+<div class="fmeta num">↓ 15 days avg (n=1)</div>
+<div class="fbar"><span class="caps">Offer</span>
+<div class="ftrack"><div class="ffill" style="width:100%;background:var(--st5i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">1</span></div>
+</div>
+</div>
 </section>
-
 <!-- ══════════ MOBILE ══════════ -->
 <section class="sec">
-  <h2>12 · The seven-column table on a phone</h2>
-  <p class="note">Container query on the row wrapper, not a viewport breakpoint
+<h2>12 · The seven-column table on a phone</h2>
+<p class="note">Container query on the row wrapper, not a viewport breakpoint
     (§2.1). Identity and state pinned to line one. Fields <b>with content</b>
     render; empty ones collapse into one named adder. No column is hidden.
     The frame below is 380px wide — resize the window and it will not change,
     because it responds to its container.</p>
-  <div style="width:380px;max-width:100%;margin-top:var(--space-room)" class="rowwrap">
-    <div class="record">
-      <div class="id">
-        <div><span class="tag">Example</span>
-          <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
-        <span class="pill s2">Applied</span>
-      </div>
-      <div class="sub"><span>Analyst, Strategy · London</span>
-        <span class="num" style="font-weight:600">4.0 ▸</span></div>
-      <div class="notes">
-        <span class="caps">Replies</span><span>Automated acknowledgement received.</span>
-        <span class="caps">Next</span><span>
-          <label style="display:flex;gap:var(--space-base)"><input type="checkbox" checked
-            style="accent-color:var(--accent)" /><s style="color:var(--ink-3)">Send the CV</s></label>
-          <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
-            <input type="checkbox" style="accent-color:var(--accent)" />Follow up next week</label></span>
-      </div>
-      <div class="adder"><button class="btn" style="border-style:dashed;width:100%">+ Notes</button></div>
-    </div>
-    <div class="record" style="margin-top:var(--space-base)">
-      <div class="id">
-        <div><div style="font-weight:600">Northwind</div></div>
-        <span class="pill s1">To apply</span>
-      </div>
-      <div class="sub"><span>Analyst, Strategy · London</span>
-        <span class="num" style="font-weight:600">2.0 ▸</span></div>
-      <div class="adder"><button class="btn" style="border-style:dashed;width:100%">
+<div class="rowwrap" style="width:380px;max-width:100%;margin-top:var(--space-room)">
+<div class="record">
+<div class="id">
+<div><span class="tag">Example</span>
+<div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+<span class="pill s2">Applied</span>
+</div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600">4.0 ▸</span></div>
+<div class="notes">
+<span class="caps">Replies</span><span>Automated acknowledgement received.</span>
+<span class="caps">Next</span><span>
+<label style="display:flex;gap:var(--space-base)"><input checked="" style="accent-color:var(--accent)" type="checkbox"/><s style="color:var(--ink-3)">Send the CV</s></label>
+<label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+<input style="accent-color:var(--accent)" type="checkbox"/>Follow up next week</label></span>
+</div>
+<div class="adder"><button class="btn" style="border-style:dashed;width:100%">+ Notes</button></div>
+</div>
+<div class="record" style="margin-top:var(--space-base)">
+<div class="id">
+<div><div style="font-weight:600">Northwind</div></div>
+<span class="pill s1">To apply</span>
+</div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600">2.0 ▸</span></div>
+<div class="adder"><button class="btn" style="border-style:dashed;width:100%">
         + Replies, next steps, notes</button></div>
-    </div>
-  </div>
+</div>
+</div>
 </section>
-
 <!-- ══════════ NOTICES / ERRORS ══════════ -->
 <section class="sec">
-  <h2>24–30 · View bar, undo, deleted, errors, migration, sign out</h2>
-  <div class="grid2">
-    <div class="frame"><p class="caps">View bar</p>
-      <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
-        <button class="btn">Group by <b>None</b> ▾</button>
-        <button class="btn">Sort <b>Pipeline order</b> ▾</button>
-        <button class="btn">Filter <b>Any score</b> ▾</button>
-        <button class="btn" style="border:0;background:none;text-decoration:underline;
+<h2>24–30 · View bar, undo, deleted, errors, migration, sign out</h2>
+<div class="grid2">
+<div class="frame"><p class="caps">View bar</p>
+<div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+<button class="btn">Group by <b>None</b> ▾</button>
+<button class="btn">Sort <b>Pipeline order</b> ▾</button>
+<button class="btn">Filter <b>Any score</b> ▾</button>
+<button class="btn" style="border:0;background:none;text-decoration:underline;
           color:var(--ink-3)">Reset view</button>
-      </div></div>
-
-    <div class="frame"><p class="caps">Undo toast</p>
-      <div class="toast"><span>Example Consulting → Replied</span>
-        <button class="btn nested-lg" style="padding:2px var(--space-base)">Undo</button>
-        <span class="muted">×</span></div></div>
-
-    <div class="frame"><p class="caps">Database error — input preserved</p>
-      <div class="notice n-danger">
-        <p class="caps" style="color:var(--danger-ink)">Could not save that change</p>
-        <div class="well" style="margin-top:var(--space-base);background:transparent;
+</div></div>
+<div class="frame"><p class="caps">Undo toast</p>
+<div class="toast"><span>Example Consulting → Replied</span>
+<button class="btn nested-lg" style="padding:2px var(--space-base)">Undo</button>
+<span class="muted">×</span></div></div>
+<div class="frame"><p class="caps">Database error — input preserved</p>
+<div class="notice n-danger">
+<p class="caps" style="color:var(--danger-ink)">Could not save that change</p>
+<div class="well" style="margin-top:var(--space-base);background:transparent;
           border-color:color-mix(in oklch,var(--danger-ink) 30%,transparent)">new row violates row-level security policy
 Code: 42501</div>
-        <p style="margin-top:var(--space-base);font-size:var(--t--1)">Your text is
+<p style="margin-top:var(--space-base);font-size:var(--t--1)">Your text is
           still in the cell. <button class="btn" style="padding:2px var(--space-base)">Retry</button></p>
-      </div></div>
-
-    <div class="frame"><p class="caps">Migration notice</p>
-      <div class="notice n-warn">
-        <p class="caps">Your database is missing 10 columns</p>
-        <p style="margin-top:var(--space-base);font-size:var(--t--1);line-height:var(--lh-prose)">
+</div></div>
+<div class="frame"><p class="caps">Migration notice</p>
+<div class="notice n-warn">
+<p class="caps">Your database is missing 10 columns</p>
+<p style="margin-top:var(--space-base);font-size:var(--t--1);line-height:var(--lh-prose)">
           Run this in SQL Editor → New query, then reload. It only adds columns.</p>
-        <p style="margin-top:var(--space-base)"><button class="btn">Copy SQL</button>
-          <button class="btn">Show SQL</button></p>
-      </div></div>
-
-    <div class="frame"><p class="caps">Recently deleted</p>
-      <div class="well" style="max-height:none;font-family:inherit;font-size:var(--t--1)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span>Old Co — Researcher</span>
-          <span><button class="btn" style="padding:2px var(--space-base)">Restore</button>
-          <button class="btn" style="padding:2px var(--space-base);color:var(--danger-ink);
+<p style="margin-top:var(--space-base)"><button class="btn">Copy SQL</button>
+<button class="btn">Show SQL</button></p>
+</div></div>
+<div class="frame"><p class="caps">Recently deleted</p>
+<div class="well" style="max-height:none;font-family:inherit;font-size:var(--t--1)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span>Old Co — Researcher</span>
+<span><button class="btn" style="padding:2px var(--space-base)">Restore</button>
+<button class="btn" style="padding:2px var(--space-base);color:var(--danger-ink);
             border-color:var(--danger-ink)">Delete forever</button></span></div>
-      </div></div>
-
-    <div class="frame"><p class="caps">Hard delete — never optimistic</p>
-      <div class="card">
-        <p style="font-size:var(--t--1);max-width:56ch;line-height:var(--lh-prose)">
+</div></div>
+<div class="frame"><p class="caps">Hard delete — never optimistic</p>
+<div class="card">
+<p style="font-size:var(--t--1);max-width:56ch;line-height:var(--lh-prose)">
           Delete this application permanently? This cannot be undone.</p>
-        <p style="margin-top:var(--space-cosy)">
-          <button class="btn" disabled><span class="spinner"></span>Deleting</button>
-          <button class="btn">Cancel</button></p>
-        <p class="note" style="margin-top:var(--space-base)">Spinner, disabled, awaits
+<p style="margin-top:var(--space-cosy)">
+<button class="btn" disabled=""><span class="spinner"></span>Deleting</button>
+<button class="btn">Cancel</button></p>
+<p class="note" style="margin-top:var(--space-base)">Spinner, disabled, awaits
           the network. §Stage 2 — never optimistic.</p>
-      </div></div>
-  </div>
+</div></div>
+</div>
 </section>
-
 <!-- ══════════ STATES ══════════ -->
 <section class="sec">
-  <h2>17, 33 · Sync chip, focus, hover, disabled</h2>
-  <div class="grid2">
-    <div class="frame"><p class="caps">Sync chip — ambient, no motion</p>
-      <p><span class="caps" style="color:var(--ink-3)">● live</span> &nbsp;
-        <span class="caps" style="color:var(--ink-3)">◐ saving</span> &nbsp;
+<h2>17, 33 · Sync chip, focus, hover, disabled</h2>
+<div class="grid2">
+<div class="frame"><p class="caps">Sync chip — ambient, no motion</p>
+<p><span class="caps" style="color:var(--ink-3)">● live</span>  
+        <span class="caps" style="color:var(--ink-3)">◐ saving</span>  
         <span class="caps" style="color:var(--warn-ink)">○ offline</span></p></div>
-    <div class="frame"><p class="caps">Focus ring — 5.61:1, never animated</p>
-      <p><button class="btn" style="outline:2px solid var(--accent);outline-offset:2px">
+<div class="frame"><p class="caps">Focus ring — 5.61:1, never animated</p>
+<p><button class="btn" style="outline:2px solid var(--accent);outline-offset:2px">
         Focused button</button></p></div>
-    <div class="frame"><p class="caps">Disabled</p>
-      <p><button class="btn" disabled>Verify</button>
-        <button class="btn btn-primary" disabled style="background:var(--line);
+<div class="frame"><p class="caps">Disabled</p>
+<p><button class="btn" disabled="">Verify</button>
+<button class="btn btn-primary" disabled="" style="background:var(--line);
           border-color:var(--line);color:var(--ink-3)">Connect</button></p></div>
-    <div class="frame"><p class="caps">Buttons</p>
-      <p><button class="btn btn-primary">+ Add application</button>
-        <button class="btn">Share / Export</button>
-        <button class="btn">Sign out</button></p>
-      <p class="note" style="margin-top:var(--space-base)">Exactly one filled button
+<div class="frame"><p class="caps">Buttons</p>
+<p><button class="btn btn-primary">+ Add application</button>
+<button class="btn">Share / Export</button>
+<button class="btn">Sign out</button></p>
+<p class="note" style="margin-top:var(--space-base)">Exactly one filled button
         on the page. §1.2 restraint as a costly signal.</p></div>
-  </div>
+</div>
 </section>
-
 <!-- ══════════ THE CAPSULE PRIMITIVE ══════════ -->
 <section class="sec">
-  <h2>C · The capsule — shape primitive</h2>
-  <p class="note">Extracted from the undo toast and measured, not estimated:
+<h2>C · The capsule — shape primitive</h2>
+<p class="note">Extracted from the undo toast and measured, not estimated:
     43.34px tall, effective radius 21.67px = exactly h/2, so it is a
     <b>true stadium</b>. Border 1px <code>--line-strong</code>, surface
     <code>--raised</code>, <b>one</b> shadow layer, padding 8/18.</p>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.1 · Nesting — the ratio was accidental</h3>
-  <p class="note">Outer 21.67 : inner 6 = <b>3.61 : 1</b>, because the inner control
+<h3 class="caps" style="margin-top:var(--space-loose)">C.1 · Nesting — the ratio was accidental</h3>
+<p class="note">Outer 21.67 : inner 6 = <b>3.61 : 1</b>, because the inner control
     was just <code>--r-sm</code>. Concentric would be 21.67 − 8 = <b>13.67px</b>.
     Corrected to <code>--capsule-r-nested-lg</code> = 14px. Measured <b>1.71 : 1</b>, not the
     nominal 1.57 — the 14px clamps to the inner control's own half-height
     (12.67px), so it becomes a stadium too. Correct degenerate case.</p>
-  <div class="row" style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
-    <div><p class="caps">Was — 6px, accidental</p>
-      <div class="toast" style="margin-top:var(--space-base)">
-        <span>Example Consulting → Replied</span>
-        <button class="btn" style="padding:2px var(--space-base);border-radius:6px">Undo</button>
-        <span class="muted">×</span></div></div>
-    <div><p class="caps">Now — 14px, concentric</p>
-      <div class="toast" style="margin-top:var(--space-base)">
-        <span>Example Consulting → Replied</span>
-        <button class="btn nested-lg" style="padding:2px var(--space-base)">Undo</button>
-        <span class="muted">×</span></div></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.2 · Aspect ratio — the stadium holds to 6:1</h3>
-  <div style="overflow-x:auto;margin-top:var(--space-cosy);padding-bottom:var(--space-base)">
-  <div style="display:grid;gap:var(--space-base);width:max-content">
-    <span class="capsule" style="width:64px;justify-content:center">2:1</span>
-    <span class="capsule" style="width:192px;justify-content:center">6:1 — the bound</span>
-    <span class="capsule" style="width:288px;justify-content:center">9:1 — reads as a lozenge</span>
-    <span class="capsule" style="width:704px;justify-content:center">22:1 — a table cell. Absurd.</span>
-    <span class="capsule capsule--block" style="width:704px;text-align:center">22:1 at --capsule-r-block instead — correct</span>
-  </div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.3 · Adjacency — gap 8–12px</h3>
-  <div style="display:grid;gap:var(--space-room);margin-top:var(--space-cosy)">
-    <div style="display:flex;gap:4px"><span class="caps" style="width:70px">gap 4</span>
-      <span class="chip">All 4</span><span class="chip">Applied 1</span>
-      <span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
-    <div style="display:flex;gap:var(--space-base)"><span class="caps" style="width:70px">gap 8 ✓</span>
-      <span class="chip">All 4</span><span class="chip">Applied 1</span>
-      <span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
-    <div style="display:flex;gap:22px"><span class="caps" style="width:70px">gap 22</span>
-      <span class="chip">All 4</span><span class="chip">Applied 1</span>
-      <span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.4 · Multi-line — if it can wrap, it is not a capsule</h3>
-  <div style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
-    <div style="width:260px"><p class="caps">Stadium at 3 lines — fails</p>
-      <!-- white-space override is deliberate: this specimen exists to show the
+<div class="row" style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
+<div><p class="caps">Was — 6px, accidental</p>
+<div class="toast" style="margin-top:var(--space-base)">
+<span>Example Consulting → Replied</span>
+<button class="btn" style="padding:2px var(--space-base);border-radius:6px">Undo</button>
+<span class="muted">×</span></div></div>
+<div><p class="caps">Now — 14px, concentric</p>
+<div class="toast" style="margin-top:var(--space-base)">
+<span>Example Consulting → Replied</span>
+<button class="btn nested-lg" style="padding:2px var(--space-base)">Undo</button>
+<span class="muted">×</span></div></div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.2 · Aspect ratio — the stadium holds to 6:1</h3>
+<div style="overflow-x:auto;margin-top:var(--space-cosy);padding-bottom:var(--space-base)">
+<div style="display:grid;gap:var(--space-base);width:max-content">
+<span class="capsule" style="width:64px;justify-content:center">2:1</span>
+<span class="capsule" style="width:192px;justify-content:center">6:1 — the bound</span>
+<span class="capsule" style="width:288px;justify-content:center">9:1 — reads as a lozenge</span>
+<span class="capsule" style="width:704px;justify-content:center">22:1 — a table cell. Absurd.</span>
+<span class="capsule capsule--block" style="width:704px;text-align:center">22:1 at --capsule-r-block instead — correct</span>
+</div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.3 · Adjacency — gap 8–12px</h3>
+<div style="display:grid;gap:var(--space-room);margin-top:var(--space-cosy)">
+<div style="display:flex;gap:4px"><span class="caps" style="width:70px">gap 4</span>
+<span class="chip">All 4</span><span class="chip">Applied 1</span>
+<span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
+<div style="display:flex;gap:var(--space-base)"><span class="caps" style="width:70px">gap 8 ✓</span>
+<span class="chip">All 4</span><span class="chip">Applied 1</span>
+<span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
+<div style="display:flex;gap:22px"><span class="caps" style="width:70px">gap 22</span>
+<span class="chip">All 4</span><span class="chip">Applied 1</span>
+<span class="chip">Interview 1</span><span class="chip">Offer 1</span></div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.4 · Multi-line — if it can wrap, it is not a capsule</h3>
+<div style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
+<div style="width:260px"><p class="caps">Stadium at 3 lines — fails</p>
+<!-- white-space override is deliberate: this specimen exists to show the
            failure the primitive's nowrap normally prevents. -->
-      <div class="capsule" style="display:block;white-space:normal;margin-top:var(--space-base)">Automated
+<div class="capsule" style="display:block;white-space:normal;margin-top:var(--space-base)">Automated
         acknowledgement received. Nothing from the hiring manager yet, so chase on Friday.</div></div>
-    <div style="width:260px"><p class="caps">--capsule-r-block — correct</p>
-      <div class="capsule capsule--block" style="margin-top:var(--space-base)">Automated
+<div style="width:260px"><p class="caps">--capsule-r-block — correct</p>
+<div class="capsule capsule--block" style="margin-top:var(--space-base)">Automated
         acknowledgement received. Nothing from the hiring manager yet, so chase on Friday.</div></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.5 · Focus rings follow the curve at every radius</h3>
-  <div style="display:flex;gap:var(--space-room);flex-wrap:wrap;margin-top:var(--space-cosy)">
-    <span class="capsule" style="outline:2px solid var(--accent);outline-offset:2px">stadium</span>
-    <span class="capsule nested-lg" style="outline:2px solid var(--accent);outline-offset:2px">nested-lg 14</span>
-    <span class="capsule capsule--block" style="display:inline-flex;outline:2px solid var(--accent);outline-offset:2px">block 10</span>
-    <span class="capsule nested" style="outline:2px solid var(--accent);outline-offset:2px">nested 8</span>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.6 · Text inset — +6px is optical, not mathematical</h3>
-  <div style="display:flex;gap:var(--space-room);flex-wrap:wrap;margin-top:var(--space-cosy)">
-    <span class="capsule capsule--block" style="display:inline-flex;padding:8px 12px">rectangle, pad-x 12</span>
-    <span class="capsule" style="padding:8px 12px">stadium, pad-x 12 — crowded</span>
-    <span class="capsule">stadium, pad-x 18 ✓</span>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.0 · Elevation — pick an intensity</h3>
-  <p class="note">Applied to the <b>row</b>, never to each cell: with 0 horizontal
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.5 · Focus rings follow the curve at every radius</h3>
+<div style="display:flex;gap:var(--space-room);flex-wrap:wrap;margin-top:var(--space-cosy)">
+<span class="capsule" style="outline:2px solid var(--accent);outline-offset:2px">stadium</span>
+<span class="capsule nested-lg" style="outline:2px solid var(--accent);outline-offset:2px">nested-lg 14</span>
+<span class="capsule capsule--block" style="display:inline-flex;outline:2px solid var(--accent);outline-offset:2px">block 10</span>
+<span class="capsule nested" style="outline:2px solid var(--accent);outline-offset:2px">nested 8</span>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.6 · Text inset — +6px is optical, not mathematical</h3>
+<div style="display:flex;gap:var(--space-room);flex-wrap:wrap;margin-top:var(--space-cosy)">
+<span class="capsule capsule--block" style="display:inline-flex;padding:8px 12px">rectangle, pad-x 12</span>
+<span class="capsule" style="padding:8px 12px">stadium, pad-x 12 — crowded</span>
+<span class="capsule">stadium, pad-x 18 ✓</span>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.0 · Elevation — pick an intensity</h3>
+<p class="note">Applied to the <b>row</b>, never to each cell: with 0 horizontal
     border-spacing the cells are flush, so per-cell shadows cast onto their
     neighbours and draw vertical seams between columns (tested — it is visibly
     wrong). Three intensities below; <b>B is what is applied throughout this
     preview</b>. Toggle to dark to check both.</p>
-  <div style="display:grid;gap:var(--space-room);margin-top:var(--space-cosy)">
-    <div><p class="caps">A · hairline only — the earlier "flat and honest" verdict</p>
-      <table class="tk" style="margin-top:var(--space-tight)"><tbody>
-        <tr style="box-shadow:none"><td style="width:14rem">Example Consulting</td>
-        <td>Analyst, Strategy</td><td>London</td>
-        <td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-        <td class="num" style="width:5rem;font-weight:600">4.0</td></tr></tbody></table></div>
-
-    <div><p class="caps">B · lighter — 0 1px 2px /.06 + 0 3px 8px /.05</p>
-      <table class="tk" style="margin-top:var(--space-tight)"><tbody>
-        <tr style="box-shadow:0 1px 2px oklch(26% .02 255/.06), 0 3px 8px oklch(26% .02 255/.05)"><td style="width:14rem">Example Consulting</td>
-        <td>Analyst, Strategy</td><td>London</td>
-        <td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-        <td class="num" style="width:5rem;font-weight:600">4.0</td></tr></tbody></table></div>
-
-    <div><p class="caps">C · deeper — 0 2px 4px /.08 + 0 10px 24px /.10 ✓ applied</p>
-      <table class="tk" style="margin-top:var(--space-tight)"><tbody>
-        <tr>
-        <td style="width:14rem">Example Consulting</td>
-        <td>Analyst, Strategy</td><td>London</td>
-        <td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-        <td class="num" style="width:5rem;font-weight:600">4.0</td></tr></tbody></table></div>
-
-    <div><p class="caps">D · rejected — shadow on each cell, seams between columns</p>
-      <table class="tk" style="margin-top:var(--space-tight)"><tbody>
-        <tr style="box-shadow:none"><td style="width:14rem;box-shadow:var(--shadow-rest)">Example Consulting</td>
-        <td style="box-shadow:var(--shadow-rest)">Analyst, Strategy</td>
-        <td style="box-shadow:var(--shadow-rest)">London</td>
-        <td style="width:7.5rem;box-shadow:var(--shadow-rest)"><span class="pill s2">Applied</span></td>
-        <td class="num" style="width:5rem;font-weight:600;box-shadow:var(--shadow-rest)">4.0</td></tr></tbody></table></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.7 · The family, together — a real row</h3>
-  <p class="note">Capsules: status pill, chase chip, example tag, add button, dropdown
+<div style="display:grid;gap:var(--space-room);margin-top:var(--space-cosy)">
+<div><p class="caps">A · hairline only — the earlier "flat and honest" verdict</p>
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-base);margin-top:var(--space-tight)"><div class="tk2-row" style="box-shadow:none"><div class="tk2-c">Example Consulting</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div></div></div>
+<div><p class="caps">B · lighter — 0 1px 2px /.06 + 0 3px 8px /.05</p>
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-base);margin-top:var(--space-tight)"><div class="tk2-row" style="box-shadow:0 1px 2px oklch(26% .02 255/.06), 0 3px 8px oklch(26% .02 255/.05)"><div class="tk2-c">Example Consulting</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div></div></div>
+<div><p class="caps">C · deeper — 0 2px 4px /.08 + 0 10px 24px /.10 ✓ applied</p>
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-base);margin-top:var(--space-tight)"><div class="tk2-row"><div class="tk2-c">Example Consulting</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div></div></div>
+<div><p class="caps">D · rejected — shadow on each cell, seams between columns</p>
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-base);margin-top:var(--space-tight)"><div class="tk2-row" style="box-shadow:none"><div class="tk2-c" style="box-shadow:var(--shadow-rest)">Example Consulting</div><div class="tk2-c" style="box-shadow:var(--shadow-rest)">Analyst, Strategy</div><div class="tk2-c" style="box-shadow:var(--shadow-rest)">London</div><div class="tk2-c" style="box-shadow:var(--shadow-rest)"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600; box-shadow:var(--shadow-rest)">4.0</div></div></div></div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.7 · The family, together — a real row</h3>
+<p class="note">Capsules: status pill, chase chip, example tag, add button, dropdown
     trigger. Not capsules: the cells themselves, the rail, the sync chip.</p>
-  <div class="scrollpad" style="margin-top:var(--space-cosy)">
-  <table class="tk">
-    <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
-      <th>Replies</th><th>Next steps</th><th style="width:5rem">Score</th></tr></thead>
-    <tbody><tr>
-      <td><span class="tag">Example</span>
-        <div class="cell" style="margin-top:var(--space-tight)">Example Consulting</div></td>
-      <td><div class="cell">Analyst, Strategy</div></td>
-      <td><div class="cell">London</div></td>
-      <td><span class="pill s2">Applied</span></td>
-      <td><div class="cell">Automated acknowledgement received. Nothing from the
-        hiring manager yet, so chase this on Friday.</div></td>
-      <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
-        <input type="checkbox" checked style="accent-color:var(--accent)" />
-        <s style="color:var(--ink-3)">Send the CV</s></label></div></td>
-      <td><div class="cell num" style="font-weight:600">4.0 <span class="muted">▸</span></div></td>
-    </tr>
-    <tr>
-      <td><div class="cell" style="border:var(--capsule-edge);border-radius:var(--capsule-r-block);
+<div class="scrollpad" style="margin-top:var(--space-cosy)">
+<div class="tk2" style="grid-template-columns:auto auto auto 7.5rem auto auto 5rem;row-gap:var(--space-base)"><div class="tk2-head"><div class="tk2-h">Company</div><div class="tk2-h">Role</div><div class="tk2-h">Location</div><div class="tk2-h">Status</div><div class="tk2-h">Replies</div><div class="tk2-h">Next steps</div><div class="tk2-h">Score</div></div><div class="tk2-row"><div class="tk2-c"><span class="tag">Example</span>
+<div class="cell" style="margin-top:var(--space-tight)">Example Consulting</div></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c"><div class="cell">Automated acknowledgement received. Nothing from the
+        hiring manager yet, so chase this on Friday.</div></div><div class="tk2-c"><div class="cell"><label style="display:flex;gap:var(--space-base)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send the CV</s></label></div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">4.0 <span class="muted">▸</span></div></div></div><div class="tk2-row"><div class="tk2-c"><div class="cell" style="border:var(--capsule-edge);border-radius:var(--capsule-r-block);
         background:var(--surface)">Northwind<span style="color:var(--accent)">|</span></div>
-        <p class="caps" style="margin-top:var(--space-tight)">cell, editing</p></td>
-      <td><div class="cell">Analyst, Strategy</div></td>
-      <td><div class="cell">London</div></td>
-      <td><span class="pill s1">To apply</span></td>
-      <td><div class="cell muted">Log the reply</div></td>
-      <td><div class="cell muted">Set the next action</div></td>
-      <td><div class="cell num" style="font-weight:600">2.0 <span class="muted">▸</span></div></td>
-    </tr></tbody>
-  </table>
-  </div>
-  <div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-cosy);align-items:center">
-    <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
-    <button class="btn" style="border-radius:var(--capsule-r)">Group by <b>None</b> ▾</button>
-    <span class="tag">1 awaiting chase</span>
-    <span class="caps" style="color:var(--ink-3)">● live &nbsp;— not a capsule</span>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">C.8 · The family at card width</h3>
-  <div style="width:380px;max-width:100%;margin-top:var(--space-cosy)" class="rowwrap">
-    <div class="record">
-      <div class="id">
-        <div><span class="tag">Example</span>
-          <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
-        <span class="pill s2">Applied</span>
-      </div>
-      <div class="sub"><span>Analyst, Strategy · London</span>
-        <span class="num" style="font-weight:600">4.0 ▸</span></div>
-      <div class="notes">
-        <span class="caps">Replies</span>
-        <span>Automated acknowledgement received. Nothing from the hiring
+<p class="caps" style="margin-top:var(--space-tight)">cell, editing</p></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c"><div class="cell muted">Log the reply</div></div><div class="tk2-c"><div class="cell muted">Set the next action</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">2.0 <span class="muted">▸</span></div></div></div></div>
+</div>
+<div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-cosy);align-items:center">
+<button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
+<button class="btn" style="border-radius:var(--capsule-r)">Group by <b>None</b> ▾</button>
+<span class="tag">1 awaiting chase</span>
+<span class="caps" style="color:var(--ink-3)">● live  — not a capsule</span>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">C.8 · The family at card width</h3>
+<div class="rowwrap" style="width:380px;max-width:100%;margin-top:var(--space-cosy)">
+<div class="record">
+<div class="id">
+<div><span class="tag">Example</span>
+<div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+<span class="pill s2">Applied</span>
+</div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600">4.0 ▸</span></div>
+<div class="notes">
+<span class="caps">Replies</span>
+<span>Automated acknowledgement received. Nothing from the hiring
           manager yet, so chase this on Friday.</span>
-      </div>
-      <div class="adder"><button class="btn" style="border-style:dashed;width:100%;
+</div>
+<div class="adder"><button class="btn" style="border-style:dashed;width:100%;
         border-radius:var(--capsule-r-block)">+ Next steps, notes</button></div>
-    </div>
-  </div>
-  <p class="note" style="margin-top:var(--space-base)">The pill is ~4:1 here —
+</div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">The pill is ~4:1 here —
     better proportioned than in the table, because the card constrains its width.</p>
 </section>
-
-
 <!-- ════════════════════════════════════════════════════════════════════
      REFINEMENT ROUND 2 — R1–R7
      ════════════════════════════════════════════════════════════════════ -->
-
 <section class="sec" style="border-top-width:6px">
-  <h2 style="font-size:var(--t-3)">Refinement round 2 — R1–R7</h2>
-  <p class="note">Everything below is new since the approved build. It is
+<h2 style="font-size:var(--t-3)">Refinement round 2 — R1–R7</h2>
+<p class="note">Everything below is new since the approved build. It is
     additive to the sections above; where a specimen replaces one of them the
     old version is shown beside it, labelled. Toggle the theme on each.</p>
 </section>
-
 <!-- ══════════ R1 · SHADOWS ══════════ -->
 <section class="sec">
-  <h2>R1 · Shadows — the gap was the limiter, not the table</h2>
-  <p class="note">The row and the funnel card resolve to the <b>same</b>
+<h2>R1 · Shadows — the gap was the limiter, not the table</h2>
+<p class="note">The row and the funnel card resolve to the <b>same</b>
     computed shadow, and the first 8px of falloff are pixel-identical. The row
     is cut at 8px because <code>border-spacing: 0 8px</code> is all the room it
     has, and the shadow needs 59px to reach page ground. Measured across gaps
-    8/12/16/20/24, <b>visible falloff == gap, exactly</b>, every time. Column
-    alignment is not at risk, so the table stays.</p>
-
-  <div style="display:grid;gap:var(--space-open);margin-top:var(--space-room)">
-    <div>
-      <p class="caps">Gap 8px — today. 56% of the falloff shown; residual step
+    8/12/16/20/24, <b>visible falloff == gap, exactly</b>, every time — and the
+    measurement reproduces at 9 / 19 / 29px after the rebuild, unchanged.</p>
+<p class="note" style="margin-top:var(--space-base)"><b>This section originally
+    concluded “column alignment is not at risk, so the table stays”. That was
+    right about the shadow and wrong about the table</b> — a separate defect,
+    found later, makes a table row incapable of being a card at all. See
+    <i>R1b</i> below. These rows are grid rows now; every number in this section
+    was re-measured against them and none of it moved.</p>
+<div style="display:grid;gap:var(--space-open);margin-top:var(--space-room)">
+<div>
+<p class="caps">Gap 8px — today. 56% of the falloff shown; residual step
         0.1030 against page ground, with the next row's border directly under
         it. This abutment is the “clipped, not lifted” reading.</p>
-      <table class="tk tk--g8" style="margin-top:var(--space-base)"><tbody>
-        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
-          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
-        <tr><td>Example Studio</td><td>Business Development Associate</td>
-          <td>Remote</td><td><span class="pill s4">Interview</span></td>
-          <td class="num" style="font-weight:600">4.8</td></tr>
-        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-          <td>City</td><td><span class="pill s5">Offer</span></td>
-          <td class="num" style="font-weight:600">3.0</td></tr>
-      </tbody></table>
-    </div>
-
-    <div>
-      <p class="caps">Gap 18px <code>--space-room</code> — 77% shown, residual
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-base);margin-top:var(--space-base)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div><div class="tk2-row"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div><div class="tk2-c">Remote</div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c" style="font-weight:600">4.8</div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c">City</div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c" style="font-weight:600">3.0</div></div></div>
+</div>
+<div>
+<p class="caps">Gap 18px <code>--space-room</code> — 77% shown, residual
         0.0532. Better, but the termination is still visible.</p>
-      <table class="tk tk--g18" style="margin-top:var(--space-base)"><tbody>
-        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
-          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
-        <tr><td>Example Studio</td><td>Business Development Associate</td>
-          <td>Remote</td><td><span class="pill s4">Interview</span></td>
-          <td class="num" style="font-weight:600">4.8</td></tr>
-        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-          <td>City</td><td><span class="pill s5">Offer</span></td>
-          <td class="num" style="font-weight:600">3.0</td></tr>
-      </tbody></table>
-    </div>
-
-    <div>
-      <p class="caps" style="color:var(--ink)">Gap 28px <code>--space-loose</code>
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-room);margin-top:var(--space-base)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div><div class="tk2-row"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div><div class="tk2-c">Remote</div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c" style="font-weight:600">4.8</div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c">City</div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c" style="font-weight:600">3.0</div></div></div>
+</div>
+<div>
+<p class="caps" style="color:var(--ink)">Gap 28px <code>--space-loose</code>
         — chosen. ~97% shown, residual ~0.008. The next value on the committed
         1.5-ratio scale, so no new token. Costs +20px a row, ~+16% list height.</p>
-      <table class="tk tk--g28" style="margin-top:var(--space-base)"><tbody>
-        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
-          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
-        <tr><td>Example Studio</td><td>Business Development Associate</td>
-          <td>Remote</td><td><span class="pill s4">Interview</span></td>
-          <td class="num" style="font-weight:600">4.8</td></tr>
-        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-          <td>City</td><td><span class="pill s5">Offer</span></td>
-          <td class="num" style="font-weight:600">3.0</td></tr>
-      </tbody></table>
-    </div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-open)">Cause B — the scroll
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-loose);margin-top:var(--space-base)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div><div class="tk2-row"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div><div class="tk2-c">Remote</div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c" style="font-weight:600">4.8</div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c">City</div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c" style="font-weight:600">3.0</div></div></div>
+</div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-open)">Cause B — the scroll
     wrapper was clipping the last row</h3>
-  <p class="note"><code>overflow-x: auto</code> makes the other axis compute to
+<p class="note"><code>overflow-x: auto</code> makes the other axis compute to
     <code>auto</code> as well, so the wrapper clipped vertically and the last
     row kept only <b>8px</b> of shadow. Adding
     <code>padding-bottom: var(--space-loose)</code> took it to <b>32px</b>.</p>
-  <div class="grid2">
-    <div class="frame"><p class="caps">Before — overflow-x:auto, clipped</p>
-      <div class="scrollclip">
-        <table class="tk tk--g28"><tbody>
-          <tr><td style="width:12rem">Northwind</td><td>Analyst, Strategy</td>
-            <td style="width:7.5rem"><span class="pill s2">Applied</span></td></tr>
-          <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-            <td><span class="pill s5">Offer</span></td></tr>
-        </tbody></table>
-      </div></div>
-    <div class="frame"><p class="caps">After — padding-bottom on the wrapper</p>
-      <div class="scrollpad">
-        <table class="tk tk--g28"><tbody>
-          <tr><td style="width:12rem">Northwind</td><td>Analyst, Strategy</td>
-            <td style="width:7.5rem"><span class="pill s2">Applied</span></td></tr>
-          <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-            <td><span class="pill s5">Offer</span></td></tr>
-        </tbody></table>
-      </div></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-open)">An expanded row and its
+<div class="grid2">
+<div class="frame"><p class="caps">Before — overflow-x:auto, clipped</p>
+<div class="scrollclip">
+<div class="tk2" style="grid-template-columns:12rem auto 7.5rem;row-gap:var(--space-loose)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c"><span class="pill s2">Applied</span></div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c"><span class="pill s5">Offer</span></div></div></div>
+</div></div>
+<div class="frame"><p class="caps">After — padding-bottom on the wrapper</p>
+<div class="scrollpad">
+<div class="tk2" style="grid-template-columns:12rem auto 7.5rem;row-gap:var(--space-loose)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c"><span class="pill s2">Applied</span></div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c"><span class="pill s5">Offer</span></div></div></div>
+</div></div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-open)">An expanded row and its
     drawer are one card</h3>
-  <p class="note">Two shadows 1px apart is the “shadow inside a shadow” failure
-    C.6 forbids. The row gap is bridged at cell level — cell backgrounds paint
-    above row-level shadows — so no shadow renders between the pair and only
-    the outside of it meets page ground. Two 1px shadow copies carry the side
-    hairlines across the bridge.</p>
-  <div class="scrollpad" style="margin-top:var(--space-cosy)">
-    <table class="tk tk--g28"><tbody>
-      <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
-        <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
-        <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
-      <tr class="is-open"><td>Example Studio</td><td>Business Development Associate</td>
-        <td>Remote</td><td><span class="pill s4">Interview</span></td>
-        <td class="num" style="font-weight:600">4.8
-          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path
-            d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-            stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
-      <tr class="is-drawer"><td colspan="5" style="padding-top:0">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+<p class="note">Two shadows 1px apart is the “shadow inside a shadow” failure
+    C.6 forbids. This used to need a bridge painted across the row gap at cell
+    level. It needs nothing now: the drawer is a block <i>inside</i> the row, so
+    the pair is one box by construction — one background, one radius, one ring,
+    one shadow, and no junction to hide. The bridge, and the three shadow copies
+    that carried its hairlines, are deleted.</p>
+<div class="scrollpad" style="margin-top:var(--space-cosy)">
+<div class="tk2" style="grid-template-columns:14rem auto auto 7.5rem 5rem;row-gap:var(--space-loose)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c" style="font-weight:600">4.0</div></div><div class="tk2-row is-open is-drawer"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div><div class="tk2-c">Remote</div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c" style="font-weight:600">4.8
+          <svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div><div class="tk2-drawer" style="padding-top:0">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
           gap:var(--space-room);padding-top:var(--space-base)">
-          <div><p class="caps">Company score</p>
-            <p class="num" style="margin-top:var(--space-tight);font-weight:600">4.8
+<div><p class="caps">Company score</p>
+<p class="num" style="margin-top:var(--space-tight);font-weight:600">4.8
               <span class="muted">/ 5</span></p></div>
-          <div><p class="caps">Offer</p>
-            <p class="num" style="margin-top:var(--space-tight)">£52,000 · 0.1% · 01/09/2026</p></div>
-        </div></td></tr>
-      <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
-        <td>City</td><td><span class="pill s5">Offer</span></td>
-        <td class="num" style="font-weight:600">3.0</td></tr>
-    </tbody></table>
+<div><p class="caps">Offer</p>
+<p class="num" style="margin-top:var(--space-tight)">£52,000 · 0.1% · 01/09/2026</p></div>
+</div></div></div><div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div><div class="tk2-c">City</div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c" style="font-weight:600">3.0</div></div></div>
+</div>
+</section>
+<!-- ══════════ FULL ROW LIST — ALL STATES ══════════ -->
+<!-- ══════════ R1b · THE CORNER DEFECT ══════════ -->
+<section class="sec">
+  <h2>R1b · Square corners — why the row stopped being a table row</h2>
+  <p class="note">Every application cell rendered with a square corner
+    protruding past its curve, and the shadow traced the square rather than the
+    curve. It is invisible at reading distance and unmissable once seen.</p>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Root cause</h3>
+  <p class="note"><b>The radius and the background were on different elements
+    from the shadow.</b> <code>border-radius</code> and
+    <code>background</code> were on each <code>&lt;td&gt;</code>;
+    <code>box-shadow</code> was on the <code>&lt;tr&gt;</code>, which has no
+    radius of its own. So the cells drew a curve and the row cast a square.
+    <code>border-collapse</code> was already <code>separate</code>, and nothing
+    was hardcoded <code>#fff</code> — the protruding colour was
+    <code>--surface</code>, which is why it read as white in light mode and as a
+    dark notch in dark mode.</p>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Why the table could not
+    be fixed in place</h3>
+  <p class="note">One element has to own all three. Inside a table, none can —
+    each of these was built and measured, not assumed:</p>
+  <div class="spec" style="grid-template-columns:9rem 1fr;margin-top:var(--space-cosy)">
+    <dt>&lt;td&gt;</dt>
+    <dd>Clips its background to the radius correctly — but a per-cell shadow
+      falls on the neighbouring cell and draws a vertical seam. Clipping each
+      cell's shadow to its own column removes the overlap and leaves a hard
+      vertical step in the shadow instead. Both visible.</dd>
+    <dt>&lt;tr&gt;</dt>
+    <dd>Applies the radius to its <i>shadow</i>, but paints its
+      <i>background</i> square. Measured on a minimal case.</dd>
+    <dt>&lt;tbody&gt;</dt>
+    <dd>Same. A row group spans an expanded pair, which looked promising, but it
+      paints square too — so this was built, measured, and abandoned.</dd>
   </div>
+  <p class="note" style="margin-top:var(--space-cosy)">In the separated-borders
+    model a radius on a row or row group shapes what it <i>casts</i> and not
+    what it <i>fills</i>. So the row stops being a table row.</p>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">What that costs — the
+    only thing the table was buying us</h3>
+  <p class="note">Column alignment, and it is not lost. Each row is a grid item
+    spanning every column with <code>grid-template-columns: subgrid</code>, so
+    the tracks are sized <b>once, across all rows at once</b> — which is exactly
+    what a table does. <b>Measured across all 17 converted grids and 42 rows:
+    zero misaligned</b>, header included, multi-line rows included.</p>
+  <p class="note" style="margin-top:var(--space-base)">The row now owns
+    background, border-radius, box-shadow and the hairline — one element,
+    four properties, no split. The hairline is an inset ring instead of four
+    cell borders, because a ring follows a radius and four borders never did.</p>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">The corner, before and
+    after, against a control</h3>
+  <p class="note">Top-left corner at 4× — the <code>.record</code> card on the
+    right is a plain <code>&lt;div&gt;</code> that always owned all three
+    properties, so it is the control the rows had to match.</p>
+  <div style="display:flex;gap:var(--space-room);flex-wrap:wrap;
+    margin-top:var(--space-cosy);align-items:flex-start">
+    <div><p class="caps">Broken — square past the curve</p>
+      <div style="margin-top:var(--space-base);width:150px;height:150px;
+        position:relative;background:var(--page);border:1px solid var(--line-soft);
+        overflow:hidden">
+        <!-- reconstruction: square background, curve drawn separately -->
+        <div style="position:absolute;left:38px;top:38px;right:-40px;bottom:-40px;
+          background:var(--surface)"></div>
+        <div style="position:absolute;left:48px;top:48px;right:-40px;bottom:-40px;
+          border-top:1px solid var(--line);border-left:1px solid var(--line);
+          border-top-left-radius:10px"></div>
+      </div></div>
+    <div><p class="caps">Fixed — one element, one curve</p>
+      <div style="margin-top:var(--space-base);width:150px;height:150px;
+        position:relative;background:var(--page);border:1px solid var(--line-soft);
+        overflow:hidden">
+        <div style="position:absolute;left:44px;top:44px;right:-40px;bottom:-40px;
+          background:var(--surface);border-radius:10px 0 0 0;
+          box-shadow:var(--shadow-rest), inset 0 0 0 1px var(--line)"></div>
+      </div></div>
+  </div>
+  <p class="note" style="margin-top:var(--space-cosy)">Verified at 4× on all
+    four corners of: the first row, two adjacent rows, the hovered row, the
+    selected row, a multi-line row, the last row, the expanded pair, and the
+    mobile card collapsed and expanded — in light and in dark. The shadow
+    follows the curve continuously, with no straight segment and no gap.</p>
 </section>
 
-<!-- ══════════ FULL ROW LIST — ALL STATES ══════════ -->
 <section class="sec">
-  <h2>R1 · The full list — first, last, hovered, selected, multi-line</h2>
-  <p class="note">One table at the chosen 28px gap, inside the padded wrapper.
+<h2>R1 · The full list — first, last, hovered, selected, multi-line</h2>
+<p class="note">One table at the chosen 28px gap, inside the padded wrapper.
     Hover and keyboard selection cannot happen in a static file, so those two
     rows have the state painted on and are labelled in the first column. The
     multi-line row is the case that decides whether the gap still reads as
     rhythm when the rows are unequal — it does, because the gap is constant and
     the height is not.</p>
-
-  <div class="scrollpad" style="margin-top:var(--space-room)">
-    <table class="tk tk--g28">
-      <thead><tr><th>Company</th><th>Role</th><th>Location</th>
-        <th style="width:7.5rem">Status</th><th>Replies</th><th>Next steps</th>
-        <th style="width:5.5rem">Score</th></tr></thead>
-      <tbody>
-        <tr>
-          <td style="width:13rem"><div class="cell">Northwind</div>
-            <p class="caps" style="margin-top:var(--space-tight)">first row</p></td>
-          <td><div class="cell">Analyst, Strategy</div></td>
-          <td><div class="cell">London</div></td>
-          <td><span class="pill s1">To apply</span></td>
-          <td><div class="cell muted">Log the reply</div></td>
-          <td><div class="cell muted">Set the next action</div></td>
-          <td><div class="cell num" style="font-weight:600">2.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
-              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
-        </tr>
-        <tr class="is-hover">
-          <td><div class="cell">Example Consulting</div>
-            <p class="caps" style="margin-top:var(--space-tight)">hovered — raise + sunken fill</p></td>
-          <td><div class="cell">Analyst, Strategy</div></td>
-          <td><div class="cell">London</div></td>
-          <td><span class="pill s2">Applied</span></td>
-          <td><div class="cell">Automated acknowledgement received.</div></td>
-          <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
-            <input type="checkbox" checked style="accent-color:var(--accent)" />
-            <s style="color:var(--ink-3)">Send the CV</s></label></div></td>
-          <td><div class="cell num" style="font-weight:600">4.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
-              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
-        </tr>
-        <tr class="is-sel">
-          <td><div class="cell">Example Studio</div>
-            <p class="caps" style="margin-top:var(--space-tight)">selected — keyboard row</p></td>
-          <td><div class="cell">Business Development Associate</div></td>
-          <td><div class="cell">Remote</div></td>
-          <td><span class="pill s4">Interview</span></td>
-          <td><div class="cell">First round scheduled, 30 minutes, video.</div></td>
-          <td><div class="cell">Prepare three examples</div></td>
-          <td><div class="cell num" style="font-weight:600">4.8
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
-              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
-        </tr>
-        <tr>
-          <td><div class="cell">Meridian Partners</div>
-            <p class="caps" style="margin-top:var(--space-tight)">multi-line — 4 lines</p></td>
-          <td><div class="cell">Associate, Corporate Development &amp; Strategic Partnerships</div></td>
-          <td><div class="cell">Manchester</div></td>
-          <td><span class="pill s3">Replied</span></td>
-          <td><div class="cell">Recruiter replied on the 14th asking for
+<div class="scrollpad" style="margin-top:var(--space-room)">
+<div class="tk2" style="grid-template-columns:13rem auto auto 7.5rem auto auto 5.5rem;row-gap:var(--space-loose)"><div class="tk2-head"><div class="tk2-h">Company</div><div class="tk2-h">Role</div><div class="tk2-h">Location</div><div class="tk2-h">Status</div><div class="tk2-h">Replies</div><div class="tk2-h">Next steps</div><div class="tk2-h">Score</div></div><div class="tk2-row"><div class="tk2-c"><div class="cell">Northwind</div>
+<p class="caps" style="margin-top:var(--space-tight)">first row</p></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c"><div class="cell muted">Log the reply</div></div><div class="tk2-c"><div class="cell muted">Set the next action</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">2.0
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div><div class="tk2-row is-hover"><div class="tk2-c"><div class="cell">Example Consulting</div>
+<p class="caps" style="margin-top:var(--space-tight)">hovered — raise + sunken fill</p></div><div class="tk2-c"><div class="cell">Analyst, Strategy</div></div><div class="tk2-c"><div class="cell">London</div></div><div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c"><div class="cell">Automated acknowledgement received.</div></div><div class="tk2-c"><div class="cell"><label style="display:flex;gap:var(--space-base)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send the CV</s></label></div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">4.0
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div><div class="tk2-row is-sel"><div class="tk2-c"><div class="cell">Example Studio</div>
+<p class="caps" style="margin-top:var(--space-tight)">selected — keyboard row</p></div><div class="tk2-c"><div class="cell">Business Development Associate</div></div><div class="tk2-c"><div class="cell">Remote</div></div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c"><div class="cell">First round scheduled, 30 minutes, video.</div></div><div class="tk2-c"><div class="cell">Prepare three examples</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">4.8
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div><div class="tk2-row"><div class="tk2-c"><div class="cell">Meridian Partners</div>
+<p class="caps" style="margin-top:var(--space-tight)">multi-line — 4 lines</p></div><div class="tk2-c"><div class="cell">Associate, Corporate Development &amp; Strategic Partnerships</div></div><div class="tk2-c"><div class="cell">Manchester</div></div><div class="tk2-c"><span class="pill s3">Replied</span></div><div class="tk2-c"><div class="cell">Recruiter replied on the 14th asking for
             availability the following week, then went quiet. Nothing from the
-            hiring manager yet, so chase this on Friday.</div></td>
-          <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
-            <input type="checkbox" checked style="accent-color:var(--accent)" />
-            <s style="color:var(--ink-3)">Send availability</s></label>
-            <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
-            <input type="checkbox" style="accent-color:var(--accent)" />
-            Chase the hiring manager</label></div></td>
-          <td><div class="cell num" style="font-weight:600">3.6
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
-              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
-        </tr>
-        <tr>
-          <td><div class="cell">Example Foundation</div>
-            <p class="caps" style="margin-top:var(--space-tight)">last row — shadow clears the wrapper</p></td>
-          <td><div class="cell">Programme Operations Assistant</div></td>
-          <td><div class="cell muted">City</div></td>
-          <td><span class="pill s5">Offer</span></td>
-          <td><div class="cell muted">Log the reply</div></td>
-          <td><div class="cell muted">Set the next action</div></td>
-          <td><div class="cell num" style="font-weight:600">3.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
-              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
-              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+            hiring manager yet, so chase this on Friday.</div></div><div class="tk2-c"><div class="cell"><label style="display:flex;gap:var(--space-base)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send availability</s></label>
+<label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+<input style="accent-color:var(--accent)" type="checkbox"/>
+            Chase the hiring manager</label></div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">3.6
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div><div class="tk2-row"><div class="tk2-c"><div class="cell">Example Foundation</div>
+<p class="caps" style="margin-top:var(--space-tight)">last row — shadow clears the wrapper</p></div><div class="tk2-c"><div class="cell">Programme Operations Assistant</div></div><div class="tk2-c"><div class="cell muted">City</div></div><div class="tk2-c"><span class="pill s5">Offer</span></div><div class="tk2-c"><div class="cell muted">Log the reply</div></div><div class="tk2-c"><div class="cell muted">Set the next action</div></div><div class="tk2-c"><div class="cell num" style="font-weight:600">3.0
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div></div>
+</div>
 </section>
-
 <!-- ══════════ R2 · DROPDOWNS ══════════ -->
 <section class="sec">
-  <h2>R2 · Dropdowns — label is chrome, value is the answer</h2>
-  <p class="note">Primary lever is contrast: label <code>--ink-3</code> at
+<h2>R2 · Dropdowns — label is chrome, value is the answer</h2>
+<p class="note">Primary lever is contrast: label <code>--ink-3</code> at
     <b>4.93 : 1</b>, value <code>--ink</code> at <b>15.45 : 1</b> — a 3.1× step,
     the same mechanism that already carries rank everywhere else. Supporting
     lever is case: uppercase reads as machine-fixed chrome, sentence case as
     the thing you chose. The separator rule, the weight change and the extra
     spacing are all declined as decoration.</p>
-
-  <div class="grid2">
-    <div class="frame"><p class="caps">Before — one ink, one case, no rank</p>
-      <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
-        <button class="dd dd--flat"><span class="k">Group by</span><span class="v">None</span>
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg></button>
-        <button class="dd dd--flat"><span class="k">Sort</span><span class="v">Pipeline order</span>
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg></button>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">Reading it takes a
+<div class="grid2">
+<div class="frame"><p class="caps">Before — one ink, one case, no rank</p>
+<div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+<button class="dd dd--flat"><span class="k">Group by</span><span class="v">None</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--flat"><span class="k">Sort</span><span class="v">Pipeline order</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Reading it takes a
         pass over the whole string to find which half is the answer.</p></div>
-
-    <div class="frame"><p class="caps">After — contrast, then case</p>
-      <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
-        <button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg></button>
-        <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg></button>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">The value is what the
+<div class="frame"><p class="caps">After — contrast, then case</p>
+<div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+<button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+</div>
+<p class="note" style="margin-top:var(--space-base)">The value is what the
         eye lands on. The label is still legible at 4.93 : 1 — the hierarchy
         comes from raising the value, not from whispering the label.</p></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">Short value and long
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">Short value and long
     value — the trigger must not change width</h3>
-  <p class="note">The value has a <code>min-width</code> in <code>ch</code>
+<p class="note">The value has a <code>min-width</code> in <code>ch</code>
     sized to the longest option for that control and is left-aligned inside it,
     so switching from “None” to “Location” cannot shift the toolbar under the
     cursor. Group by <code>8ch</code>, Sort <code>14ch</code>, Filter
     <code>9ch</code>.</p>
-  <div style="display:grid;gap:var(--space-cosy);margin-top:var(--space-cosy);
+<div style="display:grid;gap:var(--space-cosy);margin-top:var(--space-cosy);
     justify-items:start">
-    <div style="display:flex;gap:var(--space-base);align-items:center">
-      <span class="caps" style="width:6rem">shortest</span>
-      <button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Newest</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">4+</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-    </div>
-    <div style="display:flex;gap:var(--space-base);align-items:center">
-      <span class="caps" style="width:6rem">longest</span>
-      <button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
-        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-          stroke-linejoin="round"/></svg></button>
-    </div>
-    <p class="note">The two rows are the same width, edge for edge. Compare the
+<div style="display:flex;gap:var(--space-base);align-items:center">
+<span class="caps" style="width:6rem">shortest</span>
+<button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--sort"><span class="k">Sort</span><span class="v">Newest</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--filter"><span class="k">Filter</span><span class="v">4+</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+</div>
+<div style="display:flex;gap:var(--space-base);align-items:center">
+<span class="caps" style="width:6rem">longest</span>
+<button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+</div>
+<p class="note">The two rows are the same width, edge for edge. Compare the
       right-hand edge of each trigger against the row above it.</p>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">The full view bar, at
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">The full view bar, at
     380px</h3>
-  <div style="width:380px;max-width:100%;margin-top:var(--space-cosy);
+<div style="width:380px;max-width:100%;margin-top:var(--space-cosy);
     display:flex;gap:var(--space-base);flex-wrap:wrap">
-    <button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
-      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-        stroke-linejoin="round"/></svg></button>
-    <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
-      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-        stroke-linejoin="round"/></svg></button>
-    <button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
-      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-        stroke-linejoin="round"/></svg></button>
-    <button class="btn" style="border:0;background:none;text-decoration:underline;
+<button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></button>
+<button class="btn" style="border:0;background:none;text-decoration:underline;
       color:var(--ink-3)">Reset view</button>
-  </div>
-  <p class="note" style="margin-top:var(--space-base)">They wrap as a group. The
+</div>
+<p class="note" style="margin-top:var(--space-base)">They wrap as a group. The
     <code>ch</code> minimums are small enough that none forces a horizontal
     scroll.</p>
 </section>
-
 <!-- ══════════ R3 · FUNNEL ══════════ -->
 <section class="sec">
-  <h2>R3 · The funnel — locked and unlocked</h2>
-  <p class="note">Threshold is <b>20 rows at Applied or beyond</b>. Below it no
+<h2>R3 · The funnel — locked and unlocked</h2>
+<p class="note">Threshold is <b>20 rows at Applied or beyond</b>. Below it no
     ratio appears anywhere in the funnel. Counts stay, because a count is honest
     at any n; it is the <i>rate</i> that is noise. Interview → Offer keeps its
     count and loses its percentage for good: there is no volume at which it
     stabilises, so the number displayed a precision the data does not have.</p>
-
-  <div class="grid2" style="align-items:start">
-    <div class="frame"><p class="caps">Locked — 14 of 20</p>
-      <div class="card" style="box-shadow:var(--shadow-rest)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <button class="btn" style="border:0;background:none;padding:0;display:flex;
-            align-items:center;gap:var(--space-base)" aria-expanded="true">
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg><span class="caps">Funnel</span></button>
-        </div>
-
-        <div style="margin-top:var(--space-cosy)">
-          <p style="font-size:var(--t--1);color:var(--ink-2);line-height:var(--lh-prose);
+<div class="grid2" style="align-items:start">
+<div class="frame"><p class="caps">Locked — 14 of 20</p>
+<div class="card" style="box-shadow:var(--shadow-rest)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<button aria-expanded="true" class="btn" style="border:0;background:none;padding:0;display:flex;
+            align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">Funnel</span></button>
+</div>
+<div style="margin-top:var(--space-cosy)">
+<p style="font-size:var(--t--1);color:var(--ink-2);line-height:var(--lh-prose);
             max-width:44ch">Rates unlock at 20 applications — they are noise
             below that.</p>
-          <p style="margin-top:var(--space-base);display:flex;align-items:center;
+<p style="margin-top:var(--space-base);display:flex;align-items:center;
             gap:var(--space-cosy)">
-            <span class="lockbar"><i style="width:70%"></i></span>
-            <span class="num" style="font-size:var(--t--1);color:var(--ink-2)">14 of 20 applications</span></p>
-        </div>
-
-        <div style="margin-top:var(--space-room)">
-          <div class="fbar"><span class="caps">Applied</span>
-            <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">14</span></div>
-          <div class="fbar"><span class="caps">Replied</span>
-            <div class="ftrack"><div class="ffill" style="width:21%;background:var(--st3i)"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">3</span></div>
-          <div class="fbar"><span class="caps">Interview</span>
-            <div class="ftrack"><div class="ffill" style="width:14%;background:var(--st4i);opacity:.75"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">2</span></div>
-          <div class="fbar"><span class="caps">Offer</span>
-            <div class="ftrack"><div class="ffill" style="width:7%;background:var(--st5i)"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">1</span></div>
-        </div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">No greyed-out
+<span class="lockbar"><i style="width:70%"></i></span>
+<span class="num" style="font-size:var(--t--1);color:var(--ink-2)">14 of 20 applications</span></p>
+</div>
+<div style="margin-top:var(--space-room)">
+<div class="fbar"><span class="caps">Applied</span>
+<div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
+<span class="num" style="text-align:right;font-weight:600">14</span></div>
+<div class="fbar"><span class="caps">Replied</span>
+<div class="ftrack"><div class="ffill" style="width:21%;background:var(--st3i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">3</span></div>
+<div class="fbar"><span class="caps">Interview</span>
+<div class="ftrack"><div class="ffill" style="width:14%;background:var(--st4i);opacity:.75"></div></div>
+<span class="num" style="text-align:right;font-weight:600">2</span></div>
+<div class="fbar"><span class="caps">Offer</span>
+<div class="ftrack"><div class="ffill" style="width:7%;background:var(--st5i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">1</span></div>
+</div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">No greyed-out
         controls, no padlock, no “coming soon”. It is a state with its own
         content, not a disabled version of another state (§3.3).</p></div>
-
-    <div class="frame"><p class="caps">Unlocked — 41 applications</p>
-      <div class="card" style="box-shadow:var(--shadow-rest)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <button class="btn" style="border:0;background:none;padding:0;display:flex;
-            align-items:center;gap:var(--space-base)" aria-expanded="true">
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg><span class="caps">Funnel</span></button>
-        </div>
-
-        <div class="kpi" style="margin-top:var(--space-cosy)">
-          <b class="num">22%</b>
-          <span class="caps" style="color:var(--ink-2)">reply rate</span>
-          <span class="num">9 of 41 applications</span>
-        </div>
-        <p class="num" style="margin-top:var(--space-tight);font-size:var(--t--1);
+<div class="frame"><p class="caps">Unlocked — 41 applications</p>
+<div class="card" style="box-shadow:var(--shadow-rest)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<button aria-expanded="true" class="btn" style="border:0;background:none;padding:0;display:flex;
+            align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">Funnel</span></button>
+</div>
+<div class="kpi" style="margin-top:var(--space-cosy)">
+<b class="num">22%</b>
+<span class="caps" style="color:var(--ink-2)">reply rate</span>
+<span class="num">9 of 41 applications</span>
+</div>
+<p class="num" style="margin-top:var(--space-tight);font-size:var(--t--1);
           color:var(--ink-3)">Median 6 days to a reply (n=9)</p>
-
-        <div style="margin-top:var(--space-room)">
-          <div class="fbar"><span class="caps">Applied</span>
-            <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">41</span></div>
-          <div class="fmeta num">↓ 8 days avg (n=41)</div>
-          <div class="fbar"><span class="caps">Replied</span>
-            <div class="ftrack"><div class="ffill" style="width:22%;background:var(--st3i)"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">9</span></div>
-          <div class="frate num">44% went to interview · ↓ 9 days avg (n=9)</div>
-          <div class="fbar"><span class="caps">Interview</span>
-            <div class="ftrack"><div class="ffill" style="width:10%;background:var(--st4i);opacity:.75"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">4</span></div>
-          <div class="fmeta num">↓ 15 days avg (n=4)</div>
-          <div class="fbar"><span class="caps">Offer</span>
-            <div class="ftrack"><div class="ffill" style="width:2.5%;background:var(--st5i)"></div></div>
-            <span class="num" style="text-align:right;font-weight:600">1</span></div>
-        </div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">Reply rate carries the
+<div style="margin-top:var(--space-room)">
+<div class="fbar"><span class="caps">Applied</span>
+<div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
+<span class="num" style="text-align:right;font-weight:600">41</span></div>
+<div class="fmeta num">↓ 8 days avg (n=41)</div>
+<div class="fbar"><span class="caps">Replied</span>
+<div class="ftrack"><div class="ffill" style="width:22%;background:var(--st3i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">9</span></div>
+<div class="frate num">44% went to interview · ↓ 9 days avg (n=9)</div>
+<div class="fbar"><span class="caps">Interview</span>
+<div class="ftrack"><div class="ffill" style="width:10%;background:var(--st4i);opacity:.75"></div></div>
+<span class="num" style="text-align:right;font-weight:600">4</span></div>
+<div class="fmeta num">↓ 15 days avg (n=4)</div>
+<div class="fbar"><span class="caps">Offer</span>
+<div class="ftrack"><div class="ffill" style="width:2.5%;background:var(--st5i)"></div></div>
+<span class="num" style="text-align:right;font-weight:600">1</span></div>
+</div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Reply rate carries the
         weight — <code>--t-2</code>, primary ink, denominator stated so the ratio
         never floats. Every other rate is <code>--t--1</code> secondary. No
         percentage under Interview → Offer; the count on the bar is the whole
         claim.</p></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">The unlock marker — as
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">The unlock marker — as
     quiet as it can be while still being honest</h3>
-  <p class="note">A celebration would be unearned in the dossier's exact sense:
+<p class="note">A celebration would be unearned in the dossier's exact sense:
     material honesty says do not promise what you cannot keep, and crossing an
     arbitrary threshold is not an achievement. Silence is also wrong — the panel
     would change shape with no explanation. One line, on the first render past
     the threshold. It does not animate, does not block, and does not return.
     Recorded in <code>localStorage</code> under <code>tracker.unlockSeen</code>,
     which is a preference key, not data — <b>no schema change</b>.</p>
-  <div style="margin-top:var(--space-cosy)">
-    <p class="num" style="font-size:var(--t--1);color:var(--ink-2)">Reply rate
+<div style="margin-top:var(--space-cosy)">
+<p class="num" style="font-size:var(--t--1);color:var(--ink-2)">Reply rate
       unlocked — 20 applications tracked</p>
-  </div>
+</div>
 </section>
-
 <!-- ══════════ R4 · CARETS ══════════ -->
 <section class="sec">
-  <h2>R4 · One caret, rotated</h2>
-  <p class="note">Two things were wrong. The row and funnel carets were a static
+<h2>R4 · One caret, rotated</h2>
+<p class="note">Two things were wrong. The row and funnel carets were a static
     <code>▶</code> that never changed — the rotation rule went out as
     subtraction S7 and nothing replaced it. The mobile card swapped
     <code>▲</code> for <code>▼</code>: two glyphs, which is exactly the swap
@@ -1606,112 +1371,86 @@ Code: 42501</div>
     <code>transform-origin: center</code> wobbles. The replacement is an inline
     SVG whose path bounding box is centred on the rotation origin, so stability
     is a property of the geometry rather than of a nudge.</p>
-
-  <div class="grid2">
-    <div class="frame"><p class="caps">Rejected — glyph swap</p>
-      <p style="font-size:var(--t-1)">▶ &nbsp; ▼ &nbsp;
+<div class="grid2">
+<div class="frame"><p class="caps">Rejected — glyph swap</p>
+<p style="font-size:var(--t-1)">▶   ▼  
         <span class="muted" style="font-size:var(--t--1)">different ink, different
         optical weight, different vertical centre</span></p></div>
-    <div class="frame"><p class="caps">Chosen — one path, rotate 90°</p>
-      <p style="display:flex;align-items:center;gap:var(--space-room)">
-        <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg><span class="caps">collapsed</span></span>
-        <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
-          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg><span class="caps">expanded</span></span>
-      </p>
-      <p class="note" style="margin-top:var(--space-base)">200ms in / 150ms out,
+<div class="frame"><p class="caps">Chosen — one path, rotate 90°</p>
+<p style="display:flex;align-items:center;gap:var(--space-room)">
+<span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">collapsed</span></span>
+<span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">expanded</span></span>
+</p>
+<p class="note" style="margin-top:var(--space-base)">200ms in / 150ms out,
         <code>cubic-bezier(.22,1,.36,1)</code> — the committed motion table's
         drawer row, not a new number. Asymmetric because opening is the
         deliberate act and closing is dismissal.</p></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">Both states, in both
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">Both states, in both
     places</h3>
-  <div class="scrollpad" style="margin-top:var(--space-cosy)">
-    <table class="tk tk--g28"><tbody>
-      <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
-        <td style="width:7.5rem"><span class="pill s1">To apply</span></td>
-        <td class="num" style="width:8rem;font-weight:600">2.0
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="caps" style="margin-left:var(--space-base)">closed</span></td></tr>
-      <tr><td>Example Studio</td><td>Business Development Associate</td>
-        <td><span class="pill s4">Interview</span></td>
-        <td class="num" style="font-weight:600">4.8
-          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="caps" style="margin-left:var(--space-base)">open</span></td></tr>
-    </tbody></table>
-  </div>
-  <div style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
-    <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
-      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-        stroke-linejoin="round"/></svg><span class="caps">Funnel — collapsed</span></span>
-    <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
-      <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-        stroke-linejoin="round"/></svg><span class="caps">Funnel — expanded</span></span>
-  </div>
-  <p class="note" style="margin-top:var(--space-base)">Under
+<div class="scrollpad" style="margin-top:var(--space-cosy)">
+<div class="tk2" style="grid-template-columns:14rem auto 7.5rem 8rem;row-gap:var(--space-loose)"><div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div><div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c" style="font-weight:600">2.0
+          <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="caps" style="margin-left:var(--space-base)">closed</span></div></div><div class="tk2-row"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div><div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c" style="font-weight:600">4.8
+          <svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="caps" style="margin-left:var(--space-base)">open</span></div></div></div>
+</div>
+<div style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
+<span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">Funnel — collapsed</span></span>
+<span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+<svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg><span class="caps">Funnel — expanded</span></span>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Under
     <code>prefers-reduced-motion</code> the direction still changes, instantly —
     the existing global rule collapses the duration and the rotation still
     applies. Direction is information; the sweep is not.</p>
 </section>
-
 <!-- ══════════ R5 + R7 · HEADER ══════════ -->
 <section class="sec">
-  <h2>R5, R7 · Header — one primary action, one overflow, no instructions</h2>
-  <p class="note">The header becomes exactly two controls. “Add application” is
+<h2>R5, R7 · Header — one primary action, one overflow, no instructions</h2>
+<p class="note">The header becomes exactly two controls. “Add application” is
     the only filled control on the screen, which is what makes it unambiguous —
     restraint is what gives the one emphasis its force. Everything else goes
     behind a single <code>⋯</code>.</p>
-
-  <div class="frame" style="margin-top:var(--space-room)">
-    <p class="caps">Before — four peers and two lines of instruction</p>
-    <div style="display:flex;align-items:baseline;gap:var(--space-cosy);flex-wrap:wrap">
-      <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
-      <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
-      <span class="caps" style="color:var(--ink-3)">● live</span>
-      <span style="margin-left:auto;display:flex;gap:var(--space-base)">
-        <button class="btn btn-primary">+ Add application</button>
-        <button class="btn">Dark mode</button>
-        <button class="btn">Share / Export</button>
-        <button class="btn">Sign out</button></span>
-    </div>
-    <p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-3);
+<div class="frame" style="margin-top:var(--space-room)">
+<p class="caps">Before — four peers and two lines of instruction</p>
+<div style="display:flex;align-items:baseline;gap:var(--space-cosy);flex-wrap:wrap">
+<span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+<span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+<span class="caps" style="color:var(--ink-3)">● live</span>
+<span style="margin-left:auto;display:flex;gap:var(--space-base)">
+<button class="btn btn-primary">+ Add application</button>
+<button class="btn">Dark mode</button>
+<button class="btn">Share / Export</button>
+<button class="btn">Sign out</button></span>
+</div>
+<p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-3);
       line-height:var(--lh-prose);max-width:70ch">Click any cell to edit it.
       Click the status pill to advance a stage. Your changes save automatically
       and sync to your other devices.</p>
-    <p style="margin-top:var(--space-base);font-size:var(--t--2);color:var(--ink-3)">
+<p style="margin-top:var(--space-base);font-size:var(--t--2);color:var(--ink-3)">
       ↑↓←→ move · Enter edit · Shift+Enter advance stage · ⌘Enter save · Esc cancel</p>
-  </div>
-
-  <div class="grid2">
-    <div class="frame"><p class="caps">After — menu closed</p>
-      <div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
-        <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
-        <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
-        <span class="caps" style="color:var(--ink-3)"
-          title="Changes sync to your other devices">● live</span>
-        <span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
-          <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
-          <button class="iconbtn" aria-label="More actions" aria-expanded="false">⋯</button></span>
-      </div>
-      <p class="note" style="margin-top:var(--space-cosy)">LIVE stays — it is
+</div>
+<div class="grid2">
+<div class="frame"><p class="caps">After — menu closed</p>
+<div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
+<span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+<span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+<span class="caps" style="color:var(--ink-3)" title="Changes sync to your other devices">● live</span>
+<span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
+<button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
+<button aria-expanded="false" aria-label="More actions" class="iconbtn">⋯</button></span>
+</div>
+<p class="note" style="margin-top:var(--space-cosy)">LIVE stays — it is
         state, not instruction, and the one thing on screen that cannot be
         inferred. It gains a <code>title</code> because “LIVE” alone is
         ambiguous.</p></div>
-
-    <div class="frame">
-      <p class="caps">After — menu open</p>
-      <p class="note" style="margin:var(--space-base) 0 var(--space-room)">Sign out
+<div class="frame">
+<p class="caps">After — menu open</p>
+<p class="note" style="margin:var(--space-base) 0 var(--space-room)">Sign out
         is separated by a rule and takes <code>--danger-ink</code>, because it is
         destructive relative to its neighbours. The theme item shows current state
         from inside with <code>aria-checked</code>, since the toggle is no longer
@@ -1719,64 +1458,53 @@ Code: 42501</div>
         and an entrance reads as lag — and fades out over 150ms. Escape closes and
         returns focus to the trigger; outside click closes; Tab closes; ↑↓ move,
         Home/End jump.</p>
-      <div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
-        <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
-        <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
-        <span class="caps" style="color:var(--ink-3)">● live</span>
-        <span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
-          <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
-          <span class="mwrap">
-            <button class="iconbtn" aria-label="More actions" aria-expanded="true"
-              style="outline:2px solid var(--accent);outline-offset:2px">⋯</button>
-            <span class="menu" role="menu">
-              <button role="menuitemradio" aria-checked="false">Dark mode</button>
-              <button role="menuitemradio" aria-checked="true">Light mode
+<div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
+<span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+<span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+<span class="caps" style="color:var(--ink-3)">● live</span>
+<span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
+<button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
+<span class="mwrap">
+<button aria-expanded="true" aria-label="More actions" class="iconbtn" style="outline:2px solid var(--accent);outline-offset:2px">⋯</button>
+<span class="menu" role="menu">
+<button aria-checked="false" role="menuitemradio">Dark mode</button>
+<button aria-checked="true" role="menuitemradio">Light mode
                 <span class="tick">✓</span></button>
-              <button role="menuitem">Share / Export</button>
-              <hr />
-              <button role="menuitem" class="danger">Sign out</button>
-            </span>
-          </span></span>
-      </div>
-      <div style="height:200px" aria-hidden="true"></div></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">R7 · What the removed
+<button role="menuitem">Share / Export</button>
+<hr/>
+<button class="danger" role="menuitem">Sign out</button>
+</span>
+</span></span>
+</div>
+<div aria-hidden="true" style="height:200px"></div></div>
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">R7 · What the removed
     text was carrying, and where each affordance went</h3>
-  <div class="grid2">
-    <div class="frame"><p class="caps">Now carried by a title, not a paragraph</p>
-      <div style="display:flex;flex-direction:column;gap:var(--space-cosy);
+<div class="grid2">
+<div class="frame"><p class="caps">Now carried by a title, not a paragraph</p>
+<div style="display:flex;flex-direction:column;gap:var(--space-cosy);
         align-items:flex-start">
-        <span class="pill s2" title="Advance to Replied">Applied</span>
-        <span class="tag" title="Live applications untouched for 7+ days">1 awaiting chase</span>
-        <span class="caps" style="color:var(--ink-3)"
-          title="Changes sync to your other devices">● live</span>
-        <button class="iconbtn" aria-label="More actions">⋯</button>
-      </div>
-      <p class="note" style="margin-top:var(--space-cosy)">The status pill names
+<span class="pill s2" title="Advance to Replied">Applied</span>
+<span class="tag" title="Live applications untouched for 7+ days">1 awaiting chase</span>
+<span class="caps" style="color:var(--ink-3)" title="Changes sync to your other devices">● live</span>
+<button aria-label="More actions" class="iconbtn">⋯</button>
+</div>
+<p class="note" style="margin-top:var(--space-cosy)">The status pill names
         its <i>next</i> stage, not itself — “Advance to Replied” — because
         looking pressable was never the gap; knowing what pressing does was.</p></div>
-
-    <div class="frame"><p class="caps">Needs no help — and never did</p>
-      <table class="tk tk--g28" style="border-spacing:0 var(--space-base)"><tbody>
-        <tr><td style="width:11rem"><div class="cell">Northwind</div></td>
-          <td><label style="display:flex;gap:var(--space-base);font-size:var(--t--1)">
-            <input type="checkbox" checked style="accent-color:var(--accent)" />
-            <s style="color:var(--ink-3)">Send the CV</s></label></td>
-          <td class="num" style="width:5.5rem;font-weight:600">2.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg></td></tr>
-      </tbody></table>
-      <p class="note" style="margin-top:var(--space-base)">Cells raise on hover
+<div class="frame"><p class="caps">Needs no help — and never did</p>
+<div class="tk2" style="grid-template-columns:11rem auto 5.5rem;row-gap:var(--space-base)"><div class="tk2-row"><div class="tk2-c"><div class="cell">Northwind</div></div><div class="tk2-c"><label style="display:flex;gap:var(--space-base);font-size:var(--t--1)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send the CV</s></label></div><div class="tk2-c" style="font-weight:600">2.0
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></div></div></div>
+<p class="note" style="margin-top:var(--space-base)">Cells raise on hover
         and show a text caret. Ticks are native checkboxes. The score caret now
         rotates. None of these were ever ambiguous enough to justify permanent
         chrome.</p></div>
-  </div>
-
-  <h3 class="caps" style="margin-top:var(--space-loose)">The one genuine loss —
+</div>
+<h3 class="caps" style="margin-top:var(--space-loose)">The one genuine loss —
     named, not hidden</h3>
-  <p class="note">Nothing on screen suggests that arrow keys move between cells
+<p class="note">Nothing on screen suggests that arrow keys move between cells
     or that Shift+Enter advances a stage. So the keyboard model moves into the
     empty state, which already renders the real table geometry and is exactly
     where someone is looking when they have not yet learned the tool. Shown
@@ -1784,32 +1512,31 @@ Code: 42501</div>
     moment they have a row. Scaffolding that helps a novice becomes noise for
     the expert, and permanent chrome makes everyone pay the novice's price
     forever.</p>
-  <div class="card" style="margin-top:var(--space-cosy);max-width:52rem">
-    <p style="font-size:var(--t-1);font-weight:600">Nothing tracked yet</p>
-    <p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-2);
+<div class="card" style="margin-top:var(--space-cosy);max-width:52rem">
+<p style="font-size:var(--t-1);font-weight:600">Nothing tracked yet</p>
+<p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-2);
       line-height:var(--lh-prose);max-width:56ch">Add your first application and
       it will appear here. Everything saves as you type.</p>
-    <p style="margin-top:var(--space-cosy)">
-      <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button></p>
-    <div style="border-top:1px solid var(--line-soft);margin-top:var(--space-room);
+<p style="margin-top:var(--space-cosy)">
+<button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button></p>
+<div style="border-top:1px solid var(--line-soft);margin-top:var(--space-room);
       padding-top:var(--space-cosy)">
-      <p class="caps">Keyboard</p>
-      <dl class="spec" style="margin-top:var(--space-base);grid-template-columns:8rem 1fr;
+<p class="caps">Keyboard</p>
+<dl class="spec" style="margin-top:var(--space-base);grid-template-columns:8rem 1fr;
         font-size:var(--t--1)">
-        <dt>↑ ↓ ← →</dt><dd>move between cells</dd>
-        <dt>Enter</dt><dd>edit the cell</dd>
-        <dt>Shift + Enter</dt><dd>advance the stage</dd>
-        <dt>⌘ / Ctrl + Enter</dt><dd>save and stay</dd>
-        <dt>Esc</dt><dd>cancel the edit</dd>
-      </dl>
-    </div>
-  </div>
+<dt>↑ ↓ ← →</dt><dd>move between cells</dd>
+<dt>Enter</dt><dd>edit the cell</dd>
+<dt>Shift + Enter</dt><dd>advance the stage</dd>
+<dt>⌘ / Ctrl + Enter</dt><dd>save and stay</dd>
+<dt>Esc</dt><dd>cancel the edit</dd>
+</dl>
+</div>
+</div>
 </section>
-
 <!-- ══════════ R6 · MOBILE COLLAPSIBLES ══════════ -->
 <section class="sec">
-  <h2>R6 · Mobile — collapsed empty, collapsed with content, expanded</h2>
-  <p class="note">Scope is the mobile layout branch only. The desktop table
+<h2>R6 · Mobile — collapsed empty, collapsed with content, expanded</h2>
+<p class="note">Scope is the mobile layout branch only. The desktop table
     renders a different row component with no such section, so the two cannot
     disagree — the collapsible does not exist on the desktop path. It collapses
     <b>with content in it</b>: a card with three filled paragraphs is the one
@@ -1818,141 +1545,118 @@ Code: 42501</div>
     scrolling a long list cannot silently reset it — not
     <code>localStorage</code>, because it is view state, not a preference, and
     should not outlive the session.</p>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,360px));
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,360px));
     justify-content:start;gap:var(--space-room);margin-top:var(--space-room);
     align-items:start">
-
-    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+<div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
       Collapsed — nothing in it yet</p>
-      <div class="record">
-        <div class="id">
-          <div><div style="font-weight:600">Northwind</div></div>
-          <span class="pill s1">To apply</span></div>
-        <div class="sub"><span>Analyst, Strategy · London</span>
-          <span class="num" style="font-weight:600;display:inline-flex;
+<div class="record">
+<div class="id">
+<div><div style="font-weight:600">Northwind</div></div>
+<span class="pill s1">To apply</span></div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600;display:inline-flex;
             align-items:center;gap:var(--space-tight)">2.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg></span></div>
-        <button class="colhead" aria-expanded="false">
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="prev">Add replies, next steps, notes</span></button>
-        <div class="coll"><div><div class="notes"></div></div></div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">Empty, so the header
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></span></div>
+<button aria-expanded="false" class="colhead">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="prev">Add replies, next steps, notes</span></button>
+<div class="coll"><div><div class="notes"></div></div></div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Empty, so the header
         is the adder. No count, because zero is not a quantity worth printing.</p>
-    </div>
-
-    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+</div>
+<div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
       Collapsed — with content</p>
-      <div class="record">
-        <div class="id">
-          <div><span class="tag">Example</span>
-            <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
-          <span class="pill s2">Applied</span></div>
-        <div class="sub"><span>Analyst, Strategy · London</span>
-          <span class="num" style="font-weight:600;display:inline-flex;
+<div class="record">
+<div class="id">
+<div><span class="tag">Example</span>
+<div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+<span class="pill s2">Applied</span></div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600;display:inline-flex;
             align-items:center;gap:var(--space-tight)">4.0
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg></span></div>
-        <button class="colhead" aria-expanded="false">
-          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="cnt num">3 fields</span>
-          <span class="prev">· Automated acknowledgement received. Nothing from the hiring manager yet</span></button>
-        <div class="coll"><div><div class="notes"></div></div></div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">A dot says only
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></span></div>
+<button aria-expanded="false" class="colhead">
+<svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="cnt num">3 fields</span>
+<span class="prev">· Automated acknowledgement received. Nothing from the hiring manager yet</span></button>
+<div class="coll"><div><div class="notes"></div></div></div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">A dot says only
         “something”. A count says how much. The preview says what — and on a
         phone the decision being made is “is it worth opening”, which only the
         preview answers. One line, ellipsised.</p>
-    </div>
-
-    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+</div>
+<div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
       Expanded</p>
-      <div class="record">
-        <div class="id">
-          <div><span class="tag">Example</span>
-            <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
-          <span class="pill s2">Applied</span></div>
-        <div class="sub"><span>Analyst, Strategy · London</span>
-          <span class="num" style="font-weight:600;display:inline-flex;
+<div class="record">
+<div class="id">
+<div><span class="tag">Example</span>
+<div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+<span class="pill s2">Applied</span></div>
+<div class="sub"><span>Analyst, Strategy · London</span>
+<span class="num" style="font-weight:600;display:inline-flex;
             align-items:center;gap:var(--space-tight)">4.0
-            <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg></span></div>
-        <button class="colhead" aria-expanded="true">
-          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="cnt num">3 fields</span></button>
-        <div class="coll open"><div>
-          <div class="notes">
-            <span class="caps">Replies</span><span>Automated acknowledgement
+            <svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></span></div>
+<button aria-expanded="true" class="colhead">
+<svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="cnt num">3 fields</span></button>
+<div class="coll open"><div>
+<div class="notes">
+<span class="caps">Replies</span><span>Automated acknowledgement
               received. Nothing from the hiring manager yet, so chase on Friday.</span>
-            <span class="caps">Next</span><span>
-              <label style="display:flex;gap:var(--space-base)">
-                <input type="checkbox" checked style="accent-color:var(--accent)" />
-                <s style="color:var(--ink-3)">Send the CV</s></label>
-              <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
-                <input type="checkbox" style="accent-color:var(--accent)" />
+<span class="caps">Next</span><span>
+<label style="display:flex;gap:var(--space-base)">
+<input checked="" style="accent-color:var(--accent)" type="checkbox"/>
+<s style="color:var(--ink-3)">Send the CV</s></label>
+<label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+<input style="accent-color:var(--accent)" type="checkbox"/>
                 Follow up next week</label></span>
-            <span class="caps">Notes</span><span>Warm intro via the alumni list.</span>
-          </div>
-        </div></div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">Height animates
+<span class="caps">Notes</span><span>Warm intro via the alumni list.</span>
+</div>
+</div></div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">Height animates
         <code>grid-template-rows: 0fr → 1fr</code> — Departure D4. Not
         GPU-composited; acceptable here on scope: one small subtree,
         user-initiated, ≤200ms, a handful on screen. Measuring a pixel height
         thrashes layout harder and needs JS on every resize.</p>
-    </div>
-
-    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+</div>
+<div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
       Expanded, mid-edit — collapse disabled</p>
-      <div class="record">
-        <div class="id">
-          <div><div style="font-weight:600">Meridian Partners</div></div>
-          <span class="pill s3">Replied</span></div>
-        <div class="sub"><span>Associate, Corporate Development · Manchester</span>
-          <span class="num" style="font-weight:600;display:inline-flex;
+<div class="record">
+<div class="id">
+<div><div style="font-weight:600">Meridian Partners</div></div>
+<span class="pill s3">Replied</span></div>
+<div class="sub"><span>Associate, Corporate Development · Manchester</span>
+<span class="num" style="font-weight:600;display:inline-flex;
             align-items:center;gap:var(--space-tight)">3.6
-            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-              stroke-linejoin="round"/></svg></span></div>
-        <button class="colhead" aria-expanded="true" disabled title="Finish editing first">
-          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
-            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round"/></svg>
-          <span class="cnt num">2 fields</span></button>
-        <div class="coll open"><div>
-          <div class="notes">
-            <span class="caps">Replies</span><span>
-              <span style="display:block;border:var(--capsule-edge);
+            <svg aria-hidden="true" class="cv" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg></span></div>
+<button aria-expanded="true" class="colhead" disabled="" title="Finish editing first">
+<svg aria-hidden="true" class="cv cv--open" viewbox="0 0 12 12"><path d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path></svg>
+<span class="cnt num">2 fields</span></button>
+<div class="coll open"><div>
+<div class="notes">
+<span class="caps">Replies</span><span>
+<span style="display:block;border:var(--capsule-edge);
                 border-radius:var(--capsule-r-block);background:var(--surface);
                 padding:var(--space-base) var(--space-cosy)">Recruiter replied on
                 the 14th<span style="color:var(--accent)">|</span></span></span>
-            <span class="caps">Notes</span><span>Referred by Sam.</span>
-          </div>
-        </div></div>
-      </div>
-      <p class="note" style="margin-top:var(--space-base)">A cell being edited
+<span class="caps">Notes</span><span>Referred by Sam.</span>
+</div>
+</div></div>
+</div>
+<p class="note" style="margin-top:var(--space-base)">A cell being edited
         cannot be collapsed out from under itself. The toggle is disabled while
         the section holds the active editing element, with
         <code>title="Finish editing first"</code>, so no caret and no
         uncommitted value can be lost.</p>
-    </div>
-  </div>
+</div>
+</div>
 </section>
-
 <p class="note" style="margin-top:var(--space-vast);text-align:center">
   End of preview · <b>not for deployment</b> · awaiting approval
 </p>
-
 </body>
-</html>
+
