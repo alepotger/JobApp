@@ -18,10 +18,11 @@ your own, and sign in — the page walks you through both, and
 [Getting started](#getting-started) below has the same steps in writing.
 
 **Nothing you type goes to that address.** It serves one HTML file and has no
-backend, no database and no account. Your applications go straight from your
-browser to the Supabase project you create in step 1, which only you can read.
-Using the same page as everybody else is what means you always have the current
-version, including security fixes — see
+backend, no database and no account. **It ships with no Supabase credentials of
+any kind** — you supply your own on first visit, they are kept in your browser
+alone, and your applications go straight from your browser to the project you
+created. Using the same page as everybody else is what means you always have
+the current version, including security fixes — see
 [Why one address](#why-one-address-instead-of-your-own-copy).
 
 ---
@@ -222,16 +223,41 @@ usually starts out saying `http://localhost:3000`; replace it.
 ### 3. Connect and sign in
 
 Open [JobApp](https://willowy-platypus-7b589d.netlify.app). It asks for two
-values, both from **Project Settings → API Keys** in Supabase:
+values — and they are **on two different pages** of the Supabase dashboard,
+which is the single most common place to get stuck. Nobody finds the key on
+the Data API page, because it is not there.
 
-- **Project URL** — looks like `https://abcdefgh.supabase.co`
-- **Publishable key** (or the legacy **anon** key) — starts `sb_publishable_…`
-  or `eyJhbGciOi…`
+**Project URL** — sidebar → **Integrations** → **Data API**
 
-Paste them in and press **Connect**. They are stored in that browser only.
+What Supabase shows there is the REST endpoint, so it ends in `/rest/v1/`:
+
+```
+https://abcdefgh.supabase.co/rest/v1/        ← what Supabase displays
+https://abcdefgh.supabase.co                 ← what the project URL actually is
+```
+
+**Paste it whole — JobApp trims it for you.** It parses what you give it and
+keeps the origin, so `/rest/v1/`, a trailing slash or any other path falls
+away. (Left on by an app that does not trim, that suffix produces *"invalid
+path specified in request url"* at sign-in, with nothing pointing at the
+cause.)
+
+**Publishable key** — sidebar → **Project Settings** → **API Keys**
+
+A different page. Navigate back to the sidebar and go there. The key starts
+`sb_publishable_…`, or `eyJhbGciOi…` on an older project where it is labelled
+**anon** **public**.
+
+Paste both in and press **Connect**. They are stored in that browser only, and
+never leave it.
 
 > Never paste a `service_role` or `sb_secret_` key. Those bypass every security
 > policy and belong on a server. See [On security](#on-security).
+
+> **Check the project on the sign-in screen.** It shows which database you are
+> about to create an account in, under *"Is this your database?"*. It must be
+> the project you made in step 1. If it is not, use **Use a different
+> database** rather than signing in.
 
 ## Signing in
 

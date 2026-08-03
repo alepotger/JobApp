@@ -1234,11 +1234,13 @@ function Checkpoint({ children }) {
   );
 }
 
+const STEPS_TOTAL = 5;
+
 function Step({ n, title, minutes, children }) {
   return (
     <li className="py-5">
       <p className="tk-micro tk-secondary">
-        Step {n} of 4 · about {minutes} minute{minutes === 1 ? "" : "s"}
+        Step {n} of {STEPS_TOTAL} · about {minutes} minute{minutes === 1 ? "" : "s"}
       </p>
       <p className="mt-1 tk-body tk-strong">{title}</p>
       {children}
@@ -1292,24 +1294,55 @@ function ConnectForm({ onSave }) {
     const raw = url.trim();
     const k = key.trim();
 
-    let origin;
+    /* Supabase presents this value on the Data API page as a REST endpoint —
+       https://abcdefgh.supabase.co/rest/v1/ — and the client wants the origin
+       on its own. Pasting the endpoint whole fails much later, at sign-in,
+       with "invalid path specified in request url" and no clue as to why. So
+       parse it and keep only the origin: /rest/v1/, a trailing slash and any
+       other path fall away silently. A missing scheme is assumed https,
+       because the dashboard shows the bare host in some places. */
+    let parsed;
     try {
-      const parsed = new URL(raw);
-      if (parsed.protocol !== "https:") throw new Error("not https");
-      origin = parsed.origin;
+      parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : "https://" + raw);
     } catch (e) {
-      setError("That is not a valid URL. It should look like https://abcdefgh.supabase.co");
+      setError("That does not look like a URL. It should be https://something.supabase.co");
       return;
     }
-
-    if (origin.includes("supabase.com")) {
+    if (parsed.protocol !== "https:") {
+      setError("The project URL has to start with https://, not " + parsed.protocol + "//");
+      return;
+    }
+    /* Assuming the scheme means URL() will now swallow almost anything —
+       "some notes" parses happily as the host "some". So the host has to look
+       like a real domain before it is accepted, or a typo becomes a client
+       pointed at nowhere and a much stranger error later on. */
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(parsed.hostname)) {
       setError(
-        "That is the dashboard address, not your project URL. You need the one ending in .supabase.co"
+        "That does not look like a project URL. It should be a web address " +
+          "like https://abcdefgh.supabase.co"
+      );
+      return;
+    }
+    const origin = parsed.origin;
+
+    /* The dashboard lives on supabase.com (and supabase.io before it). People
+       land here with the address bar copied instead of the project endpoint,
+       and the resulting failure is otherwise silent. */
+    if (/(^|\.)supabase\.(com|io)$/i.test(parsed.hostname)) {
+      setError(
+        "That is the Supabase dashboard address, not your project's. Open " +
+          "Integrations → Data API in the sidebar and copy the URL shown " +
+          "there — it ends in .supabase.co. Pasting it with /rest/v1/ still " +
+          "on the end is fine."
       );
       return;
     }
     if (k.length < 20) {
       setError("That key looks too short. Copy the whole publishable or anon key.");
+      return;
+    }
+    if (/^https?:\/\//i.test(k) || /supabase\.co/i.test(k)) {
+      setError("That is a URL, not a key. The key starts sb_publishable_ or eyJ.");
       return;
     }
 
@@ -1484,24 +1517,55 @@ function ConnectForm({ onSave }) {
             </Checkpoint>
           </Step>
 
-          <Step n={4} minutes={2} title="Copy your two details into this page">
+          <Step n={4} minutes={1} title="Copy your Project URL">
+            <p className="mt-2 tk-body leading-relaxed tk-secondary">
+              The two things this page needs live on{" "}
+              <strong>two different pages</strong> of the Supabase dashboard.
+              This is the first. Do not go looking for the key here — it is not
+              on this page, and step 5 sends you somewhere else for it.
+            </p>
             <ol className={STEP_LIST}>
               <li>
-                In the left-hand column, click <strong>Project Settings</strong> —
-                it is the cog, usually right at the bottom.
+                In the left-hand column, click <strong>Integrations</strong>,
+                then <strong>Data API</strong>.
               </li>
               <li>
-                Click <strong>API Keys</strong>. On an older project this section is
-                called just <strong>API</strong>.
+                Copy the URL shown there and paste it into{" "}
+                <strong>Project URL</strong> below.
+              </li>
+            </ol>
+            <p
+              className="mt-3 tk-r2 px-3 py-2 tk-cap leading-relaxed"
+              style={{ background: "var(--warn)", border: "1px solid var(--warn-line)" }}
+            >
+              What Supabase shows you there is the REST endpoint, so it ends in{" "}
+              <code>/rest/v1/</code> — like{" "}
+              <code>https://abcdefgh.supabase.co/rest/v1/</code>. Only{" "}
+              <code>https://abcdefgh.supabase.co</code> is the project URL.{" "}
+              <strong>Paste it whole and this page will trim it for you</strong>;
+              it is mentioned only so the extra bit does not worry you.
+            </p>
+          </Step>
+
+          <Step n={5} minutes={1} title="Copy your key — from a different page">
+            <p className="mt-2 tk-body leading-relaxed tk-secondary">
+              The key is <strong>not</strong> on the Data API page you were just
+              on. You have to navigate somewhere else for it.
+            </p>
+            <ol className={STEP_LIST}>
+              <li>
+                Go back to the left-hand column and click{" "}
+                <strong>Project Settings</strong> — the cog, usually right at
+                the bottom.
               </li>
               <li>
-                Copy <strong>Project URL</strong> and paste it into the first box
-                below. It looks like <code>https://abcdefgh.supabase.co</code>.
+                Click <strong>API Keys</strong>. On an older project this section
+                is called just <strong>API</strong>.
               </li>
               <li>
-                Copy the <strong>Publishable key</strong> — on an older project, the
-                one labelled <strong>anon</strong> <strong>public</strong> — and
-                paste it into the second box. It starts{" "}
+                Copy the <strong>Publishable key</strong> — on an older project,
+                the one labelled <strong>anon</strong> <strong>public</strong> —
+                and paste it into the second box below. It starts{" "}
                 <code>sb_publishable_</code> or <code>eyJ</code>.
                 <p
                   className="mt-2 tk-r2 px-3 py-2 tk-cap leading-relaxed"
@@ -1515,11 +1579,18 @@ function ConnectForm({ onSave }) {
                   keys ignore every security rule, and this page never needs one.
                 </p>
               </li>
-              <li>Fill both boxes in, then press <strong>Connect</strong>.</li>
+              <li>With both boxes filled, press <strong>Connect</strong>.</li>
             </ol>
 
-            <label className="mt-4 block tk-micro tk-secondary">
-              Project URL
+            {/* Both boxes sit together at the end even though they were
+                collected two steps apart, so the last action is one form
+                rather than a hunt back up the page. */}
+            <p className="mt-6 tk-cap leading-relaxed tk-tertiary">
+              The box from step 4, then the box from step 5.
+            </p>
+
+            <label className="mt-3 block tk-micro tk-secondary">
+              Project URL <span className="tk-tertiary">— from Integrations → Data API</span>
             </label>
             <input
               value={url}
@@ -1529,7 +1600,8 @@ function ConnectForm({ onSave }) {
             />
 
             <label className="mt-4 block tk-micro tk-secondary">
-              Publishable or anon key
+              Publishable or anon key{" "}
+              <span className="tk-tertiary">— from Project Settings → API Keys</span>
             </label>
             <input
               value={key}
@@ -1778,19 +1850,28 @@ function SignIn({ cfgUrl, onReset }) {
           </>
         )}
 
+        {/* Phrased as a question rather than a label. Signing in writes an
+            account into whichever project this points at, and the one failure
+            worth catching here is it pointing at somebody else's — which is
+            invisible unless the reader is actually asked to look. */}
         <div className="tk-line-b mt-8 pb-4" />
-        <p className="tk-mono tk-cap uppercase leading-relaxed tracking-wider tk-tertiary">
-          Connected to
-        </p>
-        <p className="mt-1 break-all tk-mono tk-cap leading-relaxed tk-secondary">
-          {cfgUrl}
-        </p>
-        <button
-          onClick={onReset}
-          className="tk-btn tk-focus mt-3 tk-r2 px-3 py-1 tk-micro transition-colors"
-        >
-          Change connection details
-        </button>
+        <div className="tk-panel tk-r3 p-4">
+          <p className="tk-micro tk-secondary">Is this your database?</p>
+          <p className="mt-2 break-all tk-mono tk-cap leading-relaxed">
+            {cfgUrl}
+          </p>
+          <p className="mt-2 tk-cap leading-relaxed tk-tertiary">
+            Signing in creates your account inside this Supabase project. It
+            should be the one you made yourself. If you do not recognise it,
+            stop and change it.
+          </p>
+          <button
+            onClick={onReset}
+            className="tk-btn tk-focus mt-3 tk-r2 px-3 py-1 tk-micro transition-colors"
+          >
+            Use a different database
+          </button>
+        </div>
       </div>
     </Shell>
   );
