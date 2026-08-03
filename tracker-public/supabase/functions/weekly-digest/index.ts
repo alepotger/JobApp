@@ -120,11 +120,13 @@ Deno.serve(async (req) => {
       results.push({ user_id: account.user_id, status: "sent", stale: report.count });
     } catch (err) {
       // One account's failure must not stop the rest of the run.
-      results.push({
-        user_id: account.user_id,
-        status: "error",
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      /* pg_cron discards the response body, so this array is read by nobody.
+         Without a log line, an account whose digest fails every week fails
+         invisibly, forever. This lands in Edge Function logs, which persist
+         and can be searched. */
+      console.error(`weekly-digest: ${account.user_id} failed — ${message}`);
+      results.push({ user_id: account.user_id, status: "error", error: message });
     }
   }
 

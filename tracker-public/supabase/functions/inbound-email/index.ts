@@ -105,10 +105,38 @@ Deno.serve(async (req) => {
     from_address: mail.from,
     subject: mail.subject,
   });
-  if (ledgerError) {
-    // The primary key already holds this id: a provider retry, not a new email.
-    if (ledgerError.code === "23505") return json(200, { status: "duplicate" });
+  if (ledgerError && ledgerError.code !== "23505") {
     return json(500, { error: ledgerError.message });
+  }
+  if (ledgerError) {
+    /* The id is already in the ledger, which means one of two things, and they
+       are not the same. Either the provider is retrying a delivery that
+       finished — repeating it would append the reply twice — or it is retrying
+       one that started and did not finish, because the database failed
+       somewhere after this insert. Treating both as duplicates loses the
+       second kind outright: the provider retries, gets a cheerful 200, and the
+       reply is never filed.
+
+       application_id tells them apart. It is written last, only once the
+       application row has actually been updated, so its absence means the work
+       did not complete. An unmatched message also has no application_id, and
+       reprocessing one changes nothing, so reprocessing it is harmless.
+
+       That leaves one residual case: an update that succeeded and then failed
+       to record itself, where this will file the reply a second time. That is
+       the right way to be wrong. A duplicated entry is visible in the cell and
+       can be edited out; a silently dropped reply is invisible. */
+    const { data: prior, error: priorError } = await db
+      .from("inbound_messages")
+      .select("application_id")
+      .eq("message_id", mail.messageId)
+      .limit(1);
+
+    if (priorError) return json(500, { error: priorError.message });
+    if (prior && prior.length > 0 && prior[0].application_id) {
+      return json(200, { status: "duplicate" });
+    }
+    // Otherwise fall through and finish what the last attempt started.
   }
 
   /* ---- which application? ---------------------------------------------- */
@@ -159,10 +187,22 @@ Deno.serve(async (req) => {
 
   if (updateError) return json(500, { error: updateError.message });
 
-  await db
+  /* This write is what a later retry reads to decide whether the work was
+     done, so its failure is not cosmetic: it would make a retry file the reply
+     a second time. The reply itself is already saved, so this is not worth
+     failing the request over — but it is worth being able to find in the
+     function logs afterwards. */
+  const { error: ledgerUpdateError } = await db
     .from("inbound_messages")
     .update({ application_id: match.application.id, matched_by: match.matchedBy })
     .eq("message_id", mail.messageId);
+
+  if (ledgerUpdateError) {
+    console.error(
+      `inbound-email: filed ${mail.messageId} against ${match.application.id} but could ` +
+        `not record it — a provider retry will duplicate this reply: ${ledgerUpdateError.message}`
+    );
+  }
 
   return json(200, {
     status: "applied",

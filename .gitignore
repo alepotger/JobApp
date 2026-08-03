@@ -37,3 +37,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 yarn-error.log*
+
+# Edge Function test harness output
+tracker-public/supabase/functions/_test/*.log
+tracker-public/supabase/functions/_test/outbox.jsonl

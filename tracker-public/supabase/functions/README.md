@@ -80,6 +80,33 @@ select jobname, schedule, active from cron.job;
 select * from cron.job_run_details order by start_time desc limit 5;
 ```
 
+## When something goes wrong
+
+Both functions log failures to **Supabase → Edge Functions → *function* →
+Logs**, which persists and can be searched. Check there first — `pg_cron`
+throws away the digest's response body, so the log line is the only record that
+an account's digest failed.
+
+Two lines worth knowing:
+
+- `weekly-digest: <user_id> failed — …` — that account got no email this week.
+  The rest of the run continued.
+- `inbound-email: filed <id> against <app> but could not record it` — the reply
+  was saved but the ledger was not updated, so a provider retry will file it a
+  second time. Harmless but visible; delete the duplicate entry from the cell.
+
+**Retries are safe.** The ledger is written before the reply is filed, so a
+delivery that fails partway leaves an id behind with no `application_id`
+against it. A retry sees that and finishes the job rather than treating it as
+already done — an earlier version returned `duplicate` here and lost the email
+silently. A retry of a delivery that genuinely completed is still a no-op.
+
+## Testing it locally
+
+[`_test/run-all.sh`](_test/) runs both functions for real against a stub
+database and a captured mail provider — no project, no keys, no network. Run it
+after changing anything in here.
+
 ## How a reply is matched
 
 In order of confidence, stopping at the first that fits:
