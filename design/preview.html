@@ -96,7 +96,7 @@ body{
   font-size:var(--t-0); line-height:var(--lh-body);
   font-optical-sizing:auto;
   -webkit-font-smoothing:antialiased;
-  padding:var(--space-loose) var(--space-room) var(--space-vast);
+  padding:var(--space-loose) var(--space-loose) var(--space-vast);
 }
 h1,h2,h3{font-weight:600;line-height:var(--lh-display);letter-spacing:-.02em}
 code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -121,6 +121,9 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
 .frame{border:1px dashed var(--line-strong);border-radius:var(--r-md);
   padding:var(--space-room);background:var(--page)}
 .frame > .caps{margin-bottom:var(--space-cosy)}
+/* preview chrome: a frame holding a scroll wrapper needs room for its
+   horizontal pull-back, or the specimen bleeds past its own border. */
+.frame:has(.scrollpad){padding:var(--space-room) var(--space-open)}
 
 /* ══ COMPONENTS ══ */
 .card{background:var(--surface);border:1px solid var(--line);
@@ -272,6 +275,141 @@ table.tk tr:hover td{background:var(--sunken)}
   border-top-color:currentColor;animation:spin .7s linear infinite;
   vertical-align:-2px;margin-right:var(--space-snug)}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+
+/* ══════════ REFINEMENT ROUND 2 — R1–R7 ══════════ */
+
+/* ── R1 · row rhythm. The gap is the sole limiter on the shadow: measured
+   visible falloff == border-spacing, exactly, at 8/12/16/20/24. ── */
+/* table.tk already sets border-spacing at (0,0,1,1), so these must match
+   its specificity to win — a bare .tk--g28 silently loses. */
+table.tk.tk--g8 {border-spacing:0 var(--space-base)}
+table.tk.tk--g18{border-spacing:0 var(--space-room)}
+table.tk.tk--g28{border-spacing:0 var(--space-loose)}   /* chosen */
+/* cause B: one non-visible overflow axis makes the other compute to auto,
+   so overflow-x:auto clips BOTH axes. padding-bottom alone recovers the
+   last row and leaves every row's side shadow still cut at the table's
+   left and right edges — measured flat, no falloff at all. The wrapper
+   therefore pads on three sides and is pulled back out horizontally so
+   the table's layout width is unchanged. 28px is affordable because the
+   table only renders at lg, where the shell already pays 48px. Top needs
+   only 8px: the shadow's upward extent is 2px (10px offset, 24px blur). */
+.scrollclip{overflow-x:auto}
+.scrollpad{overflow-x:auto;
+  padding:var(--space-base) var(--space-loose) var(--space-loose);
+  margin:calc(var(--space-base) * -1) calc(var(--space-loose) * -1) 0}
+
+/* Forced states. A static file cannot hover or focus itself, so the
+   specimens below paint the state on. These classes exist only here. */
+tr.is-hover{box-shadow:var(--shadow-raise)}
+tr.is-hover td{background:var(--sunken)}
+tr.is-sel{box-shadow:var(--shadow-raise)}
+tr.is-sel td{background:var(--accent-wash);
+  border-top-color:color-mix(in oklch,var(--accent) 50%,transparent);
+  border-bottom-color:color-mix(in oklch,var(--accent) 50%,transparent)}
+tr.is-sel td:first-child{border-left-color:color-mix(in oklch,var(--accent) 50%,transparent)}
+tr.is-sel td:last-child{border-right-color:color-mix(in oklch,var(--accent) 50%,transparent)}
+
+/* An expanded row and its drawer are one card. The shadow must never
+   render *between* them, so the row gap is bridged at cell level — cell
+   backgrounds paint above row-level shadows, so the bridge covers both.
+   The two extra 1px copies carry the side hairlines across the bridge. */
+tr.is-open td{border-bottom-color:transparent}
+tr.is-open td:first-child{border-bottom-left-radius:0}
+tr.is-open td:last-child {border-bottom-right-radius:0}
+tr.is-drawer td{border-top-color:transparent;
+  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface)}
+tr.is-drawer td:first-child{border-top-left-radius:0;
+  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
+            -1px calc(var(--space-loose) * -1) 0 var(--line)}
+tr.is-drawer td:last-child{border-top-right-radius:0;
+  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
+             1px calc(var(--space-loose) * -1) 0 var(--line)}
+/* a full-width drawer cell is both first and last, so it needs both sides */
+tr.is-drawer td:first-child:last-child{
+  border-radius:0 0 var(--r-md) var(--r-md);
+  box-shadow:0 calc(var(--space-loose) * -1) 0 var(--surface),
+            -1px calc(var(--space-loose) * -1) 0 var(--line),
+             1px calc(var(--space-loose) * -1) 0 var(--line)}
+
+/* ── R2 · dropdown triggers. Rank by contrast (4.93:1 label vs 15.45:1
+   value) with case as the supporting lever. min-width in ch per control
+   so the trigger cannot change width when the value changes. ── */
+.dd{display:inline-flex;align-items:center;gap:var(--space-base);
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:var(--capsule-r);white-space:nowrap;cursor:pointer;
+  padding:var(--space-snug) var(--space-cosy) var(--space-snug) var(--space-room);
+  font:inherit;font-size:var(--t--1);color:var(--ink)}
+.dd:hover{background:var(--sunken)}
+.dd .k{font-size:var(--t--2);text-transform:uppercase;letter-spacing:.075em;
+  font-weight:600;color:var(--ink-3)}
+.dd .v{display:inline-block;text-align:left;color:var(--ink);font-weight:500}
+.dd--group  .v{min-width:8ch}   /* "Location"       */
+.dd--sort   .v{min-width:14ch}  /* "Pipeline order" */
+.dd--filter .v{min-width:9ch}   /* "Any score"      */
+/* the rejected "before": no rank at all — one ink, one case, one weight */
+.dd--flat .k,.dd--flat .v{font-size:var(--t--1);text-transform:none;
+  letter-spacing:0;color:var(--ink-2);font-weight:400;min-width:0}
+
+/* ── R4 · one chevron, rotated. A glyph's ink is not centred in its em
+   box, so it wobbles; this path's bounding box is centred on (6,6),
+   which is the rotation origin, so the rotation is stable by
+   construction. Transform only. ── */
+.cv{width:12px;height:12px;flex:none;color:var(--ink-3);
+  transition:transform var(--d-out) var(--ease)}
+.cv--open{transform:rotate(90deg);transition-duration:var(--d-in)}
+[aria-expanded="true"] .cv{transform:rotate(90deg);transition-duration:var(--d-in)}
+
+/* ── R5 · header. One filled action plus one overflow trigger. ── */
+.iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;
+  justify-content:center;border-radius:var(--capsule-r);
+  border:1px solid var(--line-strong);background:var(--surface);
+  font-size:var(--t-1);line-height:1;color:var(--ink-2);cursor:pointer}
+.iconbtn:hover{background:var(--sunken)}
+.mwrap{position:relative;display:inline-block}
+/* opens instantly (0ms) — it is summoned deliberately, and an entrance
+   animation on a summoned surface reads as lag; fades out over 150ms. */
+.menu{position:absolute;right:0;top:calc(100% + var(--space-base));
+  min-width:14rem;background:var(--raised);border:1px solid var(--line);
+  border-radius:var(--r-md);box-shadow:var(--shadow-float);
+  padding:var(--space-tight);z-index:5;text-align:left}
+.menu button{display:flex;width:100%;align-items:center;
+  justify-content:space-between;gap:var(--space-cosy);background:none;
+  border:0;font:inherit;font-size:var(--t--1);color:var(--ink);
+  text-align:left;padding:var(--space-base) var(--space-cosy);
+  border-radius:var(--capsule-r-nested);cursor:pointer}
+.menu button:hover{background:var(--sunken)}
+.menu button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.menu hr{border:0;border-top:1px solid var(--line-soft);
+  margin:var(--space-tight) var(--space-snug)}
+.menu .danger{color:var(--danger-ink)}
+.menu .tick{color:var(--accent-ink)}
+
+/* ── R6 · mobile collapsible. 0fr → 1fr animates to intrinsic height
+   without measuring it — Departure D4. ── */
+.coll{display:grid;grid-template-rows:0fr;
+  transition:grid-template-rows var(--d-out) var(--ease)}
+.coll > div{overflow:hidden;min-height:0}
+.coll.open{grid-template-rows:1fr;transition-duration:var(--d-in)}
+.colhead{display:flex;align-items:center;gap:var(--space-base);width:100%;
+  background:none;border:0;border-top:1px solid var(--line-soft);
+  padding:var(--space-base) var(--space-cosy);font:inherit;
+  font-size:var(--t--1);color:var(--ink-2);cursor:pointer;text-align:left}
+.colhead .cnt{font-weight:600;color:var(--ink);white-space:nowrap}
+.colhead .prev{color:var(--ink-3);flex:1;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.colhead:disabled{cursor:default;color:var(--ink-3)}
+.colhead:disabled .cnt{color:var(--ink-3)}
+
+/* ── R3 · funnel. Locked is a real state, not a disabled one. ── */
+.kpi{display:flex;align-items:baseline;gap:var(--space-cosy);flex-wrap:wrap}
+.kpi b{font-size:var(--t-2);font-weight:600;letter-spacing:-.025em;color:var(--ink)}
+.kpi span{font-size:var(--t--1);color:var(--ink-3)}
+.lockbar{display:inline-block;vertical-align:middle;width:8rem;height:4px;
+  border-radius:999px;background:var(--line-soft);overflow:hidden}
+.lockbar i{display:block;height:100%;background:var(--ink-3);opacity:.5}
+.frate{grid-column:2;font-size:var(--t--1);color:var(--ink-2);
+  margin:-2px 0 var(--space-base)}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001ms!important;
@@ -470,7 +608,8 @@ table.tk tr:hover td{background:var(--sunken)}
   <p class="note">Below 1s: <b>nothing at all</b> (§3.3). Past 1s the skeleton is
     the real table with blocks in the cells, so replacing blocks with text shifts
     no box — CLS is 0 by construction.</p>
-  <table class="tk" style="margin-top:var(--space-room)">
+  <div class="scrollpad" style="margin-top:var(--space-room)">
+  <table class="tk">
     <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
       <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
     <tbody>
@@ -492,6 +631,7 @@ table.tk tr:hover td{background:var(--sunken)}
         <td><span class="skel" style="width:2rem"></span></td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 
 <!-- ══════════ EMPTY STATE ══════════ -->
@@ -504,7 +644,8 @@ table.tk tr:hover td{background:var(--sunken)}
     line-height:var(--lh-prose)">Add your first application. Every cell is
     editable — click one and type.</p>
   <p style="margin-top:var(--space-cosy)"><button class="btn btn-primary">+ Add application</button></p>
-  <table class="tk" style="margin-top:var(--space-cosy)">
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+  <table class="tk">
     <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
       <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
     <tbody><tr style="opacity:.75">
@@ -513,6 +654,7 @@ table.tk tr:hover td{background:var(--sunken)}
       <td class="muted">Log the reply</td><td class="muted">Set the next action</td>
       <td class="muted">Angle, contact</td><td class="muted num">–</td></tr></tbody>
   </table>
+  </div>
 </section>
 
 <!-- ══════════ DESKTOP TABLE ══════════ -->
@@ -558,7 +700,8 @@ table.tk tr:hover td{background:var(--sunken)}
     <button class="chip">Closed <span class="num">0</span></button>
   </div>
 
-  <table class="tk" style="margin-top:var(--space-room)">
+  <div class="scrollpad" style="margin-top:var(--space-room)">
+  <table class="tk">
     <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
       <th>Replies</th><th>Next steps</th><th>Notes</th><th style="width:5rem">Score</th></tr></thead>
     <tbody>
@@ -612,6 +755,7 @@ table.tk tr:hover td{background:var(--sunken)}
       </tr>
     </tbody>
   </table>
+  </div>
 
   <p class="caps" style="margin-top:var(--space-room)">All six stages</p>
   <div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-base)">
@@ -855,12 +999,14 @@ Code: 42501</div>
   </div>
 
   <h3 class="caps" style="margin-top:var(--space-loose)">C.2 · Aspect ratio — the stadium holds to 6:1</h3>
-  <div style="display:grid;gap:var(--space-base);margin-top:var(--space-cosy)">
+  <div style="overflow-x:auto;margin-top:var(--space-cosy);padding-bottom:var(--space-base)">
+  <div style="display:grid;gap:var(--space-base);width:max-content">
     <span class="capsule" style="width:64px;justify-content:center">2:1</span>
     <span class="capsule" style="width:192px;justify-content:center">6:1 — the bound</span>
     <span class="capsule" style="width:288px;justify-content:center">9:1 — reads as a lozenge</span>
     <span class="capsule" style="width:704px;justify-content:center">22:1 — a table cell. Absurd.</span>
     <span class="capsule capsule--block" style="width:704px;text-align:center">22:1 at --capsule-r-block instead — correct</span>
+  </div>
   </div>
 
   <h3 class="caps" style="margin-top:var(--space-loose)">C.3 · Adjacency — gap 8–12px</h3>
@@ -944,7 +1090,8 @@ Code: 42501</div>
   <h3 class="caps" style="margin-top:var(--space-loose)">C.7 · The family, together — a real row</h3>
   <p class="note">Capsules: status pill, chase chip, example tag, add button, dropdown
     trigger. Not capsules: the cells themselves, the rail, the sync chip.</p>
-  <table class="tk" style="margin-top:var(--space-cosy)">
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+  <table class="tk">
     <thead><tr><th>Company</th><th>Role</th><th>Location</th><th style="width:7.5rem">Status</th>
       <th>Replies</th><th>Next steps</th><th style="width:5rem">Score</th></tr></thead>
     <tbody><tr>
@@ -972,6 +1119,7 @@ Code: 42501</div>
       <td><div class="cell num" style="font-weight:600">2.0 <span class="muted">▸</span></div></td>
     </tr></tbody>
   </table>
+  </div>
   <div style="display:flex;gap:var(--space-base);flex-wrap:wrap;margin-top:var(--space-cosy);align-items:center">
     <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
     <button class="btn" style="border-radius:var(--capsule-r)">Group by <b>None</b> ▾</button>
@@ -1000,6 +1148,806 @@ Code: 42501</div>
   </div>
   <p class="note" style="margin-top:var(--space-base)">The pill is ~4:1 here —
     better proportioned than in the table, because the card constrains its width.</p>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════════
+     REFINEMENT ROUND 2 — R1–R7
+     ════════════════════════════════════════════════════════════════════ -->
+
+<section class="sec" style="border-top-width:6px">
+  <h2 style="font-size:var(--t-3)">Refinement round 2 — R1–R7</h2>
+  <p class="note">Everything below is new since the approved build. It is
+    additive to the sections above; where a specimen replaces one of them the
+    old version is shown beside it, labelled. Toggle the theme on each.</p>
+</section>
+
+<!-- ══════════ R1 · SHADOWS ══════════ -->
+<section class="sec">
+  <h2>R1 · Shadows — the gap was the limiter, not the table</h2>
+  <p class="note">The row and the funnel card resolve to the <b>same</b>
+    computed shadow, and the first 8px of falloff are pixel-identical. The row
+    is cut at 8px because <code>border-spacing: 0 8px</code> is all the room it
+    has, and the shadow needs 59px to reach page ground. Measured across gaps
+    8/12/16/20/24, <b>visible falloff == gap, exactly</b>, every time. Column
+    alignment is not at risk, so the table stays.</p>
+
+  <div style="display:grid;gap:var(--space-open);margin-top:var(--space-room)">
+    <div>
+      <p class="caps">Gap 8px — today. 56% of the falloff shown; residual step
+        0.1030 against page ground, with the next row's border directly under
+        it. This abutment is the “clipped, not lifted” reading.</p>
+      <table class="tk tk--g8" style="margin-top:var(--space-base)"><tbody>
+        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
+          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
+          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
+        <tr><td>Example Studio</td><td>Business Development Associate</td>
+          <td>Remote</td><td><span class="pill s4">Interview</span></td>
+          <td class="num" style="font-weight:600">4.8</td></tr>
+        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+          <td>City</td><td><span class="pill s5">Offer</span></td>
+          <td class="num" style="font-weight:600">3.0</td></tr>
+      </tbody></table>
+    </div>
+
+    <div>
+      <p class="caps">Gap 18px <code>--space-room</code> — 77% shown, residual
+        0.0532. Better, but the termination is still visible.</p>
+      <table class="tk tk--g18" style="margin-top:var(--space-base)"><tbody>
+        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
+          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
+          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
+        <tr><td>Example Studio</td><td>Business Development Associate</td>
+          <td>Remote</td><td><span class="pill s4">Interview</span></td>
+          <td class="num" style="font-weight:600">4.8</td></tr>
+        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+          <td>City</td><td><span class="pill s5">Offer</span></td>
+          <td class="num" style="font-weight:600">3.0</td></tr>
+      </tbody></table>
+    </div>
+
+    <div>
+      <p class="caps" style="color:var(--ink)">Gap 28px <code>--space-loose</code>
+        — chosen. ~97% shown, residual ~0.008. The next value on the committed
+        1.5-ratio scale, so no new token. Costs +20px a row, ~+16% list height.</p>
+      <table class="tk tk--g28" style="margin-top:var(--space-base)"><tbody>
+        <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
+          <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
+          <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
+        <tr><td>Example Studio</td><td>Business Development Associate</td>
+          <td>Remote</td><td><span class="pill s4">Interview</span></td>
+          <td class="num" style="font-weight:600">4.8</td></tr>
+        <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+          <td>City</td><td><span class="pill s5">Offer</span></td>
+          <td class="num" style="font-weight:600">3.0</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-open)">Cause B — the scroll
+    wrapper was clipping the last row</h3>
+  <p class="note"><code>overflow-x: auto</code> makes the other axis compute to
+    <code>auto</code> as well, so the wrapper clipped vertically and the last
+    row kept only <b>8px</b> of shadow. Adding
+    <code>padding-bottom: var(--space-loose)</code> took it to <b>32px</b>.</p>
+  <div class="grid2">
+    <div class="frame"><p class="caps">Before — overflow-x:auto, clipped</p>
+      <div class="scrollclip">
+        <table class="tk tk--g28"><tbody>
+          <tr><td style="width:12rem">Northwind</td><td>Analyst, Strategy</td>
+            <td style="width:7.5rem"><span class="pill s2">Applied</span></td></tr>
+          <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+            <td><span class="pill s5">Offer</span></td></tr>
+        </tbody></table>
+      </div></div>
+    <div class="frame"><p class="caps">After — padding-bottom on the wrapper</p>
+      <div class="scrollpad">
+        <table class="tk tk--g28"><tbody>
+          <tr><td style="width:12rem">Northwind</td><td>Analyst, Strategy</td>
+            <td style="width:7.5rem"><span class="pill s2">Applied</span></td></tr>
+          <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+            <td><span class="pill s5">Offer</span></td></tr>
+        </tbody></table>
+      </div></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-open)">An expanded row and its
+    drawer are one card</h3>
+  <p class="note">Two shadows 1px apart is the “shadow inside a shadow” failure
+    C.6 forbids. The row gap is bridged at cell level — cell backgrounds paint
+    above row-level shadows — so no shadow renders between the pair and only
+    the outside of it meets page ground. Two 1px shadow copies carry the side
+    hairlines across the bridge.</p>
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+    <table class="tk tk--g28"><tbody>
+      <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
+        <td>London</td><td style="width:7.5rem"><span class="pill s2">Applied</span></td>
+        <td class="num" style="width:5rem;font-weight:600">4.0</td></tr>
+      <tr class="is-open"><td>Example Studio</td><td>Business Development Associate</td>
+        <td>Remote</td><td><span class="pill s4">Interview</span></td>
+        <td class="num" style="font-weight:600">4.8
+          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path
+            d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+            stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></td></tr>
+      <tr class="is-drawer"><td colspan="5" style="padding-top:0">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+          gap:var(--space-room);padding-top:var(--space-base)">
+          <div><p class="caps">Company score</p>
+            <p class="num" style="margin-top:var(--space-tight);font-weight:600">4.8
+              <span class="muted">/ 5</span></p></div>
+          <div><p class="caps">Offer</p>
+            <p class="num" style="margin-top:var(--space-tight)">£52,000 · 0.1% · 01/09/2026</p></div>
+        </div></td></tr>
+      <tr><td>Example Foundation</td><td>Programme Operations Assistant</td>
+        <td>City</td><td><span class="pill s5">Offer</span></td>
+        <td class="num" style="font-weight:600">3.0</td></tr>
+    </tbody></table>
+  </div>
+</section>
+
+<!-- ══════════ FULL ROW LIST — ALL STATES ══════════ -->
+<section class="sec">
+  <h2>R1 · The full list — first, last, hovered, selected, multi-line</h2>
+  <p class="note">One table at the chosen 28px gap, inside the padded wrapper.
+    Hover and keyboard selection cannot happen in a static file, so those two
+    rows have the state painted on and are labelled in the first column. The
+    multi-line row is the case that decides whether the gap still reads as
+    rhythm when the rows are unequal — it does, because the gap is constant and
+    the height is not.</p>
+
+  <div class="scrollpad" style="margin-top:var(--space-room)">
+    <table class="tk tk--g28">
+      <thead><tr><th>Company</th><th>Role</th><th>Location</th>
+        <th style="width:7.5rem">Status</th><th>Replies</th><th>Next steps</th>
+        <th style="width:5.5rem">Score</th></tr></thead>
+      <tbody>
+        <tr>
+          <td style="width:13rem"><div class="cell">Northwind</div>
+            <p class="caps" style="margin-top:var(--space-tight)">first row</p></td>
+          <td><div class="cell">Analyst, Strategy</div></td>
+          <td><div class="cell">London</div></td>
+          <td><span class="pill s1">To apply</span></td>
+          <td><div class="cell muted">Log the reply</div></td>
+          <td><div class="cell muted">Set the next action</div></td>
+          <td><div class="cell num" style="font-weight:600">2.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
+              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
+        </tr>
+        <tr class="is-hover">
+          <td><div class="cell">Example Consulting</div>
+            <p class="caps" style="margin-top:var(--space-tight)">hovered — raise + sunken fill</p></td>
+          <td><div class="cell">Analyst, Strategy</div></td>
+          <td><div class="cell">London</div></td>
+          <td><span class="pill s2">Applied</span></td>
+          <td><div class="cell">Automated acknowledgement received.</div></td>
+          <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
+            <input type="checkbox" checked style="accent-color:var(--accent)" />
+            <s style="color:var(--ink-3)">Send the CV</s></label></div></td>
+          <td><div class="cell num" style="font-weight:600">4.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
+              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
+        </tr>
+        <tr class="is-sel">
+          <td><div class="cell">Example Studio</div>
+            <p class="caps" style="margin-top:var(--space-tight)">selected — keyboard row</p></td>
+          <td><div class="cell">Business Development Associate</div></td>
+          <td><div class="cell">Remote</div></td>
+          <td><span class="pill s4">Interview</span></td>
+          <td><div class="cell">First round scheduled, 30 minutes, video.</div></td>
+          <td><div class="cell">Prepare three examples</div></td>
+          <td><div class="cell num" style="font-weight:600">4.8
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
+              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
+        </tr>
+        <tr>
+          <td><div class="cell">Meridian Partners</div>
+            <p class="caps" style="margin-top:var(--space-tight)">multi-line — 4 lines</p></td>
+          <td><div class="cell">Associate, Corporate Development &amp; Strategic Partnerships</div></td>
+          <td><div class="cell">Manchester</div></td>
+          <td><span class="pill s3">Replied</span></td>
+          <td><div class="cell">Recruiter replied on the 14th asking for
+            availability the following week, then went quiet. Nothing from the
+            hiring manager yet, so chase this on Friday.</div></td>
+          <td><div class="cell"><label style="display:flex;gap:var(--space-base)">
+            <input type="checkbox" checked style="accent-color:var(--accent)" />
+            <s style="color:var(--ink-3)">Send availability</s></label>
+            <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+            <input type="checkbox" style="accent-color:var(--accent)" />
+            Chase the hiring manager</label></div></td>
+          <td><div class="cell num" style="font-weight:600">3.6
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
+              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
+        </tr>
+        <tr>
+          <td><div class="cell">Example Foundation</div>
+            <p class="caps" style="margin-top:var(--space-tight)">last row — shadow clears the wrapper</p></td>
+          <td><div class="cell">Programme Operations Assistant</div></td>
+          <td><div class="cell muted">City</div></td>
+          <td><span class="pill s5">Offer</span></td>
+          <td><div class="cell muted">Log the reply</div></td>
+          <td><div class="cell muted">Set the next action</div></td>
+          <td><div class="cell num" style="font-weight:600">3.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path
+              d="M4.25 2.5 7.75 6l-3.5 3.5" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════ R2 · DROPDOWNS ══════════ -->
+<section class="sec">
+  <h2>R2 · Dropdowns — label is chrome, value is the answer</h2>
+  <p class="note">Primary lever is contrast: label <code>--ink-3</code> at
+    <b>4.93 : 1</b>, value <code>--ink</code> at <b>15.45 : 1</b> — a 3.1× step,
+    the same mechanism that already carries rank everywhere else. Supporting
+    lever is case: uppercase reads as machine-fixed chrome, sentence case as
+    the thing you chose. The separator rule, the weight change and the extra
+    spacing are all declined as decoration.</p>
+
+  <div class="grid2">
+    <div class="frame"><p class="caps">Before — one ink, one case, no rank</p>
+      <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+        <button class="dd dd--flat"><span class="k">Group by</span><span class="v">None</span>
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg></button>
+        <button class="dd dd--flat"><span class="k">Sort</span><span class="v">Pipeline order</span>
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg></button>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">Reading it takes a
+        pass over the whole string to find which half is the answer.</p></div>
+
+    <div class="frame"><p class="caps">After — contrast, then case</p>
+      <div style="display:flex;gap:var(--space-base);flex-wrap:wrap">
+        <button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg></button>
+        <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg></button>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">The value is what the
+        eye lands on. The label is still legible at 4.93 : 1 — the hierarchy
+        comes from raising the value, not from whispering the label.</p></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Short value and long
+    value — the trigger must not change width</h3>
+  <p class="note">The value has a <code>min-width</code> in <code>ch</code>
+    sized to the longest option for that control and is left-aligned inside it,
+    so switching from “None” to “Location” cannot shift the toolbar under the
+    cursor. Group by <code>8ch</code>, Sort <code>14ch</code>, Filter
+    <code>9ch</code>.</p>
+  <div style="display:grid;gap:var(--space-cosy);margin-top:var(--space-cosy);
+    justify-items:start">
+    <div style="display:flex;gap:var(--space-base);align-items:center">
+      <span class="caps" style="width:6rem">shortest</span>
+      <button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Newest</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">4+</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+    </div>
+    <div style="display:flex;gap:var(--space-base);align-items:center">
+      <span class="caps" style="width:6rem">longest</span>
+      <button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
+        <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+          fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          stroke-linejoin="round"/></svg></button>
+    </div>
+    <p class="note">The two rows are the same width, edge for edge. Compare the
+      right-hand edge of each trigger against the row above it.</p>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">The full view bar, at
+    380px</h3>
+  <div style="width:380px;max-width:100%;margin-top:var(--space-cosy);
+    display:flex;gap:var(--space-base);flex-wrap:wrap">
+    <button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span>
+      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+        stroke-linejoin="round"/></svg></button>
+    <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span>
+      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+        stroke-linejoin="round"/></svg></button>
+    <button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span>
+      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+        stroke-linejoin="round"/></svg></button>
+    <button class="btn" style="border:0;background:none;text-decoration:underline;
+      color:var(--ink-3)">Reset view</button>
+  </div>
+  <p class="note" style="margin-top:var(--space-base)">They wrap as a group. The
+    <code>ch</code> minimums are small enough that none forces a horizontal
+    scroll.</p>
+</section>
+
+<!-- ══════════ R3 · FUNNEL ══════════ -->
+<section class="sec">
+  <h2>R3 · The funnel — locked and unlocked</h2>
+  <p class="note">Threshold is <b>20 rows at Applied or beyond</b>. Below it no
+    ratio appears anywhere in the funnel. Counts stay, because a count is honest
+    at any n; it is the <i>rate</i> that is noise. Interview → Offer keeps its
+    count and loses its percentage for good: there is no volume at which it
+    stabilises, so the number displayed a precision the data does not have.</p>
+
+  <div class="grid2" style="align-items:start">
+    <div class="frame"><p class="caps">Locked — 14 of 20</p>
+      <div class="card" style="box-shadow:var(--shadow-rest)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <button class="btn" style="border:0;background:none;padding:0;display:flex;
+            align-items:center;gap:var(--space-base)" aria-expanded="true">
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg><span class="caps">Funnel</span></button>
+        </div>
+
+        <div style="margin-top:var(--space-cosy)">
+          <p style="font-size:var(--t--1);color:var(--ink-2);line-height:var(--lh-prose);
+            max-width:44ch">Rates unlock at 20 applications — they are noise
+            below that.</p>
+          <p style="margin-top:var(--space-base);display:flex;align-items:center;
+            gap:var(--space-cosy)">
+            <span class="lockbar"><i style="width:70%"></i></span>
+            <span class="num" style="font-size:var(--t--1);color:var(--ink-2)">14 of 20 applications</span></p>
+        </div>
+
+        <div style="margin-top:var(--space-room)">
+          <div class="fbar"><span class="caps">Applied</span>
+            <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">14</span></div>
+          <div class="fbar"><span class="caps">Replied</span>
+            <div class="ftrack"><div class="ffill" style="width:21%;background:var(--st3i)"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">3</span></div>
+          <div class="fbar"><span class="caps">Interview</span>
+            <div class="ftrack"><div class="ffill" style="width:14%;background:var(--st4i);opacity:.75"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">2</span></div>
+          <div class="fbar"><span class="caps">Offer</span>
+            <div class="ftrack"><div class="ffill" style="width:7%;background:var(--st5i)"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">1</span></div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">No greyed-out
+        controls, no padlock, no “coming soon”. It is a state with its own
+        content, not a disabled version of another state (§3.3).</p></div>
+
+    <div class="frame"><p class="caps">Unlocked — 41 applications</p>
+      <div class="card" style="box-shadow:var(--shadow-rest)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <button class="btn" style="border:0;background:none;padding:0;display:flex;
+            align-items:center;gap:var(--space-base)" aria-expanded="true">
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg><span class="caps">Funnel</span></button>
+        </div>
+
+        <div class="kpi" style="margin-top:var(--space-cosy)">
+          <b class="num">22%</b>
+          <span class="caps" style="color:var(--ink-2)">reply rate</span>
+          <span class="num">9 of 41 applications</span>
+        </div>
+        <p class="num" style="margin-top:var(--space-tight);font-size:var(--t--1);
+          color:var(--ink-3)">Median 6 days to a reply (n=9)</p>
+
+        <div style="margin-top:var(--space-room)">
+          <div class="fbar"><span class="caps">Applied</span>
+            <div class="ftrack"><div class="ffill" style="width:100%;background:var(--st2i);opacity:.55"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">41</span></div>
+          <div class="fmeta num">↓ 8 days avg (n=41)</div>
+          <div class="fbar"><span class="caps">Replied</span>
+            <div class="ftrack"><div class="ffill" style="width:22%;background:var(--st3i)"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">9</span></div>
+          <div class="frate num">44% went to interview · ↓ 9 days avg (n=9)</div>
+          <div class="fbar"><span class="caps">Interview</span>
+            <div class="ftrack"><div class="ffill" style="width:10%;background:var(--st4i);opacity:.75"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">4</span></div>
+          <div class="fmeta num">↓ 15 days avg (n=4)</div>
+          <div class="fbar"><span class="caps">Offer</span>
+            <div class="ftrack"><div class="ffill" style="width:2.5%;background:var(--st5i)"></div></div>
+            <span class="num" style="text-align:right;font-weight:600">1</span></div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">Reply rate carries the
+        weight — <code>--t-2</code>, primary ink, denominator stated so the ratio
+        never floats. Every other rate is <code>--t--1</code> secondary. No
+        percentage under Interview → Offer; the count on the bar is the whole
+        claim.</p></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">The unlock marker — as
+    quiet as it can be while still being honest</h3>
+  <p class="note">A celebration would be unearned in the dossier's exact sense:
+    material honesty says do not promise what you cannot keep, and crossing an
+    arbitrary threshold is not an achievement. Silence is also wrong — the panel
+    would change shape with no explanation. One line, on the first render past
+    the threshold. It does not animate, does not block, and does not return.
+    Recorded in <code>localStorage</code> under <code>tracker.unlockSeen</code>,
+    which is a preference key, not data — <b>no schema change</b>.</p>
+  <div style="margin-top:var(--space-cosy)">
+    <p class="num" style="font-size:var(--t--1);color:var(--ink-2)">Reply rate
+      unlocked — 20 applications tracked</p>
+  </div>
+</section>
+
+<!-- ══════════ R4 · CARETS ══════════ -->
+<section class="sec">
+  <h2>R4 · One caret, rotated</h2>
+  <p class="note">Two things were wrong. The row and funnel carets were a static
+    <code>▶</code> that never changed — the rotation rule went out as
+    subtraction S7 and nothing replaced it. The mobile card swapped
+    <code>▲</code> for <code>▼</code>: two glyphs, which is exactly the swap
+    that must go. A text glyph's ink is not centred in its em box, so
+    <code>transform-origin: center</code> wobbles. The replacement is an inline
+    SVG whose path bounding box is centred on the rotation origin, so stability
+    is a property of the geometry rather than of a nudge.</p>
+
+  <div class="grid2">
+    <div class="frame"><p class="caps">Rejected — glyph swap</p>
+      <p style="font-size:var(--t-1)">▶ &nbsp; ▼ &nbsp;
+        <span class="muted" style="font-size:var(--t--1)">different ink, different
+        optical weight, different vertical centre</span></p></div>
+    <div class="frame"><p class="caps">Chosen — one path, rotate 90°</p>
+      <p style="display:flex;align-items:center;gap:var(--space-room)">
+        <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg><span class="caps">collapsed</span></span>
+        <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg><span class="caps">expanded</span></span>
+      </p>
+      <p class="note" style="margin-top:var(--space-base)">200ms in / 150ms out,
+        <code>cubic-bezier(.22,1,.36,1)</code> — the committed motion table's
+        drawer row, not a new number. Asymmetric because opening is the
+        deliberate act and closing is dismissal.</p></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Both states, in both
+    places</h3>
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+    <table class="tk tk--g28"><tbody>
+      <tr><td style="width:14rem">Northwind</td><td>Analyst, Strategy</td>
+        <td style="width:7.5rem"><span class="pill s1">To apply</span></td>
+        <td class="num" style="width:8rem;font-weight:600">2.0
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="caps" style="margin-left:var(--space-base)">closed</span></td></tr>
+      <tr><td>Example Studio</td><td>Business Development Associate</td>
+        <td><span class="pill s4">Interview</span></td>
+        <td class="num" style="font-weight:600">4.8
+          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="caps" style="margin-left:var(--space-base)">open</span></td></tr>
+    </tbody></table>
+  </div>
+  <div style="display:flex;gap:var(--space-loose);flex-wrap:wrap;margin-top:var(--space-cosy)">
+    <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+      <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+        stroke-linejoin="round"/></svg><span class="caps">Funnel — collapsed</span></span>
+    <span style="display:inline-flex;align-items:center;gap:var(--space-base)">
+      <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+        fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+        stroke-linejoin="round"/></svg><span class="caps">Funnel — expanded</span></span>
+  </div>
+  <p class="note" style="margin-top:var(--space-base)">Under
+    <code>prefers-reduced-motion</code> the direction still changes, instantly —
+    the existing global rule collapses the duration and the rotation still
+    applies. Direction is information; the sweep is not.</p>
+</section>
+
+<!-- ══════════ R5 + R7 · HEADER ══════════ -->
+<section class="sec">
+  <h2>R5, R7 · Header — one primary action, one overflow, no instructions</h2>
+  <p class="note">The header becomes exactly two controls. “Add application” is
+    the only filled control on the screen, which is what makes it unambiguous —
+    restraint is what gives the one emphasis its force. Everything else goes
+    behind a single <code>⋯</code>.</p>
+
+  <div class="frame" style="margin-top:var(--space-room)">
+    <p class="caps">Before — four peers and two lines of instruction</p>
+    <div style="display:flex;align-items:baseline;gap:var(--space-cosy);flex-wrap:wrap">
+      <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+      <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+      <span class="caps" style="color:var(--ink-3)">● live</span>
+      <span style="margin-left:auto;display:flex;gap:var(--space-base)">
+        <button class="btn btn-primary">+ Add application</button>
+        <button class="btn">Dark mode</button>
+        <button class="btn">Share / Export</button>
+        <button class="btn">Sign out</button></span>
+    </div>
+    <p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-3);
+      line-height:var(--lh-prose);max-width:70ch">Click any cell to edit it.
+      Click the status pill to advance a stage. Your changes save automatically
+      and sync to your other devices.</p>
+    <p style="margin-top:var(--space-base);font-size:var(--t--2);color:var(--ink-3)">
+      ↑↓←→ move · Enter edit · Shift+Enter advance stage · ⌘Enter save · Esc cancel</p>
+  </div>
+
+  <div class="grid2">
+    <div class="frame"><p class="caps">After — menu closed</p>
+      <div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
+        <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+        <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+        <span class="caps" style="color:var(--ink-3)"
+          title="Changes sync to your other devices">● live</span>
+        <span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
+          <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
+          <button class="iconbtn" aria-label="More actions" aria-expanded="false">⋯</button></span>
+      </div>
+      <p class="note" style="margin-top:var(--space-cosy)">LIVE stays — it is
+        state, not instruction, and the one thing on screen that cannot be
+        inferred. It gains a <code>title</code> because “LIVE” alone is
+        ambiguous.</p></div>
+
+    <div class="frame">
+      <p class="caps">After — menu open</p>
+      <p class="note" style="margin:var(--space-base) 0 var(--space-room)">Sign out
+        is separated by a rule and takes <code>--danger-ink</code>, because it is
+        destructive relative to its neighbours. The theme item shows current state
+        from inside with <code>aria-checked</code>, since the toggle is no longer
+        visible at a glance. Opens <b>instantly</b> — it is summoned deliberately,
+        and an entrance reads as lag — and fades out over 150ms. Escape closes and
+        returns focus to the trigger; outside click closes; Tab closes; ↑↓ move,
+        Home/End jump.</p>
+      <div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
+        <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+        <span class="num sec-ink" style="font-size:var(--t--1)">41 tracked · 12 live</span>
+        <span class="caps" style="color:var(--ink-3)">● live</span>
+        <span style="margin-left:auto;display:flex;gap:var(--space-base);align-items:center">
+          <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button>
+          <span class="mwrap">
+            <button class="iconbtn" aria-label="More actions" aria-expanded="true"
+              style="outline:2px solid var(--accent);outline-offset:2px">⋯</button>
+            <span class="menu" role="menu">
+              <button role="menuitemradio" aria-checked="false">Dark mode</button>
+              <button role="menuitemradio" aria-checked="true">Light mode
+                <span class="tick">✓</span></button>
+              <button role="menuitem">Share / Export</button>
+              <hr />
+              <button role="menuitem" class="danger">Sign out</button>
+            </span>
+          </span></span>
+      </div>
+      <div style="height:200px" aria-hidden="true"></div></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">R7 · What the removed
+    text was carrying, and where each affordance went</h3>
+  <div class="grid2">
+    <div class="frame"><p class="caps">Now carried by a title, not a paragraph</p>
+      <div style="display:flex;flex-direction:column;gap:var(--space-cosy);
+        align-items:flex-start">
+        <span class="pill s2" title="Advance to Replied">Applied</span>
+        <span class="tag" title="Live applications untouched for 7+ days">1 awaiting chase</span>
+        <span class="caps" style="color:var(--ink-3)"
+          title="Changes sync to your other devices">● live</span>
+        <button class="iconbtn" aria-label="More actions">⋯</button>
+      </div>
+      <p class="note" style="margin-top:var(--space-cosy)">The status pill names
+        its <i>next</i> stage, not itself — “Advance to Replied” — because
+        looking pressable was never the gap; knowing what pressing does was.</p></div>
+
+    <div class="frame"><p class="caps">Needs no help — and never did</p>
+      <table class="tk tk--g28" style="border-spacing:0 var(--space-base)"><tbody>
+        <tr><td style="width:11rem"><div class="cell">Northwind</div></td>
+          <td><label style="display:flex;gap:var(--space-base);font-size:var(--t--1)">
+            <input type="checkbox" checked style="accent-color:var(--accent)" />
+            <s style="color:var(--ink-3)">Send the CV</s></label></td>
+          <td class="num" style="width:5.5rem;font-weight:600">2.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg></td></tr>
+      </tbody></table>
+      <p class="note" style="margin-top:var(--space-base)">Cells raise on hover
+        and show a text caret. Ticks are native checkboxes. The score caret now
+        rotates. None of these were ever ambiguous enough to justify permanent
+        chrome.</p></div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">The one genuine loss —
+    named, not hidden</h3>
+  <p class="note">Nothing on screen suggests that arrow keys move between cells
+    or that Shift+Enter advances a stage. So the keyboard model moves into the
+    empty state, which already renders the real table geometry and is exactly
+    where someone is looking when they have not yet learned the tool. Shown
+    once, to a new user, in the place they are already reading — and gone the
+    moment they have a row. Scaffolding that helps a novice becomes noise for
+    the expert, and permanent chrome makes everyone pay the novice's price
+    forever.</p>
+  <div class="card" style="margin-top:var(--space-cosy);max-width:52rem">
+    <p style="font-size:var(--t-1);font-weight:600">Nothing tracked yet</p>
+    <p style="margin-top:var(--space-base);font-size:var(--t--1);color:var(--ink-2);
+      line-height:var(--lh-prose);max-width:56ch">Add your first application and
+      it will appear here. Everything saves as you type.</p>
+    <p style="margin-top:var(--space-cosy)">
+      <button class="btn btn-primary" style="border-radius:var(--capsule-r)">+ Add application</button></p>
+    <div style="border-top:1px solid var(--line-soft);margin-top:var(--space-room);
+      padding-top:var(--space-cosy)">
+      <p class="caps">Keyboard</p>
+      <dl class="spec" style="margin-top:var(--space-base);grid-template-columns:8rem 1fr;
+        font-size:var(--t--1)">
+        <dt>↑ ↓ ← →</dt><dd>move between cells</dd>
+        <dt>Enter</dt><dd>edit the cell</dd>
+        <dt>Shift + Enter</dt><dd>advance the stage</dd>
+        <dt>⌘ / Ctrl + Enter</dt><dd>save and stay</dd>
+        <dt>Esc</dt><dd>cancel the edit</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ R6 · MOBILE COLLAPSIBLES ══════════ -->
+<section class="sec">
+  <h2>R6 · Mobile — collapsed empty, collapsed with content, expanded</h2>
+  <p class="note">Scope is the mobile layout branch only. The desktop table
+    renders a different row component with no such section, so the two cannot
+    disagree — the collapsible does not exist on the desktop path. It collapses
+    <b>with content in it</b>: a card with three filled paragraphs is the one
+    most worth shrinking, so having content never disables the toggle. State
+    persists per row for the session in a <code>Map</code> keyed by row id, so
+    scrolling a long list cannot silently reset it — not
+    <code>localStorage</code>, because it is view state, not a preference, and
+    should not outlive the session.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,360px));
+    justify-content:start;gap:var(--space-room);margin-top:var(--space-room);
+    align-items:start">
+
+    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+      Collapsed — nothing in it yet</p>
+      <div class="record">
+        <div class="id">
+          <div><div style="font-weight:600">Northwind</div></div>
+          <span class="pill s1">To apply</span></div>
+        <div class="sub"><span>Analyst, Strategy · London</span>
+          <span class="num" style="font-weight:600;display:inline-flex;
+            align-items:center;gap:var(--space-tight)">2.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg></span></div>
+        <button class="colhead" aria-expanded="false">
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="prev">Add replies, next steps, notes</span></button>
+        <div class="coll"><div><div class="notes"></div></div></div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">Empty, so the header
+        is the adder. No count, because zero is not a quantity worth printing.</p>
+    </div>
+
+    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+      Collapsed — with content</p>
+      <div class="record">
+        <div class="id">
+          <div><span class="tag">Example</span>
+            <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+          <span class="pill s2">Applied</span></div>
+        <div class="sub"><span>Analyst, Strategy · London</span>
+          <span class="num" style="font-weight:600;display:inline-flex;
+            align-items:center;gap:var(--space-tight)">4.0
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg></span></div>
+        <button class="colhead" aria-expanded="false">
+          <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="cnt num">3 fields</span>
+          <span class="prev">· Automated acknowledgement received. Nothing from the hiring manager yet</span></button>
+        <div class="coll"><div><div class="notes"></div></div></div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">A dot says only
+        “something”. A count says how much. The preview says what — and on a
+        phone the decision being made is “is it worth opening”, which only the
+        preview answers. One line, ellipsised.</p>
+    </div>
+
+    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+      Expanded</p>
+      <div class="record">
+        <div class="id">
+          <div><span class="tag">Example</span>
+            <div style="font-weight:600;margin-top:var(--space-tight)">Example Consulting</div></div>
+          <span class="pill s2">Applied</span></div>
+        <div class="sub"><span>Analyst, Strategy · London</span>
+          <span class="num" style="font-weight:600;display:inline-flex;
+            align-items:center;gap:var(--space-tight)">4.0
+            <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg></span></div>
+        <button class="colhead" aria-expanded="true">
+          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="cnt num">3 fields</span></button>
+        <div class="coll open"><div>
+          <div class="notes">
+            <span class="caps">Replies</span><span>Automated acknowledgement
+              received. Nothing from the hiring manager yet, so chase on Friday.</span>
+            <span class="caps">Next</span><span>
+              <label style="display:flex;gap:var(--space-base)">
+                <input type="checkbox" checked style="accent-color:var(--accent)" />
+                <s style="color:var(--ink-3)">Send the CV</s></label>
+              <label style="display:flex;gap:var(--space-base);margin-top:var(--space-tight)">
+                <input type="checkbox" style="accent-color:var(--accent)" />
+                Follow up next week</label></span>
+            <span class="caps">Notes</span><span>Warm intro via the alumni list.</span>
+          </div>
+        </div></div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">Height animates
+        <code>grid-template-rows: 0fr → 1fr</code> — Departure D4. Not
+        GPU-composited; acceptable here on scope: one small subtree,
+        user-initiated, ≤200ms, a handful on screen. Measuring a pixel height
+        thrashes layout harder and needs JS on every resize.</p>
+    </div>
+
+    <div class="rowwrap"><p class="caps" style="margin-bottom:var(--space-base)">
+      Expanded, mid-edit — collapse disabled</p>
+      <div class="record">
+        <div class="id">
+          <div><div style="font-weight:600">Meridian Partners</div></div>
+          <span class="pill s3">Replied</span></div>
+        <div class="sub"><span>Associate, Corporate Development · Manchester</span>
+          <span class="num" style="font-weight:600;display:inline-flex;
+            align-items:center;gap:var(--space-tight)">3.6
+            <svg class="cv" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+              fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round"/></svg></span></div>
+        <button class="colhead" aria-expanded="true" disabled title="Finish editing first">
+          <svg class="cv cv--open" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.25 2.5 7.75 6l-3.5 3.5"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round"/></svg>
+          <span class="cnt num">2 fields</span></button>
+        <div class="coll open"><div>
+          <div class="notes">
+            <span class="caps">Replies</span><span>
+              <span style="display:block;border:var(--capsule-edge);
+                border-radius:var(--capsule-r-block);background:var(--surface);
+                padding:var(--space-base) var(--space-cosy)">Recruiter replied on
+                the 14th<span style="color:var(--accent)">|</span></span></span>
+            <span class="caps">Notes</span><span>Referred by Sam.</span>
+          </div>
+        </div></div>
+      </div>
+      <p class="note" style="margin-top:var(--space-base)">A cell being edited
+        cannot be collapsed out from under itself. The toggle is disabled while
+        the section holds the active editing element, with
+        <code>title="Finish editing first"</code>, so no caret and no
+        uncommitted value can be lost.</p>
+    </div>
+  </div>
 </section>
 
 <p class="note" style="margin-top:var(--space-vast);text-align:center">

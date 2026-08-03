@@ -1060,3 +1060,346 @@ above. I nearly reported a false failure.
 **99/99** UI · **26/26** reversibility · **10/10** inviolable · **12/12** Phase 4 ·
 **13/13** upgrade-path against a first-release schema · **0** CSP violations ·
 **0** page errors.
+
+---
+
+# Refinement round 2
+
+Seven changes. Sections R1–R7. `index.html` untouched; this is proposal +
+preview only.
+
+## R1 — Shadows: diagnosis, then fix
+
+### Root cause
+
+**Not the table.** `<tr>` renders `box-shadow` correctly and
+`border-collapse` is already `separate`. Both elements resolve to the *same*
+computed value and the first 8px of falloff are pixel-identical:
+
+| px below edge | 0 | 2 | 4 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|
+| funnel card | .7253 | .7644 | .8206 | .8510 | .8504 | .8586 |
+| application row | .7253 | .7721 | .8206 | .8510 | .8504 | **cut** |
+
+**Column alignment is not at risk. We keep the table.**
+
+Two causes, on different rows:
+
+- **A — interior rows.** `border-spacing: 0 8px` leaves 8px before the next
+  row's opaque cells. The shadow needs **59px** to reach page ground, so 51px
+  renders behind the next row. Measured across gaps 8/12/16/20/24: **visible
+  falloff == gap, exactly**, every time. The gap is the sole limiter. The cut
+  lands at luminance .8586 against a .9616 ground — a **0.103 step** — with the
+  next row's border (.692) immediately under it. That abutment is the "clipped,
+  not lifted" reading.
+- **B — the last row.** The table sits in
+  `<div class="hidden overflow-x-auto lg:block">`. Per spec, when one overflow
+  axis is not `visible` the other computes to `auto`, so `overflow-x-auto`
+  silently yields **`overflow-y: auto`**, which clips. Confirmed by fix:
+  `padding-bottom` took the last row from **8px → 32px** of visible falloff.
+- **C — every row's left and right edge.** *Found while building the preview,
+  after the paragraph above was already written.* The same overflow rule clips
+  **both** axes, not just the vertical one, and the table is exactly as wide as
+  the wrapper's content box — so every row's side shadow was being cut flush at
+  the table edge. Measured on a 30px strip level with a row's mid-height, page
+  ground at 0.9829:
+
+  | | falloff curve to the left of the row |
+  |---|---|
+  | reference card, unclipped | 0.983 … 0.940 0.925 0.912 **0.850** |
+  | row inside the wrapper, `padding-bottom` only | 0.983 0.983 0.983 … **flat, no falloff at all** |
+  | row inside the wrapper, padded on three sides | 0.983 … 0.940 0.928 **0.916** |
+
+  Depth went **0.0000 → 0.1330**, which is the reference card's depth to four
+  decimal places. `padding-bottom` alone would have shipped rows that still did
+  not match the cards, and the difference is invisible in a screenshot of a
+  single row — it only shows against the card, side by side.
+
+Ruled out: divider painting over (no such rule), row overlap (gap is positive,
+paint order is fine), shadow too small (it is too *large* for the room).
+
+### The token
+
+Already shared and already identical — nothing to unify. Verbatim, two layers:
+
+```css
+--shadow-rest: 0 2px 4px  oklch(26% .02 255 / .08),
+               0 10px 24px oklch(26% .02 255 / .10);
+```
+
+### The fix, and the decision I made
+
+| gap | falloff shown | residual step |
+|---|---|---|
+| 8px (today) | 56% | 0.1030 |
+| 18px `--space-room` | 77% | 0.0532 |
+| **28px `--space-loose`** | **~97%** | **~0.008** |
+
+**Chosen: 28px.** You asked for the rows to be *identical* to the cards, and
+18px does not deliver that — a 0.053 residual is still a visible termination.
+28px is the next value on the committed 1.5-ratio space scale (18 × 1.5 ≈ 28),
+so it needs no new token. It costs **+20px per row**, about **+16% total list
+height** on a 25-row pipeline — the price of the deeper elevation you chose last
+round, and defensible under §1.2, where refusing to fill the screen is itself
+the costly signal.
+
+Plus, for causes B and C, the scroll wrapper pads on three sides and is pulled
+back out horizontally so the table's layout width is unchanged:
+
+```css
+.tk-scroll{
+  overflow-x: auto;
+  padding: var(--space-base) var(--space-loose) var(--space-loose);
+  margin:  calc(var(--space-base) * -1) calc(var(--space-loose) * -1) 0;
+}
+```
+
+28px of horizontal pull-back is affordable because the table only renders at
+`lg`, where the shell already pays `lg:px-12` = 48px. The top needs only 8px:
+the shadow's upward extent is 2px (10px offset against a 24px blur), and the
+matching negative top margin keeps the table's position unchanged.
+
+**Expanded rows read as one card, not two.** Two stacked shadows 1px apart is
+the "shadow inside a shadow" failure C.6 already forbids. The mechanism is
+*not* "the row drops its shadow and the pair carries one" — a `<tr>` cannot
+cast a shadow around a sibling `<tr>`, and the 28px row gap sits between them.
+Instead the gap is **bridged at cell level**, which works because cell
+backgrounds paint above row-level shadows:
+
+```css
+tr.is-drawer td{ box-shadow: 0 calc(var(--space-loose) * -1) 0 var(--surface) }
+```
+
+Both rows keep `--shadow-rest`; the bridge covers the part of each that would
+otherwise render between them, so the pair meets page ground only on its
+outside. Two additional 1px copies, offset ∓1px in `--line`, carry the side
+hairlines across the bridge. Measured: the 28px between row and drawer reads a
+**flat 1.000** for all 28 rows of pixels — no gradient — with the hairline
+present at 0.850 on the outer edge.
+
+## R2 — Dropdowns: label vs value
+
+**Primary lever: contrast (§2.3, "contrast as a compositional tool").** Label
+at `--ink-3`, value at `--ink` — a measured **4.93 : 1 vs 15.45 : 1**, a 3.1×
+step. That is the same mechanism already carrying rank everywhere else in the
+app, so it adds no new vocabulary.
+
+**Supporting lever: case.** Label stays uppercase micro; value becomes sentence
+case. This does a second job — uppercase reads as machine-fixed chrome, sentence
+case as the thing you chose. One primary, one supporting; the separator rule,
+the weight change and the extra spacing are all declined as decoration.
+
+**Label contrast: 4.93 : 1** — unchanged from the committed floor. The
+hierarchy comes from raising the *value*, not from whispering the label.
+
+**Width stability.** The value gets `min-width` in `ch`, sized to the longest
+option for that control — Group by `8ch` ("Location"), Sort `14ch` ("Pipeline
+order"), Filter `9ch` ("Any score") — and is left-aligned within it. The trigger
+therefore never changes width when the value changes, so the toolbar cannot
+shift under the cursor. At mobile width the triggers wrap as a group; the
+`ch` minimums are small enough that none forces a horizontal scroll.
+
+## R3 — The funnel
+
+### R3a Threshold gating
+
+**Threshold: 20 rows that have reached Applied or beyond** (`status !== "to-apply"`,
+excluding deleted). Below it, no ratio is shown anywhere in the funnel.
+
+**Locked is a real state, not a disabled one (§3.3, empty states as
+onboarding).** Where each percentage would sit, the locked funnel shows
+progress — *"14 of 20 applications"* — with a thin progress track. The counts
+themselves stay, because they are honest at any n. The copy frames it as
+arriving, not as missing: *"Rates unlock at 20 applications — they are noise
+below that."* No greyed-out controls, no padlock, no "coming soon".
+
+**On acknowledging the unlock — I argue for the quietest possible marker.**
+A celebration would be unearned in the dossier's exact sense: §1.2's material
+honesty (Rams 6) says do not promise what you cannot keep, and crossing an
+arbitrary threshold is not an achievement. But silence is also wrong — the
+funnel would change shape with no explanation. So: the first render past the
+threshold shows one line, *"Reply rate unlocked — 20 applications tracked"*,
+which does not animate, does not block, and does not return. Recorded in
+`localStorage` (`tracker.unlockSeen`), which is a preference key, not data —
+**no schema change**.
+
+### R3b Interview → Offer ratio: deleted
+
+Count kept, percentage gone. Agreed and for the reason given: there is no volume
+at which it stabilises, so it displays precision the data does not have. §4.1's
+eraser test applied to a number rather than an effect.
+
+### R3c Reply rate is the primary metric
+
+Applied → Replied gets the visual weight: `--t-2` figure, primary ink, on its
+own line above the stage bars, with the denominator stated (*"9 of 41
+applications"*) so the ratio is never floating. Every other rate is `--t--1`
+secondary. §2.3 again — rank by contrast and size, not by decoration.
+
+### R3d Median time-to-reply — computable, no schema change
+
+**Confirmed against the data model.** `stage_history` already stores
+`{to, at}` per transition and `firstReached(row, stage)` returns a timestamp, so
+
+```
+median over rows of ( firstReached(r,"replied") − firstReached(r,"applied") )
+```
+
+is derivable from existing rows. **No new column, no migration.**
+
+Median rather than mean, because reply times are strongly right-skewed — one
+reply after 60 days would drag a mean into uselessness. Sample size is printed
+beside it, as the existing stage timings already do, and it is gated behind the
+same 20-application threshold. Rows without both timestamps simply do not
+contribute — the same rule the current means already follow.
+
+## R4 — Rotating carets
+
+**Current implementation is broken in two different ways**, which the audit
+found: the row and funnel carets are a static `▶` that never changes (the
+rotation rule was removed as subtraction S7), and the mobile card **swaps
+`▲`/`▼`** — two glyphs, exactly the swap you said must go.
+
+**Replacement: one inline SVG chevron, rotated.** A text glyph's ink is not
+centred in its em box, so `transform-origin: center` wobbles — this is the
+failure mode you flagged, and it is why the glyph goes. The SVG is drawn on a
+symmetric `viewBox` with the chevron centred, so the box centre *is* the visual
+centre and rotation is stable by construction.
+
+- Collapsed `rotate(0)` → expanded `rotate(90deg)`. Transform only.
+- **200ms in / 150ms out, `cubic-bezier(.22,1,.36,1)`** — taken from the
+  committed motion table's drawer row, not invented. Justified against the
+  table's own frequency rule: the detail drawer is ~5×/session and the funnel
+  ~3×, which puts both on the animate side of §3.1's high-frequency cutoff,
+  unlike the status pill at ~40× which stays instant.
+- `prefers-reduced-motion`: direction still changes, instantly — the existing
+  global rule collapses the duration and the `rotate` still applies.
+- One rule, both places.
+
+## R5 — Header: one primary action plus an overflow menu
+
+Header becomes exactly two elements.
+
+**Primary — "Add application".** Solid `--accent` fill, white label. The only
+filled control on the screen, which is what makes it unambiguous (§1.2:
+restraint is what gives the one emphasis its force).
+
+**Overflow — a single `⋯` trigger**, `aria-label="More actions"`, no content
+names on it. Contains Dark/Light, Share/Export, then a divider, then Sign out.
+
+- **Sign out is separated** by a rule and takes `--danger-ink`, because it is
+  destructive relative to its neighbours.
+- **Keyboard:** Enter/Space open, ↑↓ move, Home/End jump, Escape closes and
+  returns focus to the trigger, Tab closes. `role="menu"` / `menuitem`.
+- **Outside click and Escape both close.**
+- **Asymmetric timing (§3.1, Linear):** opens **instantly, 0ms** — it is
+  summoned deliberately and an entrance reads as lag — and fades out over
+  **150ms**, matching `--d-out`.
+- **The theme item shows current state from inside**: "Dark mode ✓" / "Light
+  mode ✓" with `aria-checked`, since the toggle is no longer visible at a glance.
+- At mobile width the trigger is the same 44px target and the menu is
+  right-anchored so it cannot overflow the viewport.
+
+## R6 — Mobile: collapsible replies / next steps / notes
+
+**Scope: the mobile layout branch only.** The desktop table renders
+`DesktopRow`, which has no such section, so there is nothing to diverge — the
+two cannot disagree because the collapsible does not exist on the desktop path.
+That is the honest scoping answer: it is a layout branch, not a media query
+applied to shared markup.
+
+- **Collapses with content in it.** That is the requirement — a card with three
+  filled paragraphs is the one most worth shrinking — so collapse is never
+  disabled on the basis of having content.
+- **Collapsed-with-content shows a count and a one-line preview**:
+  *"3 fields · Automated acknowledgement received…"*. A dot says only
+  "something"; a count says how much; the preview says what. On a phone the
+  decision being made is "is it worth opening", and only the preview answers
+  that. Truncated to one line with `text-overflow: ellipsis`.
+- **Persists per row for the session.** Kept in a `Map` held by `Tracker` and
+  keyed by row id, so scrolling a long list cannot silently reset it. Not
+  localStorage — it is view state, not a preference, and should not outlive the
+  session.
+- **Same caret as R4**, same duration and easing.
+- **Height animation:** `grid-template-rows: 0fr → 1fr`, the technique already
+  declared as **Departure D4**. It is not GPU-composited, and the honest reason
+  it is acceptable here is scope: one small subtree, user-initiated, ≤200ms, at
+  most a handful on screen at once. The alternative — measuring and animating a
+  pixel height — thrashes layout harder and needs JS on every resize.
+- **A cell being edited cannot be collapsed mid-edit.** The toggle is disabled
+  while the section contains the active editing element, with
+  `title="Finish editing first"`, so the user cannot lose a caret or an
+  uncommitted value.
+
+## R7 — Strip the instructional text
+
+Removed: the keyboard-hints footer and the descriptive lines beneath the
+heading. **Kept: the LIVE / OFFLINE indicator** — state, not instruction, and
+the one thing on screen that cannot be inferred.
+
+### Affordance audit — every control that text was carrying
+
+| Control | Self-evident? | Action |
+|---|---|---|
+| Status pill | Partly — it looks pressable but not that it *advances* | `title="Advance to Replied"`, naming the next stage; `aria-label` already dynamic |
+| Editable cell | Yes — hover raises it and the caret appears | none |
+| Checklist tick | Yes — native checkbox | none |
+| Score cell + caret | Yes, once the caret rotates (R4) | `aria-expanded` already present |
+| Chase count | **No** — "1 awaiting chase" does not say what a chase is | `title="Live applications untouched for 7+ days"` |
+| Sync chip | **No** — LIVE is ambiguous alone | `title="Changes sync to your other devices"` |
+| Stage rail chips | Yes — pressed state is visible | none |
+| Dropdowns | Yes, more so after R2 | none |
+| Overflow menu | Yes — `⋯` is conventional | `aria-label="More actions"` |
+| **Keyboard grid** (arrows / Enter / Shift+Enter / ⌘Enter / Esc) | **No — genuinely undiscoverable** | see below |
+
+**One genuine discoverability loss, named rather than hidden:** the keyboard
+grid. Nothing on screen suggests arrow keys move between cells or that
+Shift+Enter advances a stage. Per §3.3 the right home for first-run teaching is
+the empty state, not persistent chrome — so **the keyboard model moves into the
+empty state**, which already renders the real table geometry and is exactly
+where someone is looking when they have not yet learned the tool. It is shown
+once, to a new user, in the place they are already reading, and disappears the
+moment they have a row. §1.1's expertise-reversal effect is the argument:
+scaffolding that helps a novice becomes noise for the expert, and permanent
+chrome makes everyone pay the novice's price forever.
+
+## Preview — what it shows, and what was measured in it
+
+`design/preview.html` now carries every state the brief asked for. Nothing in
+`tracker-public/index.html` has been touched.
+
+| Brief | Where |
+|---|---|
+| Funnel locked and unlocked | R3, side by side, plus the unlock marker |
+| Dropdowns with long and short values | R2, both rows, plus the rejected "before" |
+| Full row list — first, last, hovered, selected, multi-line | R1, one table at the chosen gap |
+| Both caret states, on rows and on the funnel | R4 |
+| Header with the menu open and closed | R5 |
+| Mobile card collapsed-empty, collapsed-with-content, expanded | R6, plus expanded-mid-edit |
+| Header after the instructional text is removed | R5, against the "before" |
+
+Hover and keyboard selection cannot occur in a static file, so those two rows
+have the state painted on by classes that exist only in the preview and are
+labelled as such in the first column.
+
+### Measured, not asserted
+
+Every number below was read back from the rendered preview.
+
+| Check | Result |
+|---|---|
+| Row gap renders as specified | 8 / 18 / 28px; visible falloff 9 / 19 / 29px — **falloff == gap**, reproduced independently of the diagnosis harness |
+| Row side shadow vs reference card | depth **0.1330 both** — identical curve |
+| Bridge between row and drawer | flat 1.000 across all 28px; hairline present at 0.850 |
+| Dropdown trigger width, short vs long value | Group **184.39px both**, Sort **204.19px both**, Filter **170.95px both** — zero shift |
+| Dropdown label vs value contrast | **4.93 : 1** vs **15.45 : 1** light; **5.26** vs **14.36** dark |
+| Caret rotation origin | `6px 6px` on a 12×12 box — exactly the centre, so no wobble |
+| Collapsible heights | closed **0px**, open **161.1 / 89.7px** — `0fr → 1fr` resolves |
+| Container query on the card layout | all 7 record specimens render; the query fires |
+| Contrast, 12 new surfaces × 2 themes | **24 / 24 pass**, lowest 4.93 : 1 against a 4.5 floor |
+| Page overflow | none at 1440 / 1024 / 768 |
+| Console / page errors | none |
+
+Two things the preview does **not** claim to prove: the 200ms/150ms caret
+timing (static file, no interaction) and the menu's keyboard model, both of
+which are specified in R4 and R5 and belong to implementation.
