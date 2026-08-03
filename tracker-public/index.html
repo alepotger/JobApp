@@ -163,7 +163,7 @@ textarea{resize:vertical}
 .tk-prose{max-width:62ch}
 .tk-secondary{color:var(--ink-2)} .tk-tertiary{color:var(--ink-3)}
 /* tabular figures wherever data appears — §2.2 */
-.tk-num,.tk-data,.tk-stat,.tk-table,.tk-figure,.tk-interval{
+.tk-num,.tk-data,.tk-stat,.tk-grid,.tk-figure,.tk-interval{
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1,"zero" 1}
 .tk-data{font-family:var(--font-mono)}
 .tk-figure{font-size:var(--t-2);font-weight:var(--w-bold);line-height:1.1}
@@ -224,25 +224,57 @@ textarea{resize:vertical}
 .tk-toast{background:var(--raised);border:var(--capsule-edge);
   border-radius:var(--capsule-r);box-shadow:var(--capsule-lift);white-space:nowrap}
 
-/* ── table: rows are cards; elevation by shadow at the user's direction ── */
-.tk-table{border-collapse:separate;border-spacing:0 var(--space-base);width:100%}
+/* ── rows are cards, and the card is ONE element ─────────────────────────
+   background, border-radius and box-shadow used to be split: radius and
+   background on each <td>, shadow on the <tr>. A <tr> has no radius of its
+   own, so the cells drew a curve while the row cast a square, and a square
+   corner in --surface protruded past the curve at all four corners of every
+   row. No arrangement of table elements puts all three on one box — each was
+   built and measured:
+     <td>    clips its background to the radius, but a per-cell shadow falls
+             on the neighbouring cell and seams the columns; clipping each
+             shadow to its own column leaves a hard vertical step instead.
+     <tr>    applies the radius to its shadow but paints its background square.
+     <tbody> the same.
+   In the separated-borders model a radius on a row or row group shapes what
+   it CASTS, not what it FILLS. So the rows are grid rows.
+
+   Column alignment — the only thing the table was buying us — is preserved by
+   subgrid: every row re-uses the parent's tracks, so they are sized once,
+   across all rows at once, exactly as a table does. ── */
+.tk-grid{display:grid;align-items:start;row-gap:var(--space-loose);
+  min-width:56rem;
+  grid-template-columns:minmax(0,13fr) minmax(0,13fr) minmax(0,8fr) 8rem
+                        minmax(0,14fr) minmax(0,14fr) minmax(0,16fr) 5rem}
+.tk-grid>*{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
+.tk-grid--fluid{min-width:0}
+.tk-span{grid-column:1/-1}
 .tk-th{text-align:left;font-size:var(--t--2);text-transform:uppercase;
   letter-spacing:var(--tr-caps);font-weight:var(--w-semibold);color:var(--ink-3);
   padding:0 var(--space-cosy) var(--space-tight)}
-/* The shadow goes on the row, never on each cell: horizontal border-spacing is
-   0, so per-cell shadows cast onto their neighbours and seam the columns. */
-.tk-rowcard{box-shadow:var(--shadow-rest)}
-.tk-rowcard:hover{box-shadow:var(--shadow-raise)}
-.tk-rowcard>td{background:var(--surface);border-top:1px solid var(--line);
-  border-bottom:1px solid var(--line);padding:var(--space-cosy) var(--space-base);
-  vertical-align:top;font-size:var(--t--1);line-height:var(--lh-cell)}
-.tk-rowcard>td:first-child{border-left:1px solid var(--line);
-  border-radius:var(--r-3) 0 0 var(--r-3);padding-left:calc(var(--space-cosy) + 1px)}
-.tk-rowcard>td:last-child{border-right:1px solid var(--line);
-  border-radius:0 var(--r-3) var(--r-3) 0;padding-right:var(--space-cosy)}
-.tk-rowcard:hover>td{background:var(--hover)}
-.tk-detail>td{background:var(--surface);border:1px solid var(--line);
-  border-top:0;border-radius:0 0 var(--r-3) var(--r-3)}
+.tk-rowcard{background:var(--surface);border-radius:var(--r-3);
+  box-shadow:var(--shadow-rest),inset 0 0 0 1px var(--line)}
+.tk-rowcard:hover{background:var(--hover);
+  box-shadow:var(--shadow-raise),inset 0 0 0 1px var(--line)}
+/* The hairline is an inset ring, not four cell borders: a ring follows a
+   radius and four borders never did. */
+.tk-rowcard>[role="row"]{grid-column:1/-1;display:grid;
+  grid-template-columns:subgrid}
+.tk-rowcard [role="cell"]{padding:var(--space-cosy) var(--space-base);
+  font-size:var(--t--1);line-height:var(--lh-cell);min-width:0}
+.tk-rowcard [role="cell"]:first-child{padding-left:var(--space-cosy)}
+.tk-rowcard [role="cell"]:last-child{padding-right:var(--space-cosy)}
+/* The drawer is a block INSIDE the card, so an expanded row and its drawer
+   are one box by construction — one background, one radius, one ring, one
+   shadow, and no junction to conceal. */
+.tk-detail{grid-column:1/-1;padding:0 var(--space-cosy) var(--space-cosy)}
+/* One non-visible overflow axis makes the other compute to auto, so the
+   scroller was clipping the shadow on every side — the last row kept 8px of
+   falloff and the sides kept none at all. Pad for the shadow, then pull the
+   box back out so the grid's layout width is unchanged. 28px is affordable
+   because this only renders at lg, where the shell already pays 48px. */
+.tk-scroll{padding:var(--space-base) var(--space-loose) var(--space-loose);
+  margin:calc(var(--space-base)*-1) calc(var(--space-loose)*-1) 0}
 .tk-cell{border-radius:var(--r-2);color:inherit}
 .tk-cell:hover{background:var(--sunken)}
 .tk-edit{background:var(--surface);border:var(--capsule-edge);
@@ -2732,11 +2764,11 @@ function GroupHeading({ section, columns }) {
   );
   if (!columns) return <div className="pb-1 pt-2">{text}</div>;
   return (
-    <tr>
-      <td colSpan={columns} className="px-1 pb-0 pt-2">
+    <div role="row">
+      <div className="tk-span px-1 pb-0 pt-2" role="cell" aria-colspan={columns}>
         {text}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -2888,8 +2920,8 @@ const DesktopRow = React.memo(function DesktopRow({ row, rowIndex, open, onToggl
   });
 
   return (
-    <tr className="tk-rowcard align-top">
-      <td className="w-52 px-2 py-3">
+    <div role="row">
+      <div role="cell">
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0 flex-1">
             {isExample(row) && (
@@ -2913,53 +2945,53 @@ const DesktopRow = React.memo(function DesktopRow({ row, rowIndex, open, onToggl
             ×
           </button>
         </div>
-      </td>
-      <td className="w-52 px-2 py-3">
+      </div>
+      <div role="cell">
         <EditableCell
           value={row.role}
           placeholder="Role"
           cell={cell(1)}
           onChange={(v) => onEdit(row.id, "role", v)}
         />
-      </td>
-      <td className="w-32 px-2 py-3">
+      </div>
+      <div role="cell">
         <EditableCell
           value={row.location}
           placeholder="City"
           cell={cell(2)}
           onChange={(v) => onEdit(row.id, "location", v)}
         />
-      </td>
-      <td className="px-3 py-3">
+      </div>
+      <div role="cell">
         <StatusCell row={row} onAdvance={onAdvance} cell={cell(3)} />
-      </td>
-      <td className="w-56 px-2 py-3">
+      </div>
+      <div role="cell">
         <EditableCell
           value={row.replies}
           placeholder="Log the reply"
           cell={cell(4)}
           onChange={(v) => onEdit(row.id, "replies", v)}
         />
-      </td>
-      <td className="w-56 px-2 py-3">
+      </div>
+      <div role="cell">
         <StepsCell
           value={row.nextSteps}
           cell={cell(5)}
           onChange={(v) => onEdit(row.id, "nextSteps", v)}
         />
-      </td>
-      <td className="w-64 px-2 py-3">
+      </div>
+      <div role="cell">
         <EditableCell
           value={row.notes}
           placeholder="Angle, contact, ATS"
           cell={cell(6)}
           onChange={(v) => onEdit(row.id, "notes", v)}
         />
-      </td>
-      <td className="w-20 px-2 py-3">
+      </div>
+      <div role="cell">
         <ScoreCell row={row} open={open} onToggle={onToggle} cell={cell(7)} />
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 });
 
@@ -3592,12 +3624,12 @@ function Tracker({ session }) {
       <Shell>
         {slowLoad ? (
           <div className="pt-10">
-            <table className="tk-table">
-              <tbody>
-                {[0, 1, 2, 3, 4].map((r) => (
-                  <tr key={r} className="tk-rowcard">
+            <div className="tk-grid tk-grid--fluid" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((r) => (
+                <div key={r} className="tk-rowcard" role="presentation">
+                  <div role="row">
                     {[70, 80, 50, 64, 90, 75, 60, 32].map((w, i) => (
-                      <td key={i}>
+                      <div key={i} role="cell">
                         <span
                           className="tk-skel"
                           style={{
@@ -3606,12 +3638,12 @@ function Tracker({ session }) {
                             borderRadius: i === 3 ? "999px" : undefined,
                           }}
                         />
-                      </td>
+                      </div>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </Shell>
@@ -3760,48 +3792,51 @@ function Tracker({ session }) {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden overflow-x-auto lg:block" ref={grid} onKeyDown={onGridKey}>
-        <table className="tk-table min-w-full">
-          <thead>
-            <tr>
-              <th className={TH}>Company</th>
-              <th className={TH}>Role</th>
-              <th className={TH}>Location</th>
-              <th className={`${TH} w-32`}>Status</th>
-              <th className={TH}>Replies</th>
-              <th className={TH}>Next steps</th>
-              <th className={TH}>Notes</th>
-              <th className={`${TH} w-20`}>Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.map((section) => (
-              <React.Fragment key={section.key}>
-                {groupBy && <GroupHeading section={section} columns={8} />}
-                {section.items.map((row) => (
-                  <React.Fragment key={row.id}>
-                    <DesktopRow
-                      row={row}
-                      rowIndex={rowIndex.get(row.id)}
-                      open={expanded === row.id}
-                      onToggle={toggleExpanded}
-                      onEdit={editField}
-                      onDelete={removeRow}
-                      onAdvance={onAdvance}
-                    />
-                    {expanded === row.id && (
-                      <tr className="tk-detail">
-                        <td colSpan={8} className="p-4">
-                          <DetailPanel row={row} onEdit={editField} onClearScores={clearScores} />
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+      <div
+        className="tk-scroll hidden overflow-x-auto lg:block"
+        ref={grid}
+        onKeyDown={onGridKey}
+      >
+        <div className="tk-grid" role="table" aria-label="Applications" aria-colcount={8}>
+          <div role="row">
+            <div className={TH} role="columnheader">Company</div>
+            <div className={TH} role="columnheader">Role</div>
+            <div className={TH} role="columnheader">Location</div>
+            <div className={TH} role="columnheader">Status</div>
+            <div className={TH} role="columnheader">Replies</div>
+            <div className={TH} role="columnheader">Next steps</div>
+            <div className={TH} role="columnheader">Notes</div>
+            <div className={TH} role="columnheader">Score</div>
+          </div>
+          {sections.map((section) => (
+            <React.Fragment key={section.key}>
+              {groupBy && <GroupHeading section={section} columns={8} />}
+              {section.items.map((row) => (
+                /* The card wraps the row AND its drawer so the pair is one
+                   box. It is presentational so the rows underneath stay the
+                   table's direct children, which is what the roles require. */
+                <div className="tk-rowcard" role="presentation" key={row.id}>
+                  <DesktopRow
+                    row={row}
+                    rowIndex={rowIndex.get(row.id)}
+                    open={expanded === row.id}
+                    onToggle={toggleExpanded}
+                    onEdit={editField}
+                    onDelete={removeRow}
+                    onAdvance={onAdvance}
+                  />
+                  {expanded === row.id && (
+                    <div role="row">
+                      <div className="tk-detail" role="cell" aria-colspan={8}>
+                        <DetailPanel row={row} onEdit={editField} onClearScores={clearScores} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
 
       {/* Mobile cards */}
@@ -3852,13 +3887,13 @@ function Tracker({ session }) {
                   + Add application
                 </button>
               </div>
-              <table className="tk-table mt-6 hidden lg:block" aria-hidden="true">
-                <tbody>
-                  <tr className="tk-rowcard" style={{ opacity: 0.7 }}>
+              <div className="tk-grid tk-grid--fluid mt-6 hidden lg:block" aria-hidden="true">
+                <div className="tk-rowcard" role="presentation" style={{ opacity: 0.7 }}>
+                  <div role="row">
                     {["Company", "Role", "City"].map((t) => (
-                      <td key={t} className="text-left tk-tertiary">{t}</td>
+                      <div key={t} role="cell" className="text-left tk-tertiary">{t}</div>
                     ))}
-                    <td className="text-left">
+                    <div role="cell" className="text-left">
                       <span
                         className="tk-pill tk-pill-label"
                         style={{
@@ -3869,14 +3904,14 @@ function Tracker({ session }) {
                       >
                         To apply
                       </span>
-                    </td>
-                    <td className="text-left tk-tertiary">Log the reply</td>
-                    <td className="text-left tk-tertiary">Set the next action</td>
-                    <td className="text-left tk-tertiary">Angle, contact</td>
-                    <td className="text-left tk-tertiary tk-num">–</td>
-                  </tr>
-                </tbody>
-              </table>
+                    </div>
+                    <div role="cell" className="text-left tk-tertiary">Log the reply</div>
+                    <div role="cell" className="text-left tk-tertiary">Set the next action</div>
+                    <div role="cell" className="text-left tk-tertiary">Angle, contact</div>
+                    <div role="cell" className="text-left tk-tertiary tk-num">–</div>
+                  </div>
+                </div>
+              </div>
             </>
           ) : (
             <>

@@ -1223,23 +1223,63 @@ zero misaligned**, header and multi-line rows included.
 The hairline becomes an inset ring rather than four cell borders, because a ring
 follows a radius and four borders never did.
 
-**What else this affects**, stated plainly:
+**What else this affects.** `index.html` is now converted too; this section
+records what that took.
 
-- **`index.html` is not yet changed.** This is preview and proposal only. The
-  same conversion has to be made there and is a larger job than a CSS edit.
-- **Semantics.** The table's implicit roles are gone and must be replaced with
-  explicit `role="table" / "row" / "columnheader" / "cell"`. Not yet done in the
-  preview; it must be done before this ships.
-- **Keyboard grid navigation** in `index.html` walks `td`/`tr` via a ref. It
-  will need to walk the new elements. The key model itself does not change.
-- **Browser support.** Subgrid is Chrome 117+, Safari 16+, Firefox 71+. Fine for
-  current browsers; there is no fallback, and on an older engine the columns
-  would not align.
-- **The drawer** stops being a `colspan` row and becomes a block inside the row
-  with `grid-column: 1/-1` — which is what removes the pair problem entirely.
-- **Print styles** that assume table semantics need re-checking.
+- **Semantics** are explicit: `role="table"` with `aria-colcount`,
+  `role="columnheader"` on the eight headings, `role="row"` per row and
+  `role="cell"` per cell. The card that wraps a row and its drawer is
+  `role="presentation"`, so the rows stay the table's owned children while the
+  card owns the paint. Verified: 0 orphaned rows, 8 cells on every row.
+- **Keyboard navigation needed no change at all.** I said earlier it walks
+  `td`/`tr`; it does not. `onGridKey` resolves cells through
+  `data-r`/`data-c` attributes and `grid.current.querySelector`, which is
+  structure-agnostic. Verified working after the conversion: arrows move
+  0,0 → 0,1 → 1,1, and a cell open for editing still yields the arrows to the
+  caret.
+- **Column proportions barely move.** Old vs new cell widths at 1440px:
+  `190 186 125 120 207 195 212 76` → `184 184 113 128 198 198 226 80`.
+  Identical total (1311px); largest single change 14px.
+- **Browser support.** Subgrid is Chrome 117+, Safari 16+, Firefox 71+. There is
+  no fallback; on an older engine the columns would not align.
+- **The drawer** stops being a `colspan` row and becomes a block inside the
+  card, which is what removes the pair problem entirely.
+- **Print** still works: `break-inside: avoid` moved to the row card, which is a
+  block element, so it applies more reliably than it did on a `<tr>`.
+- **Converted alongside the table:** the loading skeleton and the empty-state
+  specimen, both of which were tables. They use the same grid with
+  `min-width: 0` so they do not force a scroller.
+- **Untouched:** the mobile card layout, which never used the table.
 
-### Verified
+### Verified in `index.html`
+
+Driven against the real app with a stubbed Supabase session — 15/15:
+
+| | |
+|---|---|
+| No `<table>` elements remain | 0 |
+| `role="table"`, 8 `columnheader`s, `aria-colcount=8` | pass |
+| Every row owned by the table or a presentational card | 0 orphans |
+| Every data row has exactly 8 cells | `[8,8,8,8,8]` |
+| Subgrid alignment | 6 rows, **0 misaligned** — and 0 again under group-by |
+| Arrow-key navigation | `c=0 → c=1 → r=1,c=1` |
+| No square corner, first and last row, light **and** dark | 4/4 corners clean each |
+| Expanded row and drawer are one card | one box, one shadow, radius 10px |
+| Scroll wrapper pads and pulls back | `28px / 28px / -28px` |
+| Page errors, load and after interaction | none |
+
+Inviolable behaviours: **1–8 pass** via `design/verify-inviolable.js` (selectors
+updated for the new markup). **9 and 10 cannot run in this sandbox** — they need
+a signed-in session, and they stall identically on the *pre-conversion* build,
+so it is an environment limit rather than a regression. Both were therefore
+exercised directly against a stubbed session on both builds and compared:
+*add clears the stage filter* (filtered 1 → 6 after add) and *soft delete
+restores to position* — **identical outcomes old and new**.
+
+No horizontal overflow at 1024 / 1280 / 1440 / 1920, and the grid stays hidden
+at 390 where the card layout takes over.
+
+### Verified in the preview
 
 At 4× on all four corners of the first row, two adjacent rows, the hovered row,
 the selected row, a multi-line row, the last row, the expanded pair, and the

@@ -8,7 +8,7 @@ const SQL = fs.readFileSync("/home/user/Officient/tracker-public/supabase/setup.
 const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL  ")+n+(d?"\n         "+d:""));};
 
 (async () => {
-  const b = await chromium.launch({ executablePath:"/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args:["--no-sandbox"] });
+  const b = await chromium.launch({ executablePath:"/opt/pw-browsers/chromium", args:["--no-sandbox"] });
 
   /* 1 — user_id on every insert AND defaulted in the database */
   const inserts=[...SRC.matchAll(/\.from\("applications"\)\s*\n?\s*\.insert\(/g)]
@@ -89,14 +89,14 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
   await r.addInitScript(()=>localStorage.setItem("tracker.config",
     JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
   await r.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
-  await r.waitForSelector("table");
+  await r.waitForSelector(".tk-grid");
   await r.getByRole("button",{name:/^Offer 1$/}).click().catch(async()=>{
     await r.evaluate(()=>{[...document.querySelectorAll("button")].find(b=>/Offer/.test(b.textContent)).click();});});
   await r.waitForTimeout(250);
-  const filtered=await r.locator("tr.tk-rowcard").count();
+  const filtered=await r.locator(".tk-grid .tk-rowcard").count();
   await r.getByRole("button",{name:/Add application/}).click();
   await r.waitForTimeout(500);
-  const after=await r.locator("tr.tk-rowcard").count();
+  const after=await r.locator(".tk-grid .tk-rowcard").count();
   t("9. adding a row clears any active stage filter, so the new row is visible",
     filtered===1 && after>filtered, `filtered to ${filtered}, after add ${after} rows visible`);
   await ctx2.close();
@@ -106,16 +106,16 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
   await d.addInitScript(()=>localStorage.setItem("tracker.config",
     JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
   await d.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
-  await d.waitForSelector("table");
+  await d.waitForSelector(".tk-grid");
   const order0=await d.evaluate(()=>[...document.querySelectorAll('[data-c="0"]')].map(e=>e.textContent.trim()));
-  await d.evaluate(()=>{document.querySelectorAll("tr.tk-rowcard")[1]
+  await d.evaluate(()=>{document.querySelectorAll(".tk-grid .tk-rowcard")[1]
     .querySelector('button[aria-label^="Delete"]').click();});
   await d.waitForTimeout(300);
   await d.evaluate(()=>{[...document.querySelectorAll("button")].find(b=>b.textContent.trim()==="Restore").click();});
   await d.waitForTimeout(400);
   const order1=await d.evaluate(()=>[...document.querySelectorAll('[data-c="0"]')].map(e=>e.textContent.trim()));
   let confirmed=false; d.on("dialog",async dl=>{confirmed=true;await dl.dismiss();});
-  await d.evaluate(()=>{document.querySelectorAll("tr.tk-rowcard")[1]
+  await d.evaluate(()=>{document.querySelectorAll(".tk-grid .tk-rowcard")[1]
     .querySelector('button[aria-label^="Delete"]').click();});
   await d.waitForTimeout(200);
   await d.evaluate(()=>{const b=[...document.querySelectorAll("button")].find(x=>/Delete for good/.test(x.textContent));if(b)b.click();});
