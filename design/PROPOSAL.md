@@ -1517,3 +1517,178 @@ Every number below was read back from the rendered preview.
 Two things the preview does **not** claim to prove: the 200ms/150ms caret
 timing (static file, no interaction) and the menu's keyboard model, both of
 which are specified in R4 and R5 and belong to implementation.
+
+# Refinement round 3 — shipped in `index.html`
+
+Round 2 (R1–R7) was proposal and preview only. This round implements the six
+outstanding items in the live page and re-verifies everything.
+
+## 0. The invariant, restated and held
+
+**One element owns `background`, `border-radius` and `box-shadow`** — the
+`.tk-rowcard` on desktop, the `.tk-card` on mobile — with the hairline as an
+`inset` ring on that same element rather than borders on children. No ancestor
+of a card may clip. Nothing in this round required breaking it; the collapsible
+lives *inside* the mobile card, and the header restructure touches no wrapper
+that a card sits in.
+
+## 1. Dropdowns — label versus value
+
+**Primary lever: contrast (§2.3, contrast as a compositional tool).** Label
+`--ink-3`, value `--ink`. **Measured 4.93 : 1 for the label** on `--surface`,
+which is the floor committed in round 2 and not a whisper below it — the
+hierarchy comes from raising the value to 15.45 : 1, not from dimming the label.
+
+**Supporting lever: case.** Label stays uppercase micro, value becomes sentence
+case: uppercase reads as machine-fixed chrome, sentence case as the thing you
+chose. Weight, separator and extra spacing are all declined — three more levers
+would be decoration, not hierarchy.
+
+**Width stability.** The value reserves `max(option.length) + "ch"`, *derived
+from that control's own items* rather than hardcoded, so it cannot drift when an
+option is added. Verified by changing every dropdown's value and re-measuring:
+`Group by 162.84 → 162.84`, `Sort 202.89 → 202.89`, `Filter 148.2 → 148.2`.
+Zero shift. The chevron is untouched.
+
+## 2. Rotating carets
+
+The row and funnel carets were a **static `▶` that never changed** — the app had
+no rotation rule at all. Replaced by one `<Caret>` component used in all three
+places (row, funnel, mobile disclosure).
+
+- **One element rotating, not two glyphs.** An inline SVG, because a text
+  glyph's ink is not centred in its em box and wobbles under rotation. This
+  path's bounding box is centred on (6,6). **Measured `transform-origin:
+  6px 6px` on a 12×12 box** — exactly the centre.
+- **Transform only**; measured `transition-property: transform`.
+- **200ms in / 150ms out**, which are the committed `--d-in` / `--d-out`, not
+  new numbers. Justified against the motion table's own frequency rule:
+  disclosure is low-frequency (drawer ~5×/session, funnel ~3×), unlike the
+  status pill at ~40×/session which stays instant.
+- `prefers-reduced-motion`: the existing global rule collapses the duration, and
+  the rotation still applies, so **direction still changes, instantly**.
+- Zero `▶` glyphs remain anywhere in the document.
+
+## 3. Header — one primary action plus an overflow
+
+Header is **exactly two elements** (measured: 2 children). "Add application"
+takes a solid `--accent` fill and is the only filled control on screen — §1.2,
+restraint is what gives the one emphasis its force. Everything else moves behind
+a single `⋯`, `aria-label="More actions"`, which does **not** name its contents.
+
+- **Sign out separated** by a rule and coloured `--danger-ink`.
+- **Theme states current mode from inside** as a `menuitemradio` with
+  `aria-checked`, since the toggle is no longer visible at a glance.
+- **Asymmetric timing (§3.1):** opens **instantly** — it is summoned
+  deliberately and an entrance on a summoned surface reads as lag — and fades
+  out over `--d-out`.
+- Keyboard verified end to end: arrows move into the menu (`activeElement` is a
+  `menuitem`), **Escape closes and returns focus to the trigger**, Tab closes,
+  outside click closes.
+- `ThemeToggle` is deleted rather than left orphaned.
+
+## 4. Mobile collapsible
+
+**Scoped as a layout branch, not a media query.** `lg:hidden` renders
+`MobileCard`; the desktop path renders `DesktopRow`, which has no such section.
+The two cannot diverge because the collapsible does not exist on the desktop
+path at all.
+
+- **Collapses with content in it** — measured 156px open → 0px closed on a card
+  with a filled field. Collapse is never disabled for having content.
+- **Collapsed-with-content shows a count and a one-line preview** —
+  *"1 field · Recruiter replied on the 14th…"*. A dot says only "something"; a
+  count says how much; the preview says what, and on a phone the decision is
+  "is this worth opening", which only the preview answers.
+- **Persists per row for the session** in a `Map` held by `Tracker` and keyed by
+  row id — verified still collapsed after scrolling the list and back. Not
+  `localStorage`: view state, not a preference.
+- **Height animates `grid-template-rows: 0fr → 1fr`** via the existing
+  `.tk-collapse`, already declared as Departure D4. Not GPU-composited; the
+  honest reason it is acceptable is scope — one small subtree, user-initiated,
+  ≤200ms. Measuring a pixel height thrashes layout harder and needs JS on resize.
+- **Cannot be collapsed mid-edit** — the toggle disables while the section holds
+  a focused textarea, with `title="Finish editing first"`. Verified `disabled=true`.
+
+## 5. The funnel
+
+**5a. Threshold gating.** 20 rows that have **reached Applied**; rows still at
+To apply do not count. Below it, **no ratio appears anywhere** — verified no `%`
+in the document and no KPI element, while stage counts still render. In place of
+the percentage, a progress track and *"14 of 20 applications"*. Locked is a real
+state with its own content — no greyed-out controls, no padlock, no "coming
+soon" (§3.3).
+
+**On acknowledging the unlock, I argue for the quietest possible marker.** A
+celebration would be unearned in the dossier's exact sense — §1.2 material
+honesty, Rams 6: do not promise what you cannot keep, and crossing an arbitrary
+threshold is not an achievement. But silence is also wrong, because the panel
+changes shape with no explanation. So: one line, once, on the first render past
+the threshold, which does not animate, does not block and does not return.
+Recorded in `localStorage` under `tracker.unlockSeen` — a preference key, **not
+a schema change**.
+
+**5b. Interview → Offer ratio.** There was no percentage to delete: `step.share`
+was computed and **never rendered**. Saying "removed" would have been false, so
+what actually happened is that the dead computation was erased and the count
+stays. The stated reasoning holds either way and is now the documented position.
+
+**5c. Reply rate is primary.** `--t-2` figure, primary ink, above the stage bars,
+with the denominator stated (*"9 of 26 applications"*) so the ratio never floats.
+
+**5d. Median time-to-reply — added, no schema change.** `stage_history` and
+`firstReached()` already exist, so the median of
+`firstReached(r,"replied") − firstReached(r,"applied")` is computable from
+current rows. Median rather than mean because reply times are strongly
+right-skewed. Sample size printed beside it; gated behind the same threshold.
+
+## 6. Instructional text stripped
+
+Removed: the paragraph explaining stage advancement and chase, and the whole
+keyboard-hints footer. **Kept the LIVE / OFFLINE chip** — state, not
+instruction.
+
+| Control | Self-evident alone? | Action taken |
+|---|---|---|
+| Status pill | Looked pressable, never said what pressing *did* | `title="Advance to <next stage>"`, following `advance()` rather than a hardcoded list |
+| Chase count | **No** — "awaiting chase" named a rule only the paragraph explained | `title` carries the 7-day rule and the reset-on-edit behaviour |
+| Sync chip | **No** — "Live" alone is ambiguous | `title` per state, naming sync explicitly |
+| Editable cell | Yes — hover raises it, caret appears | none |
+| Checklist tick | Yes — native checkbox | none |
+| Score cell | Yes, now that the caret rotates | none |
+| Overflow menu | Yes — `⋯` is conventional | `aria-label="More actions"` |
+| Dropdowns | Yes, more so after item 1 | none |
+| **Keyboard model** | **No — genuinely undiscoverable** | moved into the empty state |
+
+**On the Share/Export collision the brief flags:** it loses its explanatory text
+and moves into a menu on the same day, so it is the most exposed control. Its
+`title` — *"Opens your browser's print dialogue — choose Save as PDF"* — moves
+with it onto the menu item, so the one thing that was genuinely non-obvious
+about it (that "Share/Export" means print-to-PDF) survives both changes.
+
+**The one genuine discoverability loss, named rather than hidden:** the keyboard
+model. Nothing on screen suggests arrow keys move between cells or that
+Shift+Enter advances a stage. Per §3.3 first-run teaching belongs in the empty
+state, so the key grid moves there — shown once, to someone who has not learned
+the tool, in the place they are already reading, and gone the moment they have a
+row. §1.1's expertise-reversal effect is the argument against permanent chrome:
+scaffolding that helps a novice becomes noise for everyone else, forever.
+
+## A trap worth recording
+
+`min-w-[14rem]` on the new menu **silently did nothing**: there is no build
+step, so the Tailwind subset in this file is hand-maintained, and an
+arbitrary-value class that is not already present has no rule behind it. The
+menu rendered ~110px wide with every item wrapped. Caught by looking at a
+screenshot, not by any assertion. Now uses `min-w-[15rem]`, which exists.
+
+## A pre-existing defect this round exposed
+
+The shadow matrix flagged a hard step at the bottom edge of the **mobile card**,
+in both themes. Diagnosed rather than assumed: the card list used
+`space-y-4` = **18px**, unchanged between builds, so this was not a regression
+from this round — it is R1's cause A surviving in the layout R1 never revisited,
+because R1 only fixed the desktop table. R1's own table predicted it: 18px shows
+77% of the falloff and leaves a 0.053 residual step. Fixed with a dedicated
+`.tk-cardlist` at `--space-loose` (28px), matching the committed desktop
+decision, rather than editing the shared `space-y-4` utility.
