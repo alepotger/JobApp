@@ -18,6 +18,14 @@ cd "$HERE"
 command -v deno >/dev/null || { echo "deno not found on PATH"; exit 1; }
 command -v node >/dev/null || { echo "node not found on PATH"; exit 1; }
 
+# The dashboard bundles are generated from these same sources. If someone edits
+# _shared/ or a function entry point and forgets to rebuild, the browser deploy
+# path would ship code these tests never ran. Fail here rather than there.
+node "$HERE/../_dashboard/build.mjs" --check || {
+  echo "dashboard bundles are stale — run: node supabase/functions/_dashboard/build.mjs"
+  exit 1
+}
+
 cleanup() {
   pkill -f "$HERE/fake-supabase.js" 2>/dev/null
   pkill -f "$HERE/run-inbound.ts"   2>/dev/null
