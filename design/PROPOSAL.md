@@ -1852,3 +1852,34 @@ isolation before changing anything.
 to the current one rather than left to fail silently: shared case on the
 dropdowns, three elements in the header action zone, four items in the menu, and
 a 12px scroll-wrapper pad.
+
+# Recently deleted — bulk restore and bulk purge
+
+Reported from use: deleting five applications meant clearing them one at a
+time. Emptying a bin one row at a time is the wrong shape for a bin — the whole
+point of the panel is that it holds a batch you have already decided about.
+
+**Two controls in the panel header:** *Restore all N* and *Delete all for good*.
+
+- **One request, not N.** Both use `.in("id", ids)` — a single `PATCH` and a
+  single `DELETE`, verified by intercepting the network. Beyond being faster,
+  it means a partial failure cannot leave the list half-processed.
+- **Restore all is optimistic, delete all is not.** The same test the dossier
+  applies everywhere else (§1.3, and §Recommendations Stage 2): restoring is
+  reversible and high-success, so it applies immediately with a rollback if the
+  write fails; purging is irreversible, so the rows stay on screen, disabled,
+  until the database confirms they are gone.
+- **Restore all offers an undo** that re-deletes the same ids, with its own
+  rollback — matching `removeRow`, which already treats an undo as putting the
+  row back as it was rather than as a fresh edit.
+- **Delete all confirms with the count**, because "delete everything" is a
+  different decision at 2 rows than at 40.
+- **Shown only past one row.** With a single item they would duplicate the
+  buttons directly beneath them, and a control that repeats its neighbour is
+  what §4.1's eraser test removes.
+- Per-row buttons are disabled while a bulk action is in flight, so the two
+  paths cannot race.
+
+**Verified 11/11** by driving the reported scenario: delete five → bulk restore
+(one PATCH, all five back) → undo (all five back in the bin) → bulk purge (one
+DELETE, bin empty) → confirm the controls disappear at one row. No page errors.
