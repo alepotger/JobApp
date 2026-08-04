@@ -52,8 +52,8 @@
   --fn-3:oklch(58% .140 258); --fn-4:oklch(46% .150 258);
 
   /* ── elevation (intensity C) ── */
-  --shadow-rest:0 2px 4px oklch(26% .02 255/.08), 0 10px 24px oklch(26% .02 255/.10);
-  --shadow-raise:0 3px 6px oklch(26% .02 255/.10), 0 14px 32px oklch(26% .02 255/.13);
+  --shadow-rest:0 1px 2px oklch(26% .02 255/.07), 0 3px 6px oklch(26% .02 255/.09);
+  --shadow-raise:0 1px 2px oklch(26% .02 255/.09), 0 4px 8px oklch(26% .02 255/.12);
   --shadow-float:0 8px 24px oklch(26% .02 255/.12);
 
   /* ── type: 1.2 minor third from 0.9375rem ── */
@@ -82,6 +82,9 @@
   --capsule-r-block:10px;
 
   --r-1:6px; --r-2:8px; --r-3:10px; --r-4:14px;
+  /* One token for the height of a header control, so the primary button and
+     the overflow trigger cannot drift apart when either label changes. */
+  --control-h:36px;
   --ease:cubic-bezier(.22,1,.36,1);
   --d-in:200ms; --d-out:150ms;
   --page-bg:var(--page); --page-ink:var(--ink);
@@ -113,8 +116,8 @@
   --st-closed-line:oklch(31% .005 255);    --st-closed-mark:oklch(62% .009 255);
   --fn-1:oklch(45% .080 258); --fn-2:oklch(56% .110 258);
   --fn-3:oklch(66% .140 258); --fn-4:oklch(78% .140 258);
-  --shadow-rest:0 2px 4px oklch(0% 0 0/.50), 0 10px 24px oklch(0% 0 0/.42);
-  --shadow-raise:0 3px 6px oklch(0% 0 0/.55), 0 14px 32px oklch(0% 0 0/.50);
+  --shadow-rest:0 1px 2px oklch(0% 0 0/.45), 0 3px 6px oklch(0% 0 0/.38);
+  --shadow-raise:0 1px 2px oklch(0% 0 0/.50), 0 4px 8px oklch(0% 0 0/.45);
   --shadow-float:0 8px 24px oklch(0% 0 0/.55);
 }
 
@@ -243,13 +246,19 @@ textarea{resize:vertical}
    Column alignment — the only thing the table was buying us — is preserved by
    subgrid: every row re-uses the parent's tracks, so they are sized once,
    across all rows at once, exactly as a table does. ── */
-.tk-grid{display:grid;align-items:start;row-gap:var(--space-loose);
+.tk-grid{display:grid;align-items:start;row-gap:var(--space-cosy);
   min-width:56rem;
   grid-template-columns:minmax(0,13fr) minmax(0,13fr) minmax(0,8fr) 8rem
                         minmax(0,14fr) minmax(0,14fr) minmax(0,16fr) 5rem}
 .tk-grid>*{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
 .tk-grid--fluid{min-width:0}
 .tk-span{grid-column:1/-1}
+/* Group headings carry the inter-group gap themselves: the grid's row-gap is
+   uniform, so the difference has to live on the divider between groups. The
+   first heading is exempt — it sits under the column headers, not after a
+   group. */
+.tk-grid>[role="row"].tk-groupheading{margin-top:calc(var(--space-loose) - var(--space-cosy))}
+.tk-grid>[role="row"].tk-groupheading:first-of-type{margin-top:0}
 .tk-th{text-align:left;font-size:var(--t--2);text-transform:uppercase;
   letter-spacing:var(--tr-caps);font-weight:var(--w-semibold);color:var(--ink-3);
   padding:0 var(--space-cosy) var(--space-tight)}
@@ -274,8 +283,8 @@ textarea{resize:vertical}
    falloff and the sides kept none at all. Pad for the shadow, then pull the
    box back out so the grid's layout width is unchanged. 28px is affordable
    because this only renders at lg, where the shell already pays 48px. */
-.tk-scroll{padding:var(--space-base) var(--space-loose) var(--space-loose);
-  margin:calc(var(--space-base)*-1) calc(var(--space-loose)*-1) 0}
+.tk-scroll{padding:var(--space-tight) var(--space-cosy) var(--space-cosy);
+  margin:calc(var(--space-tight)*-1) calc(var(--space-cosy)*-1) 0}
 .tk-cell{border-radius:var(--r-2);color:inherit}
 .tk-cell:hover{background:var(--sunken)}
 .tk-edit{background:var(--surface);border:var(--capsule-edge);
@@ -312,6 +321,10 @@ textarea{resize:vertical}
    status pill at ~40x which stays instant. Under prefers-reduced-motion the
    global rule collapses the duration and the rotation still applies, so the
    direction still changes — instantly. ── */
+/* 1em box, glyph drawn to ~0.72em = Inter's cap height, so it reads the same
+   size as the capitals beside it. `top` rather than vertical-align: the menu
+   row is flex, and 0.5px down is the optical correction a round glyph needs. */
+.tk-ticon{width:1em;height:1em;flex:none;position:relative;top:.5px}
 .tk-caret{width:12px;height:12px;flex:none;display:inline-block;
   transition:transform var(--d-out) var(--ease)}
 [aria-expanded="true"] .tk-caret,.tk-caret[data-open="true"]{
@@ -325,17 +338,21 @@ textarea{resize:vertical}
    decoration. The value carries a min-width in ch sized to its own longest
    option, so the trigger cannot change width when the value changes and the
    toolbar cannot shift under the cursor. ── */
-.tk-dd-label{color:var(--ink-3);text-transform:uppercase;
-  letter-spacing:var(--tr-caps);font-weight:var(--w-semibold)}
-.tk-dd-value{color:var(--ink);text-transform:none;letter-spacing:0;
+.tk-dd-label{font-family:var(--font-ui);color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:var(--tr-caps);
+  font-weight:var(--w-regular)}
+.tk-dd-value{font-family:var(--font-ui);color:var(--ink);
+  text-transform:uppercase;letter-spacing:var(--tr-caps);
   font-weight:var(--w-semibold);display:inline-block;text-align:left}
 
 /* ── overflow menu ── */
 .tk-menu-sep{border:0;border-top:1px solid var(--line-soft);
   margin:var(--space-tight) var(--space-snug)}
 .tk-menu-danger{color:var(--danger-ink)}
-.tk-iconbtn{width:36px;height:36px;display:inline-flex;align-items:center;
-  justify-content:center;line-height:1}
+.tk-control-h{height:var(--control-h);display:inline-flex;align-items:center;
+  justify-content:center;line-height:1;padding-top:0;padding-bottom:0}
+.tk-iconbtn{width:var(--control-h);height:var(--control-h);display:inline-flex;
+  align-items:center;justify-content:center;line-height:1}
 
 /* ── mobile disclosure. The card, not the row, owns background+radius+
    shadow here, and this section is entirely inside it, so collapsing
@@ -570,7 +587,7 @@ textarea{resize:vertical}
 .space-y-2>*+*{margin-top:8px}
 .space-y-3>*+*{margin-top:12px}
 .space-y-4>*+*{margin-top:18px}
-.tk-cardlist>*+*{margin-top:var(--space-loose)}
+.tk-cardlist>*+*{margin-top:var(--space-room)}
 .w-4{width:16px}
 .w-8{width:32px}
 .w-20{width:5rem}
@@ -2001,7 +2018,10 @@ function OverflowMenu({ items }) {
                   it.danger ? "tk-menu-danger" : ""
                 }`}
               >
-                <span>{it.label}</span>
+                <span className="flex items-center gap-2">
+                  {it.icon ? <ThemeIcon mode={it.icon} /> : null}
+                  {it.label}
+                </span>
                 {it.checked ? <span aria-hidden="true">✓</span> : null}
               </button>
             )
@@ -2009,6 +2029,31 @@ function OverflowMenu({ items }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ThemeIcon({ mode }) {
+  return (
+    <svg
+      className="tk-ticon"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {mode === "dark" ? (
+        <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z" />
+      ) : (
+        <>
+          <circle cx="8" cy="8" r="3.1" />
+          <path d="M8 1.4v1.5M8 13.1v1.5M2.6 2.6l1.1 1.1M12.3 12.3l1.1 1.1M1.4 8h1.5M13.1 8h1.5M2.6 13.4l1.1-1.1M12.3 3.7l1.1-1.1" />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -2046,7 +2091,8 @@ function Dropdown({ label, value, items, onPick, on }) {
   /* ch, not px: the value is set in the same face it will be measured in, so
      the reservation tracks the type rather than a guess about it. */
   const valueWidth =
-    items.reduce((n, i) => Math.max(n, String(i.label).length), 0) + "ch";
+    (items.reduce((n, i) => Math.max(n, String(i.label).length), 0) * 1.15).toFixed(2) +
+    "ch";
 
   useEffect(() => {
     if (!open) return;
@@ -3069,7 +3115,7 @@ function GroupHeading({ section, columns }) {
   );
   if (!columns) return <div className="pb-1 pt-2">{text}</div>;
   return (
-    <div role="row">
+    <div role="row" className="tk-groupheading">
       <div className="tk-span px-1 pb-0 pt-2" role="cell" aria-colspan={columns}>
         {text}
       </div>
@@ -4036,38 +4082,21 @@ function Tracker({ session }) {
           <h1 className="tk-display">
             JobApp
           </h1>
-          <p className="mt-2 flex flex-wrap items-center gap-2 tk-mono tk-cap">
-            <span className="tk-secondary">
-              {rows.length} tracked · {liveRows.length} live
-            </span>
-            {/* "3 tracked" is the most misleading line on the page while all
-                three are ours, so the count says which of them are not real. */}
-            {examples.length > 0 && (
-              <span className="tk-tertiary">
-                · {examples.length} of {rows.length} still{" "}
-                {examples.length === 1 ? "an example" : "examples"}
-              </span>
-            )}
-            {/* "awaiting chase" named a rule the removed paragraph used to
-                explain. The rule now travels with the number. */}
-            <span
-              className={stale ? "tk-r2 px-2 py-1" : "tk-secondary"}
-              style={{ background: stale ? "var(--warn)" : "transparent" }}
-              title="Live applications you have not touched for 7 days or more. Editing any cell resets that row's clock."
-            >
-              {stale} awaiting chase
-            </span>
-            <SyncChip status={sync} />
-          </p>
         </div>
-        {/* Two elements, not four. Everything here used to compete at equal
+        {/* Three elements now: the sync chip sits immediately left of the
+            action pair. It matters most at the moment it changes, and the
+            moment it changes is right after you edit — so it belongs in the
+            same fixation zone as the controls you just used (§2.1, proximity),
+            as the quietest thing in that zone rather than a fourth peer.
+            Two elements, not four. Everything here used to compete at equal
             weight, which means nothing was primary; the single filled control
             is what makes the primary action unambiguous (§1.2 — restraint is
             what gives the one emphasis its force). */}
-        <div className="tk-headbar tk-noprint flex items-center gap-2">
+        <div className="tk-headbar tk-noprint flex items-center gap-3">
+          <SyncChip status={sync} />
           <button
             onClick={addRow}
-            className="tk-btn tk-focus tk-r2 px-4 py-2 tk-micro transition-colors"
+            className="tk-btn tk-focus tk-control-h tk-r2 px-4 tk-micro transition-colors"
             style={{
               background: "var(--accent)",
               borderColor: "var(--accent)",
@@ -4078,17 +4107,26 @@ function Tracker({ session }) {
           </button>
           <OverflowMenu
             items={[
+              /* Each row states a STATE, not an action, and the pair is a
+                 radio group — so the current theme is unambiguous from inside
+                 the menu now that the toggle is not visible at a glance. */
               {
-                label: theme === "dark" ? "Dark mode" : "Light mode",
-                /* The toggle is no longer visible at a glance, so the item
-                   states which mode is active from inside the menu. */
-                checked: true,
+                label: "Light mode",
+                icon: "light",
+                checked: theme !== "dark",
                 onPick: () => {
-                  const next = theme === "dark" ? "light" : "dark";
-                  applyTheme(next);
-                  setTheme(next);
+                  applyTheme("light");
+                  setTheme("light");
                 },
-                title: `Switch to ${theme === "dark" ? "light" : "dark"} mode`,
+              },
+              {
+                label: "Dark mode",
+                icon: "dark",
+                checked: theme === "dark",
+                onPick: () => {
+                  applyTheme("dark");
+                  setTheme("dark");
+                },
               },
               {
                 label: "Share / Export",

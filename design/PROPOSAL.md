@@ -1692,3 +1692,163 @@ because R1 only fixed the desktop table. R1's own table predicted it: 18px shows
 77% of the falloff and leaves a 0.053 residual step. Fixed with a dedicated
 `.tk-cardlist` at `--space-loose` (28px), matching the committed desktop
 decision, rather than editing the shared `space-y-4` utility.
+
+# Refinement round 4
+
+## 0. The invariant, restated and held
+
+**One element owns `background`, `border-radius` and `box-shadow`** — the
+`.tk-rowcard` on desktop, the `.tk-card` on mobile — with the hairline as an
+`inset` ring on that same element, and no clipping ancestor. Item 1 changes the
+shadow itself and the spacing around it, but not where they are declared.
+**16/16 states clean after the change.**
+
+## 1. Row spacing
+
+### Diagnosis, before touching anything
+
+| | Before |
+|---|---|
+| Row gap | **28px** (`--space-loose`), measured 28px |
+| Row height | **61px** → height : gap = **2.18 : 1** |
+| `--shadow-rest` | `0 2px 4px /.08` + `0 10px 24px /.10`, **spread 0 on both layers** |
+| Vertical reach | `max(2 + 4/2, 10 + 24/2)` = **22px** |
+| Was the gap widened for the shadow? | **Yes.** R1 chose 28px precisely so the falloff was not cut. |
+
+So shrinking the gap alone would have reintroduced the defect. The shadow is
+the lever, as the brief says.
+
+### The change
+
+| | Before | After |
+|---|---|---|
+| `--shadow-rest` | `0 2px 4px /.08`, `0 10px 24px /.10` | `0 1px 2px /.07`, `0 3px 6px /.09` |
+| `--shadow-raise` | `0 3px 6px /.10`, `0 14px 32px /.13` | `0 1px 2px /.09`, `0 4px 8px /.12` |
+| Reach | 22px | **6px** |
+| Row gap | 28px | **12px** (`--space-cosy`) |
+| Height : gap | 2.18 : 1 | **5.08 : 1** |
+| Clearance | 6px spare | 6px spare — the same margin, at a fifth of the distance |
+
+**Why a smaller shadow is more honest here, not just smaller.** The row does not
+float above the page; it sits on it, and the elevation is signalling *separation
+between rows*. The 22px reach was inherited from the undo toast, which genuinely
+does float. Applying §4.1's eraser test to the elevation rather than to an
+element: what remains is the least shadow that still separates. Measured
+residual at the end of the available room is **0.0039** — the falloff completes
+before the next row begins.
+
+**Grouped mode.** Intra-group **12px**, inter-group **28px** — measured
+`intra [12,12]` vs `inter [28,28,28]`, a 2.3× difference. The grid's row-gap is
+uniform, so the difference is carried by a `margin-top` on the group heading,
+with the first heading exempt because it follows the column headers rather than
+a group.
+
+**Mobile** stays at **18px**. A ~200px card needs proportionally more separation
+than a 61px row to read as a discrete object; 18px still clears the 6px reach
+three times over. Measured residual 0.0039.
+
+Stacking context was not the constraint — raw distance was, and the numbers
+above are the whole story.
+
+## 2. Dropdown typography — the premise did not hold
+
+**Measured before changing anything: both parts were already the same family.**
+
+| | Label | Value |
+|---|---|---|
+| Family | `Inter var` | `Inter var` |
+| Size | 10.4px (`--t--2`) | 10.4px (`--t--2`) |
+| Weight | 600 | 600 |
+
+There was no family mismatch and nothing to move. What read as foreign was
+**case**: the value was the only sentence-case text in a control row where the
+stage chips, the column headers and the status pills are all uppercase micro.
+
+**The brief's own reasoning resolves it.** These values are *system-defined
+options, not user-authored content*, so by the convention already in use here —
+uppercase for machine-fixed, sentence case for human-facing — the value belongs
+on the machine-fixed side. It becomes uppercase, and the hierarchy moves off
+case onto the two levers that remain:
+
+- **Weight**: label `--w-regular` 400, value `--w-semibold` 600.
+- **Colour**: label `--ink-3` **4.93 : 1**, value `--ink` **15.45 : 1**. The
+  label is unchanged from the committed floor — the hierarchy comes from
+  raising the value, not from dimming the label.
+
+Size stays at `--t--2`, on the committed 1.2 scale. **Tracking on both is
+`--tr-caps` = `.075em`** (0.78px at 10.4px), because uppercase at default
+tracking reads as cramped. No third family enters; both are `--font-ui`.
+
+**Width stability still holds** — measured across a value change:
+`Group by 170.83 → 170.83`, `Sort 221.02 → 221.02`, `Filter 157.06 → 157.06`.
+The `ch` reservation is scaled **1.15×** because uppercase is wider per
+character than the `0` that defines `ch`.
+
+## 3. Header
+
+**3a.** The counts line is erased: the rows and the stage rail already state
+them, so restating them is noise (§4.1). The sync chip is not a restatement, so
+it moves rather than dying with the line around it — into the action zone,
+immediately left of the primary button. It matters most at the moment it
+changes, and that moment is right after an edit, so it belongs in the same
+fixation zone as the controls just used (§2.1, proximity) as the quietest thing
+in that zone rather than a fourth peer.
+
+**One real loss, reported rather than absorbed.** `stale` — "N awaiting chase" —
+was computed only as an aggregate and displayed only on that line. There is **no
+per-row staleness indicator**, so unlike "tracked" and "live" this count was
+*not* restated anywhere, and removing the line removes the signal. The brief
+named it explicitly for removal so it is gone, but if you want it back the
+honest home is a per-row marker rather than a header count, since the aggregate
+never told you *which* row to chase.
+
+**3b.** Both controls take their height from **one token**, `--control-h: 36px`,
+rather than from padding — measured **36 vs 36** at both 1440px and 390px, with
+centres aligned to **Δ0**. Radius is `--r-2` on both: with equal heights and no
+nesting, the concentric rule degenerates to equality, the same correct
+degenerate case as the capsule's stadium clamp (C.1). Equal height, not equal
+weight — only the primary is filled.
+
+## 4. Theme icons
+
+Two rows, each stating a **state** rather than an action, as a radio group with
+`aria-checked` — so the current theme is unambiguous from inside the menu now
+that the toggle is not visible at a glance. "Light mode ✓" answers that; "Switch
+to dark" would not.
+
+- Inline SVG, `stroke="currentColor"`, so both follow the menu's text colour and
+  need no second declaration for the other theme.
+- **Sized to cap height**: a 1em box with the glyph drawn to ~0.72em, which is
+  Inter's cap height, so it matches the capitals beside it rather than an
+  arbitrary pixel value. Measured 10.39px at `--t--2`.
+- **Optically aligned**: `top: .5px`. A circular sun centred by computation sits
+  visibly high (§2.1, optical versus mathematical alignment).
+- **Stroke 1.75 on both, identical to the caret** — verified by reading both
+  attributes and comparing.
+- `aria-hidden` on both; the label carries the meaning.
+
+## Verification
+
+**Items:** 13/13 on the four items; 32/32 on the round-3 suite; 15/15 on
+structure and the corner fix.
+
+**Shadow regression, 16/16 clean** — corners *and* bottom-edge falloff, on
+first, adjacent, multi-line, last, hovered and selected/expanded rows plus the
+mobile card collapsed and expanded, in light and dark.
+
+**Two detector faults found and fixed rather than accepted as results.** The
+bottom-edge probe sampled a fixed 24px window, which now exceeds the 12px gap,
+so it was measuring the *next* card's edge and reporting a step; it is now
+bounded by the real distance to whatever follows. And the expanded-row corner
+probe ran with the pointer still parked on a card from the hover probe, so
+`--hover` made the interior sample match the wedge — a false positive on all
+four corners in light only. Both were confirmed by probing the same corner in
+isolation before changing anything.
+
+**Inviolable behaviours: all ten pass** — 1–8 via `design/verify-inviolable.js`,
+9 and 10 driven against a stubbed session.
+
+**Four assertions in the harness encoded the previous design** and were updated
+to the current one rather than left to fail silently: shared case on the
+dropdowns, three elements in the header action zone, four items in the menu, and
+a 12px scroll-wrapper pad.

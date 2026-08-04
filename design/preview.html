@@ -189,6 +189,27 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
 .tk2-head{font-size:var(--t--2);text-transform:uppercase;letter-spacing:.075em;
   font-weight:600;color:var(--ink-3)}
 .tk2-head > *{padding:0 var(--space-cosy) var(--space-tight)}
+.r4{--r4-rest:0 1px 2px oklch(26% .02 255/.07), 0 3px 6px oklch(26% .02 255/.09);
+  --r4-raise:0 1px 2px oklch(26% .02 255/.09), 0 4px 8px oklch(26% .02 255/.12)}
+:root[data-theme="dark"] .r4{--r4-rest:0 1px 2px oklch(0% 0 0/.45), 0 3px 6px oklch(0% 0 0/.38);
+  --r4-raise:0 1px 2px oklch(0% 0 0/.50), 0 4px 8px oklch(0% 0 0/.45)}
+.r4 .tk2{row-gap:var(--space-cosy)}
+.r4 .tk2-row{box-shadow:var(--r4-rest), inset 0 0 0 1px var(--line)}
+.r4 .tk2-row.is-hover,.r4 .tk2-row.is-sel{box-shadow:var(--r4-raise), inset 0 0 0 1px var(--line)}
+.r4 .tk2-row.is-sel{box-shadow:var(--r4-raise),
+  inset 0 0 0 1px color-mix(in oklch,var(--accent) 55%,transparent)}
+.r4 .grouphead{grid-column:1/-1;margin-top:calc(var(--space-loose) - var(--space-cosy));
+  font-size:var(--t--2);text-transform:uppercase;letter-spacing:.075em;
+  font-weight:600;color:var(--ink-3);padding:0 var(--space-cosy) var(--space-tight)}
+.r4 .grouphead:first-child{margin-top:0}
+/* both parts in Inter, both uppercase: the values are system-defined options,
+   so they sit on the machine-fixed side. Hierarchy is weight + colour. */
+.r4 .dd .k{font-weight:400;color:var(--ink-3);letter-spacing:.075em}
+.r4 .dd .v{text-transform:uppercase;letter-spacing:.075em;font-weight:600;color:var(--ink)}
+.ctl{height:36px;display:inline-flex;align-items:center;justify-content:center;
+  line-height:1;border-radius:var(--r-sm);padding:0 var(--space-room)}
+.ctl--icon{width:36px;padding:0}
+.ticon{width:1em;height:1em;flex:none;position:relative;top:.5px}
 .tk2-row{background:var(--surface);border-radius:var(--r-md);
   box-shadow:var(--shadow-rest), inset 0 0 0 1px var(--line)}
 .tk2-row > *{padding:var(--space-cosy);font-size:var(--t--1);
@@ -1656,6 +1677,148 @@ Code: 42501</div>
 </div>
 </div>
 </section>
+<!-- ══════════ ROUND 4 ══════════ -->
+<section class="sec r4" style="border-top-width:6px">
+  <h2 style="font-size:var(--t-3)">Refinement round 4</h2>
+  <p class="note">Row gap <b>28px → 12px</b>, made possible by tightening the
+    shadow rather than by shrinking the clearance it needs. Reach was
+    <code>max(2+4/2, 10+24/2)</code> = <b>22px</b>; it is now
+    <code>max(1+2/2, 3+6/2)</code> = <b>6px</b>. Row height 61px, so the
+    height-to-gap ratio goes from <b>2.18 : 1</b> to <b>5.08 : 1</b> — a list
+    reads as a group when the gap is a small fraction of the object rather than
+    a rival to it. Elevation here signals separation between rows, not
+    floating; the tall shadow was inherited from the undo toast, which
+    genuinely does float (§4.1, the eraser test).</p>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Full row list at the new spacing</h3>
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+    <div class="tk2" style="grid-template-columns:13rem auto auto 7.5rem auto 5.5rem">
+      <div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div>
+        <div class="tk2-c">London</div><div class="tk2-c"><span class="pill s1">To apply</span></div>
+        <div class="tk2-c">Log the reply</div><div class="tk2-c num" style="font-weight:600">2.0</div></div>
+      <div class="tk2-row is-hover"><div class="tk2-c">Example Consulting</div><div class="tk2-c">Analyst, Strategy</div>
+        <div class="tk2-c">London</div><div class="tk2-c"><span class="pill s2">Applied</span></div>
+        <div class="tk2-c">Automated acknowledgement received.</div><div class="tk2-c num" style="font-weight:600">4.0</div>
+        <div class="tk2-drawer caps">hovered</div></div>
+      <div class="tk2-row is-sel"><div class="tk2-c">Example Studio</div><div class="tk2-c">Business Development Associate</div>
+        <div class="tk2-c">Remote</div><div class="tk2-c"><span class="pill s4">Interview</span></div>
+        <div class="tk2-c">First round scheduled.</div><div class="tk2-c num" style="font-weight:600">4.8</div>
+        <div class="tk2-drawer caps">selected</div></div>
+      <div class="tk2-row"><div class="tk2-c">Meridian Partners</div>
+        <div class="tk2-c">Associate, Corporate Development &amp; Strategic Partnerships</div>
+        <div class="tk2-c">Manchester</div><div class="tk2-c"><span class="pill s3">Replied</span></div>
+        <div class="tk2-c">Recruiter replied on the 14th asking for availability the following week,
+          then went quiet. Chase this on Friday.</div>
+        <div class="tk2-c num" style="font-weight:600">3.6</div></div>
+      <div class="tk2-row"><div class="tk2-c">Example Foundation</div><div class="tk2-c">Programme Operations Assistant</div>
+        <div class="tk2-c">City</div><div class="tk2-c"><span class="pill s5">Offer</span></div>
+        <div class="tk2-c">Log the reply</div><div class="tk2-c num" style="font-weight:600">3.0</div></div>
+    </div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Grouped — 12px inside a
+    group, 28px between groups</h3>
+  <p class="note">The grid's row-gap is uniform, so the difference lives on the
+    group heading. 2.3× is enough to read as a division without a rule.</p>
+  <div class="scrollpad" style="margin-top:var(--space-cosy)">
+    <div class="tk2" style="grid-template-columns:13rem auto 7.5rem 5.5rem">
+      <div class="grouphead">London · 2</div>
+      <div class="tk2-row"><div class="tk2-c">Northwind</div><div class="tk2-c">Analyst, Strategy</div>
+        <div class="tk2-c"><span class="pill s1">To apply</span></div><div class="tk2-c num" style="font-weight:600">2.0</div></div>
+      <div class="tk2-row"><div class="tk2-c">Example Consulting</div><div class="tk2-c">Analyst, Strategy</div>
+        <div class="tk2-c"><span class="pill s2">Applied</span></div><div class="tk2-c num" style="font-weight:600">4.0</div></div>
+      <div class="grouphead">Manchester · 1</div>
+      <div class="tk2-row"><div class="tk2-c">Meridian Partners</div><div class="tk2-c">Associate, Corp Dev</div>
+        <div class="tk2-c"><span class="pill s3">Replied</span></div><div class="tk2-c num" style="font-weight:600">3.6</div></div>
+      <div class="grouphead">Remote · 1</div>
+      <div class="tk2-row"><div class="tk2-c">Example Studio</div><div class="tk2-c">BD Associate</div>
+        <div class="tk2-c"><span class="pill s4">Interview</span></div><div class="tk2-c num" style="font-weight:600">4.8</div></div>
+    </div>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Dropdowns — one family,
+    both uppercase, hierarchy by weight and colour</h3>
+  <p class="note">Both parts were already <code>Inter var</code>; there was no
+    family mismatch to fix. What read as foreign was <b>case</b> — the value was
+    the only sentence-case text in a row where the chips, column headers and
+    pills are all uppercase micro. These values are system-defined options, not
+    user-authored content, so they belong on the machine-fixed side: uppercase,
+    tracked at <code>.075em</code>, with hierarchy carried by weight
+    (400 → 600) and colour (<b>4.93 : 1</b> label, <b>15.45 : 1</b> value).</p>
+  <div style="display:grid;gap:var(--space-cosy);margin-top:var(--space-cosy);justify-items:start">
+    <div style="display:flex;gap:var(--space-base);align-items:center">
+      <span class="caps" style="width:6rem">shortest</span>
+      <button class="dd dd--group"><span class="k">Group by</span><span class="v">None</span></button>
+      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Newest</span></button>
+      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">4+</span></button>
+    </div>
+    <div style="display:flex;gap:var(--space-base);align-items:center">
+      <span class="caps" style="width:6rem">longest</span>
+      <button class="dd dd--group"><span class="k">Group by</span><span class="v">Location</span></button>
+      <button class="dd dd--sort"><span class="k">Sort</span><span class="v">Pipeline order</span></button>
+      <button class="dd dd--filter"><span class="k">Filter</span><span class="v">Any score</span></button>
+    </div>
+    <p class="note">Same width, edge for edge — the reservation is scaled 1.15×
+      because uppercase is wider per character than the “0” that defines
+      <code>ch</code>.</p>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Header — subtitle gone,
+    sync state kept and repositioned</h3>
+  <p class="note">The counts are restated by the rows and the stage rail, so
+    they are erased. The sync chip is not a restatement — it is the one thing on
+    screen a user cannot infer — so it moves into the action zone rather than
+    dying with the line around it. It matters most at the moment it changes, and
+    that moment is right after an edit, so it belongs in the same fixation zone
+    as the controls just used (§2.1), as the quietest thing there.</p>
+  <div class="frame" style="margin-top:var(--space-cosy)">
+    <div style="display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap">
+      <span style="font-size:var(--t-2);font-weight:600;letter-spacing:-.025em">JobApp</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:var(--space-cosy)">
+        <span class="caps" style="color:var(--ink-3)">● live</span>
+        <button class="btn btn-primary ctl">+ Add application</button>
+        <button class="btn ctl ctl--icon" aria-label="More actions">⋯</button></span>
+    </div>
+    <p class="note" style="margin-top:var(--space-cosy)">Both controls take their
+      height from one token (<code>--control-h: 36px</code>) rather than from
+      padding, so they cannot drift when either label changes. Equal height and
+      equal radius: with no nesting, the concentric rule degenerates to
+      equality — the same correct degenerate case as the capsule's stadium
+      clamp. Equal height, not equal weight; only one is filled.</p>
+    <p class="caps" style="margin-top:var(--space-room)">Every sync state</p>
+    <p style="margin-top:var(--space-base);display:flex;gap:var(--space-room);flex-wrap:wrap">
+      <span class="caps" style="color:var(--ink-3)">● live</span>
+      <span class="caps" style="color:var(--warn-ink)">◐ saving</span>
+      <span class="caps" style="color:var(--warn-ink)">○ offline</span>
+    </p>
+  </div>
+
+  <h3 class="caps" style="margin-top:var(--space-loose)">Menu — both theme rows
+    with their glyphs</h3>
+  <p class="note">Each row states a <b>state</b>, not an action, and the pair is
+    a radio group, so the current theme is unambiguous now that the toggle is
+    not visible at a glance. Icons are inline SVG at <code>currentColor</code>,
+    a 1em box with the glyph drawn to ~0.72em — Inter's cap height, so it
+    matches the capitals beside it. Stroke 1.75 is the caret's exactly. Nudged
+    down 0.5px: a round glyph centred by computation sits visibly high (§2.1,
+    optical versus mathematical alignment). <code>aria-hidden</code>, since the
+    label already carries the meaning.</p>
+  <div class="grid2">
+    <div class="frame"><p class="caps">Light</p>
+      <span class="menu" role="menu" style="position:static;display:block;margin-top:var(--space-base)">
+        <button role="menuitemradio" aria-checked="true"><span style="display:inline-flex;align-items:center;gap:8px"><svg class="ticon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3.1"/><path d="M8 1.4v1.5M8 13.1v1.5M2.6 2.6l1.1 1.1M12.3 12.3l1.1 1.1M1.4 8h1.5M13.1 8h1.5M2.6 13.4l1.1-1.1M12.3 3.7l1.1-1.1"/></svg>Light mode</span><span class="tick">✓</span></button>
+        <button role="menuitemradio" aria-checked="false"><span style="display:inline-flex;align-items:center;gap:8px"><svg class="ticon" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z"/></svg>Dark mode</span></button>
+        <button role="menuitem">Share / Export</button>
+        <hr />
+        <button role="menuitem" class="danger">Sign out</button>
+      </span></div>
+    <div class="frame"><p class="caps">Dark — toggle the theme at the top of this page</p>
+      <p class="note" style="margin-top:var(--space-base)">The same markup. Both
+        glyphs inherit <code>currentColor</code>, so neither needs a second
+        declaration for the other theme.</p></div>
+  </div>
+</section>
+
 <p class="note" style="margin-top:var(--space-vast);text-align:center">
   End of preview · <b>not for deployment</b> · awaiting approval
 </p>
