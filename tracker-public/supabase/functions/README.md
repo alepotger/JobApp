@@ -79,6 +79,25 @@ function using `INBOUND_SHARED_SECRET`. Same endpoint, same payload shape, same
 authentication — only the caller differs, and it is set up entirely in a
 browser. Setup instructions are in the file's header.
 
+Threads reach it either by being labelled `JobApp/Inbound` by hand, or by
+matching the optional `AUTO_QUERY` script property. A workable starting query,
+covering the applicant tracking systems most replies actually come from:
+
+```
+in:inbox (from:(greenhouse.io OR lever.co OR ashbyhq.com OR myworkday.com OR
+workday.com OR smartrecruiters.com OR workable.com OR teamtailor.com OR
+breezy.hr OR jobvite.com OR icims.com OR bamboohr.com OR taleo.net OR
+successfactors.com OR recruitee.com OR pinpointhq.com)
+OR subject:("your application" OR "application received" OR
+"thank you for applying" OR "next steps"))
+```
+
+Set `DRY_RUN` to `true` while tuning it: the script logs every message the
+query found and posts nothing. Breadth costs little in correctness, because
+`pickApplication` refuses anything unconvincing and unmatched mail returns
+`202`, but every message posted is a row in `inbound_messages` and a scan of
+your applications.
+
 ## Scheduling the digest
 
 Uncomment the `pg_cron` block at the bottom of the migration, substitute your
