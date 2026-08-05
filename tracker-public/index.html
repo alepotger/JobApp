@@ -33,6 +33,13 @@
   --warn-ink:oklch(46% .110 75);   --warn-wash:oklch(96% .035 85);
   --good-ink:oklch(45% .120 155);  --good-wash:oklch(96% .030 155);
   --cold:var(--danger-wash); --warn:var(--warn-wash);
+  /* Borders for the two wash panels. These were referenced in four places and
+     never declared, which makes `border:1px solid var(--warn-line)` invalid at
+     computed-value time — the whole shorthand unsets, so the migration notice
+     and the database-error panel have been rendering with no border at all.
+     Same hue as their wash, stepped down in lightness so the edge reads
+     without competing with the ink. */
+  --cold-line:oklch(87% .050 25); --warn-line:oklch(86% .065 85);
 
   /* ── stage ramp ── */
   --st-to-apply-fill:oklch(96% .004 255); --st-to-apply-text:oklch(45% .012 255);
@@ -102,6 +109,9 @@
   --danger-ink:oklch(78% .130 25); --danger-wash:oklch(27% .050 25);
   --warn-ink:oklch(82% .110 80);   --warn-wash:oklch(27% .045 80);
   --good-ink:oklch(80% .130 155);  --good-wash:oklch(26% .045 155);
+  /* Dark re-expresses elevation with lighter surfaces rather than heavier
+     shadow (§2.3), so these step UP from the wash rather than down. */
+  --cold-line:oklch(38% .070 25); --warn-line:oklch(38% .065 80);
   --st-to-apply-fill:oklch(24% .006 255); --st-to-apply-text:oklch(72% .014 255);
   --st-applied-fill:oklch(26% .045 155);  --st-applied-text:oklch(80% .130 155);
   --st-replied-fill:oklch(26% .045 240);  --st-replied-text:oklch(80% .120 240);
@@ -349,10 +359,78 @@ textarea{resize:vertical}
 .tk-menu-sep{border:0;border-top:1px solid var(--line-soft);
   margin:var(--space-tight) var(--space-snug)}
 .tk-menu-danger{color:var(--danger-ink)}
+/* Page names are prose, not command labels, so they keep their own casing
+   inside the menu rather than being shouted in the uppercase micro style. */
+.tk-menu-plain{text-transform:none;letter-spacing:0;font-size:var(--t--1);
+  font-weight:var(--w-regular);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .tk-control-h{height:var(--control-h);display:inline-flex;align-items:center;
   justify-content:center;line-height:1;padding-top:0;padding-bottom:0}
 .tk-iconbtn{width:var(--control-h);height:var(--control-h);display:inline-flex;
   align-items:center;justify-content:center;line-height:1}
+
+/* ── pages ──
+   The strip shares ONE baseline row with the wordmark. Stacking it on a second
+   line grew the header by 34.1px, which pushes every row down the page; that
+   was measured, not guessed, and it is the reason for the baseline alignment
+   below rather than any aesthetic preference.
+
+   NOTHING here transitions. Switching pages is high-frequency and
+   zero-novelty, which is the case §3.1 singles out for no motion at all — and
+   a sliding indicator would be a tax levied on every switch, for ever, to
+   report something the user just did. There is consequently nothing to strip
+   out under prefers-reduced-motion. ── */
+.tk-headleft{display:flex;align-items:baseline;gap:var(--space-room);
+  flex-wrap:wrap;min-width:0}
+.tk-headrule{width:1px;height:15px;background:var(--line);align-self:center;
+  flex:none;display:none}
+@media (min-width:1024px){.tk-headrule{display:block}}
+.tk-pages{display:flex;align-items:baseline;gap:var(--space-room);
+  flex-wrap:wrap;min-width:0}
+/* --t--1 and the existing weights: page names are user-supplied prose, so they
+   are set in sentence case at the caption size rather than in the uppercase
+   micro style the buttons use. No new size enters the modular scale. */
+/* Zero padding, and the underline hangs BELOW the box on a negative offset.
+   Reserving 5px of padding for it made the tab's box taller than the
+   wordmark's descender space, which grew the header by 8.7px and pushed every
+   row down by exactly that — measured, after the strip was made to render at
+   all. Absolutely positioned and outside the flow, it costs no height. */
+.tk-pgtab{background:none;border:0;cursor:pointer;font:inherit;
+  font-size:var(--t--1);font-weight:var(--w-regular);color:var(--ink-3);
+  padding:0;position:relative;border-radius:var(--r-1);
+  max-width:14rem;overflow:visible;text-overflow:ellipsis;white-space:nowrap}
+.tk-pgtab:hover{color:var(--ink-2)}
+.tk-pgtab[aria-selected="true"]{color:var(--ink);font-weight:var(--w-semibold)}
+.tk-pgtab[aria-selected="true"]::after{content:"";position:absolute;
+  left:0;right:0;bottom:-6px;height:2px;background:var(--accent);
+  border-radius:2px}
+.tk-pgcount{font-family:var(--font-mono);font-size:var(--t--2);
+  color:var(--ink-3);margin-left:var(--space-snug)}
+.tk-pgadd{background:none;border:0;cursor:pointer;color:var(--ink-3);
+  font:inherit;font-size:1rem;line-height:1;padding:0 var(--space-tight);
+  border-radius:var(--r-1)}
+/* The per-page menu trigger has to sit ON the tab scale. Left as the default
+   .tk-iconbtn it is a 36px control, which made the whole strip 36px tall and
+   grew the header by 8.7px — the tabs themselves were never the problem. */
+.tk-pgmenu{background:none;border:0;cursor:pointer;color:var(--ink-3);
+  font:inherit;font-size:var(--t--1);line-height:1.2;padding:0 var(--space-tight);
+  border-radius:var(--r-1);letter-spacing:.08em}
+.tk-pgmenu:hover{color:var(--ink-2)}
+.tk-pgadd:hover{color:var(--ink-2)}
+.tk-pgname{font:inherit;font-size:var(--t--1);color:var(--ink);
+  background:var(--surface);border:1px solid var(--accent);
+  border-radius:var(--r-1);padding:1px var(--space-snug);width:9rem;
+  min-width:0}
+/* Mobile: one full-width control naming where you are, rather than a tab strip
+   that scrolls its own contents off the screen. */
+.tk-pgmobile{display:flex;align-items:center;justify-content:space-between;
+  gap:var(--space-base);width:100%;height:var(--control-h);
+  padding:0 var(--space-cosy);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-2);font:inherit;
+  font-size:var(--t--1);font-weight:var(--w-semibold);color:var(--ink);
+  cursor:pointer}
+.tk-pgmobile-label{min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
 
 /* ── mobile disclosure. The card, not the row, owns background+radius+
    shadow here, and this section is entirely inside it, so collapsing
@@ -397,6 +475,7 @@ textarea{resize:vertical}
     --accent:#1c65c8;--accent-ink:#0f4ea3;--accent-wash:#ebf4ff;
     --danger-ink:#a01e23;--danger-wash:#ffece9;--warn-ink:#7b4d00;--warn-wash:#fdf1d8;
     --good-ink:#006836;--good-wash:#e3f8e9;
+    --cold-line:#f0c4bd;--warn-line:#e8d09a;
     --st-to-apply-fill:#f2f3f6;--st-to-apply-text:#4a4d54;
     --st-applied-fill:#e3f8e9;--st-applied-text:#036035;
     --st-replied-fill:#e2f5ff;--st-replied-text:#0056a4;
@@ -834,6 +913,106 @@ function saveExamplesDismissed() {
   }
 }
 
+/* Which page was last open. A page id, not a name — renaming a page on one
+   device must not strand the other. It carries no personal identifier, so the
+   localStorage rule holds.
+
+   Nothing downstream trusts it: the stored id is looked up among the pages
+   that actually came back, and a miss falls through to the first page. A page
+   deleted on another device therefore resolves to something real rather than
+   to a blank screen. */
+const PAGE_KEY = "tracker.page";
+
+const loadActivePage = () => {
+  try {
+    return window.localStorage.getItem(PAGE_KEY) || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+function saveActivePage(id) {
+  try {
+    if (id) window.localStorage.setItem(PAGE_KEY, id);
+    else window.localStorage.removeItem(PAGE_KEY);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+/* Pages: several independent collections of applications in one account.
+   Defined once and interpolated into both SETUP_SQL and MIGRATION_SQL, because
+   two hand-maintained copies of the same DDL drift, and the one that drifts is
+   always the one a stranger runs. Every statement is idempotent, so a fresh
+   install and a decade-old one can run the identical text. */
+const PAGES_SQL = `create table if not exists public.tracker_pages (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid()
+               references auth.users(id) on delete cascade,
+  name       text not null default 'Applications',
+  sort_order bigint not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists tracker_pages_user_idx
+  on public.tracker_pages (user_id, sort_order);
+
+alter table public.tracker_pages enable row level security;
+
+-- FOR ALL, matching public.applications: a policy that covers writes but not
+-- reads lets an insert appear to succeed and then vanish on read-back.
+drop policy if exists "owner full access pages" on public.tracker_pages;
+create policy "owner full access pages"
+  on public.tracker_pages
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.tracker_pages to authenticated;
+
+-- Nullable on purpose, and this is the safety mechanism rather than an
+-- oversight: on delete set null means a deleted page leaves its applications
+-- pointing nowhere instead of pointing somewhere wrong, and the page reads a
+-- null page_id as "the first page". No application can become invisible.
+alter table public.applications
+  add column if not exists page_id uuid
+    references public.tracker_pages(id) on delete set null;
+
+create index if not exists applications_page_idx
+  on public.applications (user_id, page_id, sort_order);
+
+-- One default page for any account that has applications and no page yet.
+insert into public.tracker_pages (user_id, name, sort_order)
+select distinct a.user_id, 'Applications', 0
+  from public.applications a
+ where not exists (
+   select 1 from public.tracker_pages p where p.user_id = a.user_id
+ );
+
+-- Nothing becomes invisible: every existing application lands on that page.
+update public.applications a
+   set page_id = (
+     select p.id from public.tracker_pages p
+      where p.user_id = a.user_id
+      order by p.sort_order, p.created_at
+      limit 1
+   )
+ where a.page_id is null;
+
+-- A page renamed on one device shows up on the others.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'tracker_pages'
+  ) then
+    alter publication supabase_realtime add table public.tracker_pages;
+  end if;
+end $$;`;
+
 const SETUP_SQL = `create table if not exists public.applications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
@@ -913,10 +1092,15 @@ begin
   ) then
     alter publication supabase_realtime add table public.applications;
   end if;
-end $$;`;
+end $$;
 
-/* Just the columns added after the first release. Shown on screen when a query
-   fails because the table predates them, so the fix is one copy away. */
+${PAGES_SQL}`;
+
+/* Everything added after the first release. Shown on screen when a query fails
+   because the table predates it, so the fix is one copy away. One script, not
+   one per feature: it is all idempotent, so someone three versions behind runs
+   the same text as someone one version behind and neither has to work out
+   which parts apply to them. */
 const MIGRATION_SQL = `alter table public.applications
   add column if not exists contact_email  text     not null default '',
   add column if not exists salary         text     not null default '',
@@ -949,18 +1133,25 @@ update public.applications
    set stage_history = jsonb_build_array(
          jsonb_build_object('to', status, 'at', activity)
        )
- where stage_history = '[]'::jsonb;`;
+ where stage_history = '[]'::jsonb;
+
+${PAGES_SQL}`;
 
 /* Every column fromDb reads, named explicitly so that asking for them is
    itself the schema check. Keep this in step with fromDb: a column read there
    and absent here would come back undefined on load and look like empty data
-   rather than a mistake. */
+   rather than a mistake.
+
+   page_id is last for a reason worth stating: it is also the multi-page schema
+   probe. An unmigrated database fails this select on page_id exactly as a
+   first-release database fails it on benefits_score, which is why multi-page
+   needed no new detection mechanism at all. */
 const SELECT_COLUMNS = [
   "id", "company", "role_title", "location", "status", "replies",
   "next_steps", "notes", "activity", "sort_order", "deleted",
   "contact_email", "salary", "equity", "start_date", "benefits_score",
   "score_salary", "score_growth", "score_culture", "score_location",
-  "stage_history",
+  "stage_history", "page_id",
 ].join(", ");
 
 /* Postgres 42703 / PostgREST PGRST204 both mean "that column is not there". */
@@ -969,6 +1160,17 @@ const isMissingColumn = (error) =>
   (error.code === "42703" ||
     error.code === "PGRST204" ||
     /column .* does not exist/i.test(error.message || ""));
+
+/* And these mean "that TABLE is not there", which isMissingColumn does not
+   recognise. Without this, a database carrying page_id but no tracker_pages —
+   only reachable by hand-editing, but reachable — would surface a raw Postgres
+   error instead of the migration notice. Degrade, never throw. */
+const isMissingTable = (error) =>
+  Boolean(error) &&
+  (error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /relation .* does not exist/i.test(error.message || "") ||
+    /could not find the table/i.test(error.message || ""));
 
 let sb = null;
 
@@ -1020,6 +1222,10 @@ const fromDb = (r) => ({
   scoreCulture: Number(r.score_culture) || 0,
   scoreLocation: Number(r.score_location) || 0,
   history: Array.isArray(r.stage_history) ? r.stage_history : [],
+  /* null on an unmigrated database, and null for a row whose page was deleted.
+     Both are read as "the first page" rather than as "nowhere", which is what
+     makes it impossible for an application to exist and be invisible. */
+  pageId: r.page_id || null,
 });
 
 const FIELD_TO_COLUMN = {
@@ -1920,7 +2126,11 @@ function SignIn({ cfgUrl, onReset }) {
    already the app's menu-button pattern — Enter/Space open, arrows move,
    Home/End jump, Escape closes and returns focus to the trigger, Tab closes,
    outside click closes. */
-function OverflowMenu({ items }) {
+/* One menu, two triggers. The mobile page control is this component with a
+   different button on the front of it, not a second implementation — so the
+   outside-click dismissal, the roving focus, Escape-refocuses-trigger and the
+   Tab behaviour are shared rather than reimplemented and allowed to diverge. */
+function OverflowMenu({ items, label, triggerContent, triggerClass, block }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const wrap = useRef(null);
@@ -1969,15 +2179,17 @@ function OverflowMenu({ items }) {
     }
   };
 
+  const name = label || "More actions";
+
   return (
-    <div className="relative" ref={wrap}>
+    <div className={block ? "relative w-full" : "relative"} ref={wrap}>
       <button
         ref={trigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="More actions"
-        title="More actions"
+        aria-label={name}
+        title={name}
         onClick={() => (open ? hide(false) : (setActive(0), setOpen(true)))}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -1986,48 +2198,191 @@ function OverflowMenu({ items }) {
             setOpen(true);
           }
         }}
-        className="tk-btn tk-focus tk-iconbtn tk-r2 tk-micro transition-colors"
+        className={
+          triggerClass || "tk-btn tk-focus tk-iconbtn tk-r2 tk-micro transition-colors"
+        }
       >
-        <span aria-hidden="true">⋯</span>
+        {triggerContent || <span aria-hidden="true">⋯</span>}
       </button>
 
       {open && (
         <div
           ref={list}
           role="menu"
-          aria-label="More actions"
+          aria-label={name}
           onKeyDown={onMenuKey}
-          className="tk-menu absolute right-0 z-20 mt-2 min-w-[15rem] p-2"
+          className={`tk-menu absolute z-20 mt-2 p-2 ${
+            block ? "left-0 right-0" : "right-0 min-w-[15rem]"
+          }`}
         >
           {items.map((it, i) =>
             it.separator ? (
               <hr key={"sep" + i} className="tk-menu-sep" />
             ) : (
               <button
-                key={it.label}
+                key={it.key || it.label}
                 data-i={i}
                 role={it.checked == null ? "menuitem" : "menuitemradio"}
                 aria-checked={it.checked == null ? undefined : it.checked}
+                aria-disabled={it.disabled ? true : undefined}
                 tabIndex={-1}
                 title={it.title}
                 onClick={() => {
+                  /* Disabled items stay focusable and keep their reason
+                     visible — a rule you can read is learnable, one that
+                     silently removes the control is not. */
+                  if (it.disabled) return;
                   hide(true);
                   it.onPick();
                 }}
                 className={`tk-focus flex w-full items-center justify-between gap-3 tk-r2 px-3 py-2 text-left tk-micro transition-colors ${
                   it.danger ? "tk-menu-danger" : ""
-                }`}
+                } ${it.disabled ? "tk-tertiary" : ""}`}
               >
-                <span className="flex items-center gap-2">
+                <span className={`flex items-center gap-2 ${it.plain ? "tk-menu-plain" : ""}`}>
                   {it.icon ? <ThemeIcon mode={it.icon} /> : null}
                   {it.label}
                 </span>
-                {it.checked ? <span aria-hidden="true">✓</span> : null}
+                {it.checked ? (
+                  <span aria-hidden="true">✓</span>
+                ) : it.note ? (
+                  <span className="tk-data tk-tertiary">{it.note}</span>
+                ) : null}
               </button>
             )
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* The page strip, desktop. A tablist so arrow keys, Home/End and the
+   announcement come from the platform rather than from bespoke ARIA, and one
+   tab stop rather than one per page — a roving tabindex, so tabbing past the
+   pages does not cost N presses.
+
+   Renaming happens inline, in place, because naming a page is not worth the
+   working-memory reload a modal costs (§1.1, context-switching). Same grammar
+   as the cells: click it and type. */
+function PageStrip({
+  pages, activeId, counts, onSwitch, onCreate, onRename,
+  renaming, setRenaming, creating, setCreating, menuFor,
+}) {
+  const tabs = useRef(null);
+
+  const onKey = (e) => {
+    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    const list = [...tabs.current.querySelectorAll('[role="tab"]')];
+    const i = list.indexOf(document.activeElement);
+    if (i === -1) return;
+    e.preventDefault();
+    const n =
+      e.key === "ArrowRight" ? (i + 1) % list.length
+      : e.key === "ArrowLeft" ? (i - 1 + list.length) % list.length
+      : e.key === "Home" ? 0
+      : list.length - 1;
+    list[n].focus();
+    list[n].click();
+  };
+
+  const commit = (e, run) => {
+    if (e.key === "Enter") { e.preventDefault(); run(e.target.value); }
+    else if (e.key === "Escape") { e.preventDefault(); setRenaming(null); setCreating(false); }
+  };
+
+  return (
+    <div className="tk-pages" role="tablist" aria-label="Pages" ref={tabs} onKeyDown={onKey}>
+      {pages.map((p) =>
+        renaming === p.id ? (
+          <input
+            key={p.id}
+            className="tk-pgname tk-focus"
+            defaultValue={p.name}
+            autoFocus
+            aria-label={`Rename ${p.name}`}
+            onKeyDown={(e) => commit(e, (v) => onRename(p.id, v))}
+            onBlur={(e) => onRename(p.id, e.target.value)}
+          />
+        ) : (
+          <button
+            key={p.id}
+            role="tab"
+            aria-selected={p.id === activeId}
+            tabIndex={p.id === activeId ? 0 : -1}
+            className="tk-pgtab tk-focus"
+            title={p.name}
+            onClick={() => (p.id === activeId ? setRenaming(p.id) : onSwitch(p.id))}
+          >
+            {p.name}
+            <span className="tk-pgcount">{counts[p.id] || 0}</span>
+          </button>
+        )
+      )}
+
+      {creating ? (
+        <input
+          className="tk-pgname tk-focus"
+          placeholder="Page name"
+          autoFocus
+          aria-label="Name the new page"
+          onKeyDown={(e) => commit(e, (v) => { setCreating(false); onCreate(v); })}
+          onBlur={(e) => { setCreating(false); if (e.target.value.trim()) onCreate(e.target.value); }}
+        />
+      ) : (
+        <button
+          className="tk-pgadd tk-focus"
+          onClick={() => setCreating(true)}
+          aria-label="New page"
+          title="New page"
+        >
+          +
+        </button>
+      )}
+
+      {menuFor}
+    </div>
+  );
+}
+
+/* Deleting a page destroys nothing, so the confirmation says what actually
+   happens instead of performing danger it cannot deliver (Rams 6, §1.2). A
+   dialogue that shouts about consequences that do not exist is how people
+   learn to click through dialogues. */
+function DeletePageNotice({ page, moving, into, onCancel, onConfirm }) {
+  return (
+    <div
+      className="tk-noprint mb-6 tk-r3 p-4"
+      style={{ background: "var(--cold)", border: "1px solid var(--cold-line)" }}
+    >
+      <p className="tk-micro">Delete “{page.name}”?</p>
+      <p className="mt-2 max-w-2xl tk-body leading-relaxed">
+        {moving === 0 ? (
+          <>This page has no applications on it.</>
+        ) : (
+          <>
+            Its <strong>{moving}</strong> {moving === 1 ? "application moves" : "applications move"}{" "}
+            to “{into}”. Nothing is deleted — they keep their stage, notes,
+            scores and history.
+          </>
+        )}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={onConfirm}
+          className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+          style={{ borderColor: "var(--danger-ink)", color: "var(--danger-ink)" }}
+        >
+          Delete page
+        </button>
+        <button
+          onClick={onCancel}
+          className="tk-btn tk-focus tk-r2 px-3 py-1 tk-micro transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -2807,9 +3162,33 @@ function DetailPanel({ row, onEdit, onClearScores }) {
 
 const oneDp = (n) => (Math.round(n * 10) / 10).toString();
 
-function Funnel({ rows, open, onToggle }) {
+/* `rows` is the current page; `allRows` is every page.
+ *
+ * Occupancy, stage means and the collapsed summary are per page, because
+ * internship and graduate conversion are genuinely different numbers and
+ * averaging them destroys both.
+ *
+ * The reply rate is the exception, and it is the one number pages could
+ * quietly break. The threshold is not decoration — it exists because ratios on
+ * single-digit counts are noise. Scope it per page and splitting 25
+ * applications across two pages locks both sides, so organising your work
+ * costs you a metric you had. Scope the gate globally but compute per page and
+ * you unlock on 25 to display a rate built from 12, which is exactly the noise
+ * the gate was put there to suppress.
+ *
+ * So: gate on every page, then report the largest population that clears the
+ * gate, preferring this page, and say which one it is. Nothing displayed is
+ * ever computed on fewer than RATE_THRESHOLD, and no split can take a number
+ * away. A page that grows past the threshold starts speaking for itself with
+ * no setting and no announcement. */
+function Funnel({ rows, allRows, scoped, open, onToggle }) {
   const steps = funnelStats(rows);
-  const rep = replyStats(rows);
+  const pageRep = replyStats(rows);
+  const everyRep = replyStats(allRows || rows);
+  const usingPage = pageRep.unlocked;
+  const rep = usingPage ? pageRep : everyRep;
+  /* Only worth naming the population when there is more than one. */
+  const scopeNote = !scoped ? "" : usingPage ? "on this page" : "across all pages";
   /* The quietest marker that is still honest. A celebration would be unearned
      in the dossier's exact sense — §1.2 material honesty, Rams 6: do not
      promise what you cannot keep, and crossing an arbitrary threshold is not
@@ -2876,6 +3255,7 @@ function Funnel({ rows, open, onToggle }) {
                 <span className="tk-micro tk-secondary">reply rate</span>
                 <span className="tk-data tk-cap tk-tertiary">
                   {rep.replied} of {rep.applied} applications
+                  {scopeNote ? ` · ${scopeNote}` : ""}
                 </span>
               </div>
               {rep.medianDays != null && (
@@ -2892,8 +3272,9 @@ function Funnel({ rows, open, onToggle }) {
           ) : (
             <div>
               <p className="tk-body tk-secondary" style={{ maxWidth: "44ch" }}>
-                Reply rate unlocks at {RATE_THRESHOLD} applications — below that
-                it is noise.
+                Reply rate unlocks at {RATE_THRESHOLD} applications
+                {scoped ? " across all your pages" : ""} — below that it is
+                noise.
               </p>
               <p className="mt-2 flex flex-wrap items-center gap-3">
                 <span className="tk-lockbar">
@@ -3595,6 +3976,16 @@ function Tracker({ session }) {
   const [opError, setOpError] = useState("");
   const [needsMigration, setNeedsMigration] = useState(false);
   const [examplesDismissed, setExamplesDismissed] = useState(loadExamplesDismissed);
+  /* Pages. `multiPage` is the single gate on every new surface: false means the
+     feature is not present rather than present-and-disabled, which is what an
+     unmigrated database must see. It is only ever set true after the page_id
+     probe has come back clean — see the loader below. */
+  const [multiPage, setMultiPage] = useState(false);
+  const [pages, setPages] = useState([]);
+  const [activePageId, setActivePageId] = useState(loadActivePage);
+  const [renamingPage, setRenamingPage] = useState(null);
+  const [deletingPage, setDeletingPage] = useState(null);
+  const [creatingPage, setCreatingPage] = useState(false);
   const pending = useRef(0);
   const [purging, setPurging] = useState(null);
   const [bulkTrash, setBulkTrash] = useState(null); // "restore" | "purge"
@@ -3693,7 +4084,13 @@ function Tracker({ session }) {
 
       if (cancelled) return;
 
+      /* Whether the pages half of the schema is present. Set from the probe
+         above, and it is the ONLY thing permitted to authorise a query against
+         tracker_pages — see the comment on the pages fetch below. */
+      let hasPages = true;
+
       if (isMissingColumn(error)) {
+        hasPages = false;
         setNeedsMigration(true);
         ({ data, error } = await sb
           .from("applications")
@@ -3733,6 +4130,59 @@ function Tracker({ session }) {
       } else {
         setAll(data.map(fromDb));
       }
+
+      /* ---- pages ------------------------------------------------------
+         THE ORDERING RULE. Nothing may query tracker_pages until the probe
+         above has come back clean. That table does not exist on an unmigrated
+         database, and its absence raises 42P01, which isMissingColumn does not
+         recognise — it would fall through to report() and put a raw Postgres
+         error on screen, which is precisely what the migration notice exists
+         to prevent.
+
+         This sits in the same await chain as the probe rather than running
+         alongside it, so the two cannot race. If you ever move this into a
+         Promise.all for speed, you have reintroduced the bug. */
+      if (hasPages) {
+        const { data: pageRows, error: pageError } = await sb
+          .from("tracker_pages")
+          .select("id, name, sort_order, created_at")
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true });
+        if (cancelled) return;
+
+        if (isMissingTable(pageError)) {
+          /* page_id exists but the table does not — only reachable by editing
+             the database by hand, and it degrades rather than throwing. */
+          setNeedsMigration(true);
+        } else if (pageError) {
+          report("Loading your pages", pageError);
+        } else if (pageRows.length === 0) {
+          /* Nobody has a page yet: a new signup, or an account that had no
+             applications when the migration ran and so matched nothing. The
+             app creates it rather than a trigger on auth.users, because a
+             trigger does not exist for anyone who has not run the migration —
+             which is exactly the case it would be there to cover. */
+          const { data: made, error: makeError } = await sb
+            .from("tracker_pages")
+            .insert({ user_id: userId, name: "Applications", sort_order: 0 })
+            .select();
+          if (cancelled) return;
+          if (makeError) {
+            /* Failure here is not fatal and must not look like one: pages stay
+               empty, multiPage stays false, and every row renders on one
+               unlabelled page. That is the unmigrated experience, which is a
+               working app. */
+            report("Creating your first page", makeError);
+          } else if (made && made.length) {
+            setPages(made);
+            setMultiPage(true);
+          }
+        } else {
+          setPages(pageRows);
+          setMultiPage(true);
+        }
+      }
+
       setLoading(false);
       setSync("live");
     })();
@@ -3741,7 +4191,14 @@ function Tracker({ session }) {
     };
   }, [userId]);
 
-  /* realtime */
+  /* realtime
+     Deliberately still scoped to the user rather than to the active page. A
+     page-filtered subscription would have to be torn down and re-established
+     on every switch, turning a free operation into a round trip with a visible
+     loading state — the obvious optimisation is the thing that would make
+     switching slow. Everything lands in `all`; the page filter is applied at
+     the derivation step. So rows on other pages stay out of view while staying
+     current, and switching to one shows fresh data with no fetch. */
   useEffect(() => {
     const channel = sb
       .channel("applications-sync")
@@ -3765,6 +4222,40 @@ function Tracker({ session }) {
       sb.removeChannel(channel);
     };
   }, [merge]);
+
+  /* Pages created, renamed or reordered on another device. Subscribed only
+     when multiPage is true, which per the loader means only after the probe
+     proved the table exists — so an unmigrated database never opens this
+     channel and cannot error on it. */
+  useEffect(() => {
+    if (!multiPage) return undefined;
+    const channel = sb
+      .channel("pages-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tracker_pages" },
+        (payload) => {
+          setPages((prev) => {
+            if (payload.eventType === "DELETE") {
+              return prev.filter((p) => p.id !== payload.old.id);
+            }
+            const row = payload.new;
+            const i = prev.findIndex((p) => p.id === row.id);
+            const next = i === -1 ? [...prev, row] : prev.map((p) => (p.id === row.id ? row : p));
+            return next.sort(
+              (a, b) =>
+                a.sort_order - b.sort_order ||
+                new Date(a.created_at) - new Date(b.created_at)
+            );
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [multiPage]);
 
   /* writes */
   /* Editing a row is what resets its chase clock. An undo is not an edit — it
@@ -3874,6 +4365,103 @@ function Tracker({ session }) {
     });
   };
 
+  /* Which page is open, with two fallbacks so a blank screen is unreachable:
+     the stored id if it still names a real page, otherwise the first page,
+     otherwise nothing at all — and "nothing at all" is single-page mode, which
+     shows every row. A page deleted on another device therefore lands you
+     somewhere real rather than nowhere.
+
+     Declared above the handlers that read it rather than beside the other
+     derivations, so no closure can capture it before it exists. */
+  const activePage = pages.find((p) => p.id === activePageId) || pages[0] || null;
+
+  /* The whole of the page filter. `all` still holds every page's rows, which
+     is what makes switching free — see the realtime comment. A null page_id is
+     read as the first page, so a row cannot fall out of every view. */
+  const onActivePage = (r) =>
+    !activePage ||
+    r.pageId === activePage.id ||
+    (r.pageId == null && pages[0] && activePage.id === pages[0].id);
+
+  /* The strip appears when it is useful and not before. One page means one tab,
+     which is chrome describing a feature nobody is using — so with one page the
+     only trace of this is a "New page" line in the overflow menu.
+     `creatingPage` is in the condition because that menu item has to have
+     somewhere to put its input: naming the second page is the moment the strip
+     becomes worth showing, so it arrives one keystroke early rather than after
+     the fact. */
+  const showPages = multiPage && (pages.length > 1 || creatingPage);
+
+  /* Live rows per page, with orphans counted against the first page so the
+     tab totals add up to what is actually on screen. */
+  const pageCounts = {};
+  pages.forEach((p) => { pageCounts[p.id] = 0; });
+  all.forEach((r) => {
+    if (r.deleted) return;
+    const key = r.pageId && pageCounts[r.pageId] != null
+      ? r.pageId
+      : pages[0] && pages[0].id;
+    if (key) pageCounts[key] += 1;
+  });
+
+  const pageIndex = activePage ? pages.findIndex((p) => p.id === activePage.id) : -1;
+
+  /* Per-page actions. Deletion of the last page is disabled and says why,
+     rather than vanishing — a rule you can read is learnable. */
+  const pageMenu = {
+    label: activePage ? `Actions for ${activePage.name}` : "Page actions",
+    /* Not the default 36px icon button — inside the strip that would set the
+       whole header's height. See .tk-pgmenu. */
+    triggerClass: "tk-pgmenu tk-focus",
+    items: activePage
+      ? [
+          { key: "rename", label: "Rename", title: "Or click the active tab again",
+            onPick: () => setRenamingPage(activePage.id) },
+          { key: "left", label: "Move left", disabled: pageIndex <= 0,
+            onPick: () => movePage(activePage.id, -1) },
+          { key: "right", label: "Move right", disabled: pageIndex === pages.length - 1,
+            onPick: () => movePage(activePage.id, 1) },
+          { separator: true },
+          { key: "new", label: "New page", onPick: () => setCreatingPage(true) },
+          {
+            key: "delete", label: "Delete page", danger: true,
+            disabled: pages.length < 2,
+            title: pages.length < 2 ? "This is your only page" : undefined,
+            onPick: () => setDeletingPage(activePage.id),
+          },
+        ]
+      : [],
+  };
+
+  /* Mobile: the same actions, plus the pages themselves, in one sheet — so the
+     phone gets the whole feature rather than a reduced version of it. */
+  const mobilePageMenu = {
+    block: true,
+    label: "Pages",
+    triggerClass: "tk-pgmobile tk-focus",
+    triggerContent: activePage ? (
+      <>
+        <span className="tk-pgmobile-label">
+          {activePage.name}
+          <span className="tk-pgcount">{pageCounts[activePage.id] || 0}</span>
+        </span>
+        <span className="tk-tertiary" aria-hidden="true">▾</span>
+      </>
+    ) : null,
+    items: [
+      ...pages.map((p) => ({
+        key: p.id,
+        label: p.name,
+        plain: true,
+        note: String(pageCounts[p.id] || 0),
+        checked: activePage ? p.id === activePage.id : undefined,
+        onPick: () => switchPage(p.id),
+      })),
+      { separator: true },
+      ...pageMenu.items,
+    ],
+  };
+
   const addRow = async () => {
     const sortOrder = all.reduce((m, r) => Math.max(m, r.sortOrder), -1) + 1;
     mark(1);
@@ -3887,6 +4475,10 @@ function Tracker({ session }) {
         status: "to-apply",
         sort_order: sortOrder,
         stage_history: [{ to: "to-apply", at: new Date().toISOString() }],
+        /* Lands on the page you are looking at. Omitted entirely on an
+           unmigrated database, where the column does not exist and naming it
+           would fail the insert. */
+        ...(activePage ? { page_id: activePage.id } : {}),
       })
       .select();
 
@@ -3895,7 +4487,10 @@ function Tracker({ session }) {
         merge(data[0]);
         /* A brand-new row is blank and unrated, so every narrowing filter
            would hide it — the row would be created and the screen would not
-           change, which reads as the button being broken. */
+           change, which reads as the button being broken.
+
+           Note what is deliberately NOT here: switching pages. The row is
+           created on the page already open, so nothing needs to move. */
         setFilter(null);
         setGroupValue(null);
         setMinScore("");
@@ -3906,6 +4501,141 @@ function Tracker({ session }) {
             "covers reads as well as writes."
         );
       }
+    }
+    mark(-1);
+  };
+
+  /* ---- pages ----------------------------------------------------------
+     Every one of these is a no-op when multiPage is false, because nothing
+     renders a control that calls them. They are written to be safe anyway:
+     none of them touches tracker_pages without a page already in hand. */
+
+  const switchPage = (id) => {
+    setActivePageId(id);
+    saveActivePage(id);
+    /* View controls deliberately carry across the switch rather than being
+       remembered per page. Changing the sort and filter under someone on the
+       highest-frequency action in the feature is a hidden state change, and
+       the empty state already names any filter that is hiding everything. */
+  };
+
+  const createPage = async (rawName) => {
+    const name = (rawName || "").trim() || "New page";
+    const sortOrder = pages.reduce((m, p) => Math.max(m, Number(p.sort_order)), -1) + 1;
+    mark(1);
+    const { data, error } = await sb
+      .from("tracker_pages")
+      .insert({ user_id: userId, name, sort_order: sortOrder })
+      .select();
+
+    if (!report("Creating a page", error)) {
+      if (data && data[0]) {
+        setPages((prev) => [...prev, data[0]]);
+        switchPage(data[0].id);
+      } else {
+        /* Same failure, same words as the row path: an insert that succeeds
+           and reads back empty is an RLS policy that covers writes but not
+           reads. Naming it is the difference between a five-minute fix and an
+           afternoon. */
+        setOpError(
+          "The page was created but could not be read back.\n\n" +
+            "Re-run the setup SQL. The policy must be created with FOR ALL so it " +
+            "covers reads as well as writes."
+        );
+      }
+    }
+    mark(-1);
+  };
+
+  const renamePage = async (id, rawName) => {
+    const name = (rawName || "").trim();
+    setRenamingPage(null);
+    const current = pages.find((p) => p.id === id);
+    if (!name || !current || name === current.name) return;
+    /* Optimistic: renaming is reversible, high-success and the user is looking
+       straight at the result. Rollback restores the previous name. */
+    const before = current.name;
+    setPages((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+    mark(1);
+    const { error } = await sb.from("tracker_pages").update({ name }).eq("id", id);
+    if (error) {
+      setPages((prev) => prev.map((p) => (p.id === id ? { ...p, name: before } : p)));
+      report("Renaming the page", error);
+    }
+    mark(-1);
+  };
+
+  /* Swap sort_order with the neighbour. Two targeted updates rather than
+     renumbering everything, so a failure leaves the order unchanged instead of
+     half-applied. */
+  const movePage = async (id, delta) => {
+    const i = pages.findIndex((p) => p.id === id);
+    const j = i + delta;
+    if (i === -1 || j < 0 || j >= pages.length) return;
+    const a = pages[i];
+    const b = pages[j];
+    const next = [...pages];
+    next[i] = { ...b, sort_order: a.sort_order };
+    next[j] = { ...a, sort_order: b.sort_order };
+    setPages(next);
+    mark(1);
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      sb.from("tracker_pages").update({ sort_order: b.sort_order }).eq("id", a.id),
+      sb.from("tracker_pages").update({ sort_order: a.sort_order }).eq("id", b.id),
+    ]);
+    if (e1 || e2) {
+      setPages(pages);
+      report("Reordering pages", e1 || e2);
+    }
+    mark(-1);
+  };
+
+  /* Deleting a page destroys nothing. Its applications — live and trashed
+     alike — move to the first remaining page, which is why the confirmation
+     can be honest rather than frightening.
+
+     The explicit move makes the outcome predictable. The database makes it
+     safe: page_id is nullable with on delete set null, so even if this update
+     never runs, the rows point nowhere rather than somewhere wrong, and a null
+     page_id renders on the first page. That belt is why this needs no
+     transaction. */
+  /* Which rows a page is actually SHOWING, which is not the same as which rows
+     name it. A null page_id displays on the first page, so deleting the first
+     page has to carry those too — otherwise the confirmation promises to move
+     nothing while rows visibly move, and the orphans would silently reattach
+     to whichever page became first. */
+  const rowsShownOn = (id) =>
+    all.filter(
+      (r) => r.pageId === id || (r.pageId == null && pages[0] && pages[0].id === id)
+    );
+
+  const deletePage = async (id) => {
+    setDeletingPage(null);
+    const survivor = pages.find((p) => p.id !== id);
+    if (!survivor) return; // the last page cannot be deleted
+    const moving = rowsShownOn(id).map((r) => r.id);
+
+    mark(1);
+    if (moving.length) {
+      const { error: moveError } = await sb
+        .from("applications")
+        .update({ page_id: survivor.id })
+        .in("id", moving);
+      if (moveError) {
+        report("Moving the applications off that page", moveError);
+        mark(-1);
+        return; // do NOT delete the page if its rows could not be moved
+      }
+      const movedIds = new Set(moving);
+      setAll((prev) =>
+        prev.map((r) => (movedIds.has(r.id) ? { ...r, pageId: survivor.id } : r))
+      );
+    }
+
+    const { error } = await sb.from("tracker_pages").delete().eq("id", id);
+    if (!report("Deleting the page", error)) {
+      setPages((prev) => prev.filter((p) => p.id !== id));
+      if (activePageId === id) switchPage(survivor.id);
     }
     mark(-1);
   };
@@ -4025,8 +4755,13 @@ function Tracker({ session }) {
     }
   };
 
-  const rows = all.filter((r) => !r.deleted);
-  const trash = all.filter((r) => r.deleted);
+  /* Rows across every page, used for two things only: the reply-rate
+     population (§4.1) and telling "brand-new account" apart from "new page on
+     an established account" in the empty state. */
+  const liveEverywhere = all.filter((r) => !r.deleted).length;
+
+  const rows = all.filter((r) => !r.deleted && onActivePage(r));
+  const trash = all.filter((r) => r.deleted && onActivePage(r));
   const examples = rows.filter(isExample);
   const liveRows = rows.filter((r) => LIVE.includes(r.status));
   const stale = liveRows.filter((r) => daysSince(r.activity) >= 7).length;
@@ -4148,10 +4883,42 @@ function Tracker({ session }) {
   return (
     <Shell>
       <header className="tk-line-b mb-6 flex flex-wrap items-end justify-between gap-4 pb-6">
-        <div>
+        {/* Wordmark and page strip share ONE baseline row. Stacking the strip
+            on a second line was measured at +34.1px of header, which pushes
+            every row down the page for no gain — see design/PROPOSAL.md §5.3.
+            With one page, or on a database without the pages schema, the strip
+            is not rendered at all: a tab strip holding a single tab is chrome
+            explaining a feature nobody is using (§1.1, expertise reversal). */}
+        <div className="tk-headleft">
           <h1 className="tk-display">
             JobApp
           </h1>
+          {showPages && (
+            <>
+              <span className="tk-headrule tk-noprint" aria-hidden="true" />
+              {/* lg:block, NOT lg:flex. The Tailwind subset in this file is
+                  hand-maintained because there is no build step, and it
+                  defines only .lg\:block and .lg\:hidden — lg:flex is inert,
+                  so the strip rendered display:none at every width while
+                  still being present in the DOM. `.tk-pages` is the flex
+                  container; this wrapper only needs to appear. */}
+              <div className="tk-noprint hidden lg:block">
+                <PageStrip
+                  pages={pages}
+                  activeId={activePage ? activePage.id : null}
+                  counts={pageCounts}
+                  onSwitch={switchPage}
+                  onCreate={createPage}
+                  onRename={renamePage}
+                  renaming={renamingPage}
+                  setRenaming={setRenamingPage}
+                  creating={creatingPage}
+                  setCreating={setCreatingPage}
+                  menuFor={<OverflowMenu {...pageMenu} />}
+                />
+              </div>
+            </>
+          )}
         </div>
         {/* Three elements now: the sync chip sits immediately left of the
             action pair. It matters most at the moment it changes, and the
@@ -4177,6 +4944,15 @@ function Tracker({ session }) {
           </button>
           <OverflowMenu
             items={[
+              /* With one page there is no strip, so this is the only way to
+                 discover pages exist — which is the right home for it: low
+                 frequency, and it sits with the other configuration rather
+                 than competing with the primary action. Once a second page
+                 exists the strip appears and carries it instead. */
+              ...(multiPage && !showPages
+                ? [{ key: "newpage", label: "New page", onPick: () => setCreatingPage(true) },
+                   { separator: true }]
+                : []),
               /* Each row states a STATE, not an action, and the pair is a
                  radio group — so the current theme is unambiguous from inside
                  the menu now that the toggle is not visible at a glance. */
@@ -4222,16 +4998,40 @@ function Tracker({ session }) {
         </div>
       </header>
 
-      {/* Only ever visible on paper: says what the export is and when. */}
+      {/* Mobile. A tab strip at phone width truncates and scrolls the tab you
+          want off the screen, so below lg it becomes one full-width control
+          naming where you are — recognition rather than recall (§1.1), and the
+          largest tap target the layout allows. Same OverflowMenu underneath. */}
+      {showPages && (
+        <div className="tk-noprint mb-6 lg:hidden">
+          <OverflowMenu {...mobilePageMenu} />
+        </div>
+      )}
+
+      {/* Only ever visible on paper: says what the export is and when. Prints
+          the page you are looking at, which is what "print what you see" has
+          always meant here — so the page name joins the same sentence as the
+          stage filter and the grouping. */}
       <p className="tk-printonly mb-6 hidden tk-micro tk-secondary">
         Pipeline export · {new Date().toLocaleDateString()} · {visibleCount} of {rows.length}{" "}
         applications
+        {showPages && activePage ? ` · page: ${activePage.name}` : ""}
         {filter ? ` · stage: ${stageOf(filter).label}` : ""}
         {groupBy ? ` · grouped by ${GROUPS.find((g) => g.key === groupBy).label}` : ""}
       </p>
 
       {needsMigration && (
         <MigrationNotice onDismiss={() => setNeedsMigration(false)} />
+      )}
+
+      {deletingPage && pages.find((p) => p.id === deletingPage) && (
+        <DeletePageNotice
+          page={pages.find((p) => p.id === deletingPage)}
+          moving={rowsShownOn(deletingPage).length}
+          into={(pages.find((p) => p.id !== deletingPage) || {}).name}
+          onCancel={() => setDeletingPage(null)}
+          onConfirm={() => deletePage(deletingPage)}
+        />
       )}
 
       {examples.length > 0 && !examplesDismissed && (
@@ -4277,6 +5077,8 @@ function Tracker({ session }) {
       <div className="mb-6">
         <Funnel
           rows={rows}
+          allRows={all.filter((r) => !r.deleted)}
+          scoped={showPages}
           open={funnelOpen}
           onToggle={() =>
             setFunnelOpen((v) => {
@@ -4377,7 +5179,32 @@ function Tracker({ session }) {
 
       {visibleCount === 0 && (
         <div className="tk-dash tk-r3 p-10 text-center">
-          {rows.length === 0 ? (
+          {rows.length === 0 && liveEverywhere > 0 ? (
+            /* A new page on an established account. §3.3 says the empty state
+               is the best onboarding surface and a new page is a second chance
+               at it — but §1.1's expertise-reversal effect says re-teaching
+               someone who already has forty applications is a tax, not a
+               kindness. So the tutorial below is gated on having no rows
+               ANYWHERE, and this is what a new page gets instead. */
+            <>
+              <p className="mx-auto tk-lead" style={{ maxWidth: "48ch" }}>
+                Nothing on this page yet.
+              </p>
+              <div className="mt-4">
+                <button
+                  onClick={addRow}
+                  className="tk-btn tk-focus tk-rfull px-4 py-2 tk-micro transition-colors"
+                  style={{
+                    background: "var(--accent)",
+                    borderColor: "var(--accent)",
+                    color: "#fff",
+                  }}
+                >
+                  + Add application
+                </button>
+              </div>
+            </>
+          ) : rows.length === 0 ? (
             /* The first-run empty state is the best onboarding surface there
                is (§3.3), so it teaches the primary action in context rather
                than dropping the reader into a blank panel. The ghost row below

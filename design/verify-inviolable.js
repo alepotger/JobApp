@@ -10,6 +10,24 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
 (async () => {
   const b = await chromium.launch({ executablePath:"/opt/pw-browsers/chromium", args:["--no-sandbox"] });
 
+  /* The page pins four CDN scripts. Where there is no outbound network, serve
+     them from a local cache instead of waiting 30s for a selector that can
+     never appear. CDN_CACHE should hold react.js, react-dom.js, babel.js and
+     supabase.js. */
+  const CACHE = process.env.CDN_CACHE;
+  const CDN_MAP = {
+    "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "react.js",
+    "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "react-dom.js",
+    "https://unpkg.com/@babel/standalone@7.29.8/babel.min.js": "babel.js",
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js": "supabase.js",
+  };
+  const routeCdn = async (target) => {
+    if (!CACHE) return;
+    await target.route((u) => !!CDN_MAP[u.href.split("?")[0]], (r) =>
+      r.fulfill({ status: 200, contentType: "application/javascript",
+        body: fs.readFileSync(`${CACHE}/${CDN_MAP[r.request().url().split("?")[0]]}`) }));
+  };
+
   /* 1 — user_id on every insert AND defaulted in the database */
   const inserts=[...SRC.matchAll(/\.from\("applications"\)\s*\n?\s*\.insert\(/g)]
     .map(m=>SRC.slice(Math.max(0,m.index-700), m.index+80));
@@ -19,10 +37,30 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
     `${inserts.length} insert site(s), all carry user_id; setup.sql sets the column default`);
 
   /* 2 — empty read-back after insert is surfaced, never swallowed */
+  /* Was a fixed-width regex over addRow, which broke the moment a comment grew
+     inside the branch — a harness that fails on prose is a harness nobody
+     trusts. Now: locate each function that inserts and reads back, and require
+     each to guard the empty array and name FOR ALL. Adding a third such site
+     without the guard fails this. */
+  const readBackSites = ["addRow", "createPage"].map((fn) => {
+    const at = SRC.indexOf(`const ${fn} = async`);
+    if (at === -1) return { fn, found: false };
+    const body = SRC.slice(at, at + 2500);
+    return {
+      fn,
+      found: true,
+      guarded:
+        /\.insert\(/.test(body) &&
+        /\.select\(\)/.test(body) &&
+        /if \(data && data\[0\]\)/.test(body) &&
+        /else \{[\s\S]{0,400}?setOpError/.test(body) &&
+        /could not be read back/i.test(body) &&
+        /FOR ALL/.test(body),
+    };
+  });
   t("2. insert().select() returning [] with no error is surfaced as an RLS read-back failure",
-    /could not be read back/i.test(SRC) && /FOR ALL/.test(SRC) &&
-      /if \(data && data\[0\]\)[\s\S]{0,400}?\} else \{[\s\S]{0,200}?setOpError/.test(SRC),
-    "addRow branches on the empty array and calls setOpError naming FOR ALL");
+    readBackSites.every((x) => x.found && x.guarded),
+    readBackSites.map((x) => `${x.fn}: ${x.found ? (x.guarded ? "guarded" : "NOT guarded") : "missing"}`).join("; "));
 
   /* 3 — no discarded Supabase errors */
   const calls=[...SRC.matchAll(/(?:(?:const|let)\s*)?\(?\{[^}]*\}\s*=\s*await sb[\s\S]{0,300}?;|await sb[\s\S]{0,300}?;/g)].map(m=>m[0]);
@@ -37,6 +75,7 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
 
   /* 5 — URL reduced to origin; exercised for real */
   const p = await b.newPage();
+  await routeCdn(p);
   await p.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
   await p.waitForSelector("h1");
   const cases=[["https://abcdefgh.supabase.co/rest/v1/","https://abcdefgh.supabase.co"],
@@ -44,7 +83,7 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
                ["abcdefgh.supabase.co/rest/v1/","https://abcdefgh.supabase.co"]];
   const got=[];
   for (const [input,want] of cases) {
-    const ctx=await b.newContext(); const q=await ctx.newPage();
+    const ctx=await b.newContext(); await routeCdn(ctx); const q=await ctx.newPage();
     await q.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
     await q.waitForSelector("h1");
     await q.locator("input").nth(0).fill(input);
@@ -58,7 +97,7 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
     got.every(Boolean), `3 inputs → origin: ${got.map(x=>x?"ok":"FAIL").join(", ")}`);
 
   /* 6 — no credentials anywhere; empty form on a clean browser */
-  const ctx=await b.newContext(); const fresh=await ctx.newPage();
+  const ctx=await b.newContext(); await routeCdn(ctx); const fresh=await ctx.newPage();
   const reqs=[]; fresh.on("request",r=>reqs.push(r.url()));
   await fresh.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
   await fresh.waitForSelector("h1"); await fresh.waitForTimeout(400);
@@ -85,7 +124,7 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
     seeds.join(", "));
 
   /* 9 — adding a row clears an active stage filter (exercised) */
-  const ctx2=await b.newContext(); const r=await ctx2.newPage();
+  const ctx2=await b.newContext(); await routeCdn(ctx2); const r=await ctx2.newPage();
   await r.addInitScript(()=>localStorage.setItem("tracker.config",
     JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
   await r.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
@@ -102,7 +141,7 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
   await ctx2.close();
 
   /* 10 — soft delete restores to position; hard delete separately confirmed */
-  const ctx3=await b.newContext(); const d=await ctx3.newPage();
+  const ctx3=await b.newContext(); await routeCdn(ctx3); const d=await ctx3.newPage();
   await d.addInitScript(()=>localStorage.setItem("tracker.config",
     JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
   await d.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});

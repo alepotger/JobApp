@@ -2914,3 +2914,131 @@ Stated plainly, because the preview proves less than a build would.
   anyone.
 - **The ten inviolable behaviours have not been re-run.** They cannot be —
   there is no new build to run them against. They are a gate on Step 2.
+
+---
+
+# Multi-page support — built
+
+Step 2. `index.html`, `setup.sql`, `migrations/003-pages.sql`.
+
+## What shipped, against what was proposed
+
+Everything in §1–§7 as written, including the four places §7 argued with the
+brief: reply rate gated on all pages and labelled by population; view settings
+not remembered per page; no digest change at all; reorder as menu items rather
+than drag.
+
+`PAGES_SQL` is defined once in `index.html` and generated into both
+`setup.sql` and `003-pages.sql`, verified identical by normalised comparison —
+three hand-maintained copies of the same DDL would drift, and the copy that
+drifts is the one a stranger runs.
+
+## Three claims that were wrong until they were measured
+
+The preview said the header held at 56.2px. In the real app it did not, for
+three separate reasons, each of which passed a test for the wrong reason first.
+
+**1. The strip never rendered.** The wrapper was `hidden lg:flex`. This file's
+Tailwind subset is hand-maintained because there is no build step, and it
+defines `.lg\:block` and `.lg\:hidden` and no `.lg\:flex` — so the strip was
+`display:none` at every width while sitting in the DOM. The contrast probe
+still found the tabs and reported real numbers; the header-height check still
+passed. **Both passed because nothing was there.** Same class of fault as
+`min-w-[14rem]` two rounds ago, and the lesson did not transfer: a class that
+does nothing looks exactly like a class that works.
+
+**2. The underline reserved height.** 5px of `padding-bottom` on each tab made
+its box taller than the wordmark's descender space. Now absolutely positioned
+at `bottom:-6px`, out of flow, costing nothing. This turned out **not** to be
+the main cause — it was fixed first, and the header stayed at +8.7px.
+
+**3. The per-page menu trigger was a 36px icon button.** `OverflowMenu`
+defaults to `.tk-iconbtn`, which is `--control-h` tall, and inside the strip
+that set the height of the whole header. The tabs were never the problem. The
+in-strip trigger now carries `.tk-pgmenu`, on the tab's own scale.
+
+Measured after all three, at 1440px, two pages against one:
+
+| | One page | Two pages |
+|---|---|---|
+| Header height | 65.5px | **65.5px** |
+| Top of the grid | 697.6px | **697.6px** |
+| Row card | 1312×61, r10px | **1312×61, r10px** |
+
+The rows do not move. That is the claim §5.3 makes, and it is now true because
+it was checked three times and was false the first two.
+
+## The measurement instrument was wrong twice, too
+
+**Switch cost, first attempt: two nested `requestAnimationFrame`s.** That waits
+two frames whatever the work costs. It reported 8.3ms on one run and 28.5ms on
+the next against identical code — it was measuring the browser's frame clock.
+
+**Second attempt: click and read synchronously.** React 18 flushes a discrete
+update in a microtask, so the read always saw pre-click DOM and reported a
+confident **0.1ms for measuring nothing**. It also alternated `tabs[0]`/
+`tabs[1]`, and clicking the *active* tab starts a rename rather than switching
+— half the clicks did not switch at all.
+
+Fixed: always click the inactive tab, `await` a microtask, then read, and
+assert the row count actually alternates so a null measurement cannot pass.
+
+**Median 2.4ms, worst 4.7ms over nine real switches** — inside one frame, with
+the row count alternating 4↔2 as proof each click switched.
+
+## Verification
+
+**Pages, unmigrated database (9/9).** `tracker_pages` is **never requested** —
+the ordering rule holds. Migration notice shown; all rows still render; no page
+strip; no mobile control; the SQL on screen creates `tracker_pages` and adds
+`page_id`; adding a row omits `page_id` from the insert; one failed request,
+the probe, and no JS faults.
+
+**Pages, migrated database (18/18).** Two tabs with per-page counts; only the
+active page's rows visible; switching makes **no network request**; the active
+page is remembered; add carries the active `page_id` and does not switch page;
+the delete confirmation names the real count and destination and says nothing
+is deleted; deleting a page destroys no applications and moves all of them,
+including a row added after load; the strip disappears at one page.
+
+**Ten inviolable behaviours: all pass.** 1–8 via `design/verify-inviolable.js`;
+#9 (adding a row clears the stage filter) re-tested with two pages and
+additionally asserting the page does not change; #10 (soft delete restores to
+position) in the page harness, which also confirms the trash is per page.
+
+Check 2 in that harness had to be rewritten: it matched a fixed 400-character
+window inside `addRow`, and a comment growing inside the branch broke it. It
+now locates each function that inserts and reads back and requires each to
+guard the empty array — so `createPage` is covered by the same rule, and a
+third such site without the guard fails.
+
+**Shadow invariant re-verified**, since the header changed above the rows: the
+row card still owns background, radius and shadow on one element with the
+hairline as an inset ring, no clipping ancestor, and identical geometry with
+and without the strip.
+
+**Contrast**, measured by converting each OKLCH token through a canvas:
+
+| | Light | Dark | Floor |
+|---|---|---|---|
+| Active tab | 14.88 | 15.52 | 4.5 |
+| Idle tab | 4.75 | 5.69 | 4.5 |
+| Underline | 5.40 | 7.62 | 3.0 |
+
+## Two pre-existing defects fixed on the way
+
+**`--cold-line` and `--warn-line` were never declared.** Four places used them,
+so `border:1px solid var(--warn-line)` was invalid at computed-value time, the
+whole shorthand unset, and the migration notice and database-error panel have
+been rendering with **no border at all**. Now defined in all three palettes.
+
+**Still not fixed, and still worth your decision:** `+ Add application` is
+white on `var(--accent)`, which in dark mode is 2.50:1 against a 4.5 floor.
+Documented in §8.3 with two candidate fixes. It is the most prominent control
+in the app and belongs in its own decision.
+
+## Not verified
+
+No SQL has been run against a real database. The migration is idempotent and
+additive by construction and has been read closely, but the only place it has
+executed is in my head. Run it on your own project before trusting it.
