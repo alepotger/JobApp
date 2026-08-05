@@ -113,6 +113,54 @@ function fileLabelledReplies() {
   }
 }
 
+/* Re-file something that has already been through once.
+ *
+ * The usual reason is a 202 "unmatched": the function saw the message, could
+ * not tell which application it belonged to, and said so. Once the row has a
+ * contact_email — or a company name that resembles the sender — the same
+ * message will file correctly, but it is wearing JobApp/Filed by then and the
+ * automatic search deliberately skips those.
+ *
+ * Set RETRY_QUERY to a Gmail search that finds the thread, run this, then run
+ * fileLabelledReplies (or wait for the trigger). Useful in its own right when
+ * mail.google.com will not load: this runs on script.google.com, so labels can
+ * be moved without the Gmail interface.
+ *
+ * Nothing is deleted or reset. The ledger row from the first attempt has no
+ * application_id, which is precisely the state the function reads as
+ * unfinished work rather than as a delivery already dealt with. */
+function retryFiled() {
+  const props = PropertiesService.getScriptProperties();
+  const query = (props.getProperty('RETRY_QUERY') || '').trim();
+
+  if (!query) {
+    throw new Error(
+      'Set a RETRY_QUERY script property first — a Gmail search that finds ' +
+      'the thread, e.g. from:noreply@eesc.europa.eu'
+    );
+  }
+
+  const source = labelNamed(SOURCE_LABEL);
+  const threads = GmailApp.search(query, 0, MAX_THREADS);
+
+  if (threads.length === 0) {
+    Logger.log('no threads matched: ' + query);
+    return;
+  }
+
+  for (const thread of threads) {
+    /* Adding the manual label is enough. collectThreads takes everything
+       carrying it without consulting JobApp/Filed, so the thread does not need
+       stripping of anything first. */
+    thread.addLabel(source);
+    Logger.log('queued: ' + thread.getFirstMessageSubject());
+  }
+
+  Logger.log(
+    threads.length + ' thread(s) queued. Run fileLabelledReplies, or wait for the trigger.'
+  );
+}
+
 function collectThreads(source, autoQuery) {
   const seen = {};
   const all = [];
