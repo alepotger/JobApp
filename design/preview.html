@@ -285,6 +285,15 @@ body{background:var(--page);color:var(--ink);
 @media(min-width:900px){.cols.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 .k{font-family:var(--font-mono);font-size:.72rem;color:var(--ink-3)}
 ul.pv-list{margin-top:var(--space-room);padding-left:1.1rem;line-height:1.8}
+
+.rowcard[data-r]{position:relative;padding-left:34px;
+  grid-template-columns:minmax(0,1.6fr) minmax(0,1.6fr) minmax(0,1fr) 96px}
+.rgrip{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  background:none;border:0;cursor:grab;color:var(--ink-3);font-size:14px;
+  line-height:1;padding:4px;border-radius:var(--r-1);touch-action:none}
+.rgrip:active{cursor:grabbing}
+.rowcard[data-lift]{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--accent);
+  z-index:5;transition:none!important}
 </style>
 </head>
 <body>
@@ -727,6 +736,39 @@ update public.applications a
   </div>
 </section>
 
+<!-- ─────────────────────────────────────────── reorder animation -->
+<section class="pv-sec">
+  <p class="pv-n">Reorder</p>
+  <h2 class="pv-t">Springboard-style reordering</h2>
+  <p class="pv-note"><strong>Grab a handle and drag.</strong> The row you hold
+  is attached to the pointer with <em>no</em> transition — any easing between
+  finger and row reads as lag (§3.1, immediately responsive). Everything it
+  displaces slides into its new slot. That asymmetry is what makes the iOS
+  effect read correctly.</p>
+  <p class="pv-note">Transform only, so nothing re-lays-out mid-flight — which
+  is also why the corners and shadow hold throughout: a transformed box paints
+  its own <code>border-radius</code> and <code>box-shadow</code>.
+  <code>cubic-bezier(0.22, 1, 0.36, 1)</code>, the dossier's smooth
+  approximated spring, at <strong>220ms</strong> — under the ~300ms ceiling
+  §3.1 sets. The energetic <code>(0.34, 1.56, …)</code> curve overshoots, and
+  four rows springing past their slots at once reads as sloppy.</p>
+  <p class="pv-note">Under <code>prefers-reduced-motion</code> the reorder still
+  happens; the rows simply arrive.</p>
+
+  <div class="stage">
+    <div class="rowlist" id="reorder">
+      <div class="rowcard" data-r><button class="rgrip" aria-label="Reorder Northwind">⠿</button><div>Northwind</div><div>Data Analyst</div><div><span class="pill p-replied">Replied</span></div><div class="tk-mono tk-cap tk-secondary">4.2</div></div>
+      <div class="rowcard" data-r><button class="rgrip" aria-label="Reorder Meridian Labs">⠿</button><div>Meridian Labs</div><div>Summer Intern</div><div><span class="pill p-interview">Interview</span></div><div class="tk-mono tk-cap tk-secondary">4.6</div></div>
+      <div class="rowcard" data-r><button class="rgrip" aria-label="Reorder Aster &amp; Co">⠿</button><div>Aster &amp; Co</div><div>Intern, Research</div><div><span class="pill p-applied">Applied</span></div><div class="tk-mono tk-cap tk-secondary">3.8</div></div>
+      <div class="rowcard" data-r><button class="rgrip" aria-label="Reorder Halberd">⠿</button><div>Halberd</div><div>Placement Year</div><div><span class="pill p-toapply">To apply</span></div><div class="tk-mono tk-cap tk-tertiary">&mdash;</div></div>
+    </div>
+  </div>
+  <p class="pv-note"><span class="k">note</span> &nbsp;A demonstration of the
+  motion, not the shipped implementation — the real one persists to
+  <code>sort_order</code>, syncs across devices, and has a keyboard equivalent
+  (Space to lift, arrows to move, Escape to cancel).</p>
+</section>
+
 </div>
 
 <script>
@@ -760,6 +802,66 @@ update public.applications a
       tabs[n].focus();
       show(tabs[n].dataset.p);
     });
+  });
+})();
+
+/* FLIP, the same shape as the shipped implementation: measure, invert with no
+   transition, release on the next frame. The dragged row is excluded AND has
+   any inherited transition cleared — a row that animated a moment ago still
+   carries one, and it would ease toward the pointer instead of tracking it. */
+(function () {
+  var list = document.getElementById('reorder');
+  if (!list) return;
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dragging = null;
+
+  function flip(run) {
+    var rows = [].slice.call(list.children);
+    var before = rows.map(function (r) { return r.getBoundingClientRect().top; });
+    run();
+    [].slice.call(list.children).forEach(function (el) {
+      var i = rows.indexOf(el);
+      var delta = before[i] - el.getBoundingClientRect().top;
+      if (el === dragging) { el.style.transition = 'none'; el.style.transform = ''; return; }
+      if (still || Math.abs(delta) < 1) return;
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(' + delta + 'px)';
+      requestAnimationFrame(function () {
+        el.style.transition = 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)';
+        el.style.transform = '';
+      });
+    });
+  }
+
+  list.addEventListener('pointerdown', function (e) {
+    var grip = e.target.closest('.rgrip');
+    if (!grip) return;
+    var row = grip.closest('.rowcard');
+    var startY = e.clientY, live = false;
+    var touch = e.pointerType === 'touch', timer = null;
+    function begin() { live = true; dragging = row; row.setAttribute('data-lift', ''); }
+    if (touch) timer = setTimeout(begin, 400);
+
+    function move(ev) {
+      if (!live) { if (touch || Math.abs(ev.clientY - startY) < 6) return; begin(); }
+      ev.preventDefault();
+      var rows = [].slice.call(list.children);
+      var over = rows.filter(function (r) { return r !== row; }).find(function (r) {
+        var b = r.getBoundingClientRect();
+        return ev.clientY < b.top + b.height / 2;
+      });
+      if (over === row) return;
+      flip(function () { list.insertBefore(row, over || null); });
+    }
+    function end() {
+      clearTimeout(timer);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      row.removeAttribute('data-lift');
+      dragging = null;
+    }
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', end);
   });
 })();
 </script>

@@ -3409,3 +3409,89 @@ requires a WebSocket server speaking Supabase's realtime protocol. That is a
 substantial piece of work, and given it has now hidden two bugs it is probably
 worth building before anything else here. Awaiting a decision rather than
 spending the effort unannounced.
+
+---
+
+# Regression round — items 2, 3, 4 built and verified
+
+## The verification bar, met
+
+"Done" now means driven on a desktop pointer **and** a real touch device, and
+cross-device sync exercised over an actual WebSocket. Four harnesses, all in
+`design/`, all runnable:
+
+| | |
+|---|---|
+| `verify-realtime.js` | two devices, live `postgres_changes` — **7/7** |
+| `verify-touch-drag.js` | iPhone UA, `hasTouch`, real touch pointers — **8/8** |
+| `verify-reorder-animation.js` | theme row + FLIP, sampled mid-drag — **15/15** |
+| `verify-reorder-sync.js` | persistence and fresh-load sync — **8/8** |
+
+## 2. Mobile drag — built, and exercised on touch
+
+The handle now renders on the mobile card, permanently visible rather than
+hover-revealed, since a phone has no hover — that alone made the desktop handle
+unreachable even before the card lacked one. `touch-action:none` is scoped to
+the handle so the rest of the card still scrolls the page. Long press 400ms;
+pointer drag stays at 6px of travel.
+
+Verified with genuine `pointerType: "touch"` events on a 390×844 iPhone
+context: four cards, **four visible handles**, `touch-action: none` confirmed
+computed, a tap does **not** start a drag, and a long press followed by a drag
+reorders — `Alpha, Bravo, Charlie, Delta` → `Bravo, Charlie, Delta, Alpha`,
+four writes, each matching exactly one row, database matching the phone.
+
+## 3. Theme row — state, and both halves change
+
+The row now states the current theme with its matching glyph, and toggling
+changes label and glyph together. The previous convention named a fixed mode
+and let a small tick carry the state; it was argued for and it failed in use,
+because a state change nobody notices is not a state change.
+
+The action lives in the accessible name and the tooltip — *"Dark mode. Switch
+to light mode."* — so the visible text can stay a plain statement of where you
+are. Verified: label changes, glyph changes (sun 167 chars of path → moon 72),
+the interface actually re-themes, the menu stays open, and reopening it still
+shows the right state.
+
+## 4. Reorder animation
+
+FLIP. Positions measured before and after the commit, the difference applied as
+an inverse translate with no transition, released the next frame.
+
+- **The dragged row does not animate.** It is attached to the pointer; any
+  easing between the two reads as lag (§3.1).
+- **Transform only** — nothing re-lays-out mid-flight, which is also why the
+  corners and shadow survive: a transformed box paints its own
+  `border-radius` and `box-shadow`. Sampled **mid-drag**: `radius=10px`,
+  inset ring present.
+- **`cubic-bezier(0.22, 1, 0.36, 1)` at 220ms** — the dossier's smooth
+  approximated spring, under the ~300ms ceiling. The energetic
+  `(0.34, 1.56, …)` curve overshoots, and four rows springing past their slots
+  at once reads as sloppy.
+- **`prefers-reduced-motion`**: nothing animates, the reorder still happens.
+
+### The defect this round's test caught
+
+The first run failed on "the dragged row does not animate": its
+`transitionProperty` was `transform`. Excluding it from the FLIP was not
+enough — a row displaced on an earlier pass still carried the inline transition
+from that pass, so the moment it became the dragged row it eased toward the
+pointer instead of tracking it. Exactly the lag item 4 warns about, and only
+visible because the test samples mid-drag rather than at rest. Fixed by
+clearing the transition explicitly on the dragged row.
+
+## Two stale assertions, corrected not weakened
+
+`drag.js` counted every `.tk-drag` on the page and expected four; there are now
+eight, because the mobile handles exist in the DOM too. It now counts the
+desktop grid's own. `theme.js` asserted `menuitemcheckbox` and `aria-checked`,
+which item 3 deliberately replaced; it now asserts the state-label contract.
+
+## Full regression
+
+13/13 drag · 8/8 touch · 7/7 realtime · 15/15 animation · 27/27 and 23/23
+pages · 14/14 theme and contact line · 8/8 inviolable source checks · contact
+email still 0 writes while typing.
+
+`design/preview.html` gains a live reorder demo — grab a handle and drag.

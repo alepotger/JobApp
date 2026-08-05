@@ -457,6 +457,12 @@ textarea{resize:vertical}
   position:relative;z-index:5;cursor:grabbing}
 .tk-rowcard[data-drag="ghost"]{opacity:.4}
 @media (prefers-reduced-motion:reduce){.tk-drag{transition:none}}
+/* The card is the positioning context on mobile too, and the handle sits in
+   the padding at its left edge — always visible, because a phone has no
+   hover to reveal it with. */
+.tk-mcard{position:relative}
+.tk-drag-m{opacity:1;left:0;top:50%;transform:translateY(-50%);height:44px;width:22px}
+.tk-mcard>.tk-drag-m~div{padding-left:var(--space-cosy)}
 .tk-pgadd:hover{color:var(--ink-2)}
 .tk-pgname{font:inherit;font-size:var(--t--1);color:var(--ink);
   background:var(--surface);border:1px solid var(--accent);
@@ -860,7 +866,7 @@ textarea{resize:vertical}
 /* Nothing in this file needs editing. Connection details are entered
    on screen the first time you open it, and kept in this browser. */
 
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useLayoutEffect, useRef, useCallback } = React;
 
 const LIB_READY = Boolean(window.supabase && window.supabase.createClient);
 
@@ -2272,6 +2278,7 @@ function OverflowMenu({ items, label, triggerContent, triggerClass, block }) {
                 }
                 aria-checked={it.checked == null ? undefined : it.checked}
                 aria-disabled={it.disabled ? true : undefined}
+                aria-label={it.srLabel}
                 tabIndex={-1}
                 title={it.title}
                 onClick={() => {
@@ -3940,6 +3947,10 @@ function MobileCard({
   onToggleFields,
   pages,
   onMovePage,
+  canReorder,
+  onDragPointerDown,
+  onDragKey,
+  lifted,
 }) {
   const mean = aggregate(row);
   const [showEmpty, setShowEmpty] = useState(false);
@@ -3960,7 +3971,27 @@ function MobileCard({
     );
   };
   return (
-    <div className="tk-card tk-r3 p-4">
+    <div
+      className="tk-card tk-r3 p-4 tk-mcard"
+      data-row-card={row.id}
+      data-drag={lifted ? "lift" : undefined}
+    >
+      {/* The handle the desktop table has, on the card, where a phone can
+          actually reach it. Permanently visible rather than revealed on hover,
+          because there is no hover on a touch screen — that alone made the
+          desktop handle unreachable here even before the card lacked one. */}
+      {canReorder && (
+        <button
+          className="tk-drag tk-drag-m tk-focus"
+          aria-label={`Reorder ${row.company || "application"}`}
+          aria-pressed={lifted}
+          title="Press and hold to drag, or press Space and use the arrow keys"
+          onPointerDown={(e) => onDragPointerDown(e, row.id)}
+          onKeyDown={(e) => onDragKey(e, row.id)}
+        >
+          <GripIcon />
+        </button>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {isExample(row) && (
@@ -5097,6 +5128,60 @@ function Tracker({ session }) {
     reorderLocal(id, at + delta);
   };
 
+  /* ---- reorder animation (FLIP) --------------------------------------
+     iPhone-springboard behaviour: the row under your finger is not animated —
+     it is attached to the pointer and any easing between the two reads as lag
+     (§3.1, immediately responsive). Everything it displaces slides into its
+     new slot.
+
+     First/Last/Invert/Play: positions are measured before and after the
+     commit, the difference is applied as an inverse translate with no
+     transition, and the next frame releases it. Transform only, so no layout
+     is recalculated mid-flight and the row cards never re-lay-out — which is
+     also what keeps the corner and shadow rendering identical throughout,
+     since a transformed box paints its own border-radius and box-shadow.
+
+     cubic-bezier(0.22, 1, 0.36, 1) — the dossier's "smooth" approximated
+     spring. The energetic (0.34, 1.56, …) curve overshoots, and a row that
+     springs past its slot and back reads as sloppy when four of them do it at
+     once. 220ms sits under the ~300ms ceiling §3.1 sets for UI transitions.
+
+     prefers-reduced-motion: the reorder still happens, the rows simply arrive. */
+  const rowTops = useRef(new Map());
+  useLayoutEffect(() => {
+    const cards = document.querySelectorAll("[data-row-card]");
+    const previous = rowTops.current;
+    const current = new Map();
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    cards.forEach((el) => {
+      const id = el.getAttribute("data-row-card");
+      const top = el.getBoundingClientRect().top;
+      current.set(id, top);
+      if (still) return;
+      /* The dragged row is excluded — it is already where the finger is — but
+         excluding it is not enough. A row that was displaced on an earlier
+         pass still carries the inline transition from that pass, so the moment
+         it becomes the dragged row it eases toward the pointer instead of
+         tracking it. Clear it explicitly. */
+      if (id === dragId) {
+        el.style.transition = "none";
+        el.style.transform = "";
+        return;
+      }
+      const was = previous.get(id);
+      if (was == null || Math.abs(was - top) < 1) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${was - top}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)";
+        el.style.transform = "";
+      });
+    });
+
+    rowTops.current = current;
+  });
+
   const setDeleted = (id, deleted) => patch(id, { deleted }, { deleted });
 
   /* Deleted rows land in a panel at the very bottom of the page, which is
@@ -5432,20 +5517,21 @@ function Tracker({ session }) {
                 ? [{ key: "newpage", label: "New page", onPick: () => setCreatingPage(true) },
                    { separator: true }]
                 : []),
-              /* ONE row, not two. It names a MODE and its checkbox says
-                 whether that mode is on — so the current theme is unambiguous
-                 from inside the menu, which matters because the toggle is not
-                 visible at a glance from outside. Naming the ACTION instead
-                 ("Switch to dark") would leave the current state unstated, and
-                 mixing the two is the classic way this control confuses
-                 people. menuitemcheckbox, so screen readers announce the state
-                 rather than a bare label. */
+              /* The row states the CURRENT theme — label and glyph together —
+                 and toggling changes both. The previous version named a fixed
+                 mode and let a small tick carry the state; it was argued for
+                 on the grounds of being unambiguous, and in use it read as
+                 stuck, because a state change nobody notices is not a state
+                 change. The action is carried by the accessible name and the
+                 tooltip, so the visible text can stay a plain statement of
+                 where you are. */
               {
-                label: "Dark mode",
-                icon: "dark",
-                toggle: true,
+                key: "theme",
+                label: theme === "dark" ? "Dark mode" : "Light mode",
+                icon: theme === "dark" ? "dark" : "light",
                 keepOpen: true,
-                checked: theme === "dark",
+                srLabel: theme === "dark" ? "Dark mode. Switch to light mode." : "Light mode. Switch to dark mode.",
+                title: theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
                 onPick: () => {
                   const next = theme === "dark" ? "light" : "dark";
                   applyTheme(next);
@@ -5672,6 +5758,10 @@ function Tracker({ session }) {
                 onAdvance={onAdvance}
                 pages={pages}
                 onMovePage={moveRowToPage}
+                canReorder={canReorder}
+                onDragPointerDown={onDragPointerDown}
+                onDragKey={onDragKey}
+                lifted={dragId === row.id || kbdLift === row.id}
               />
             ))}
           </div>
