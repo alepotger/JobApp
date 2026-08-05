@@ -425,6 +425,30 @@ textarea{resize:vertical}
    it reads as belonging to the name above it rather than competing. */
 .tk-contactline{color:var(--ink-3)}
 .tk-contactline:hover{color:var(--ink-2)}
+
+/* ── reorder ──
+   The handle hangs just inside the card's left edge. It is absolutely
+   positioned, so it adds no column to the eight-column subgrid and takes no
+   width from any field. The card keeps sole ownership of background, radius
+   and shadow — the invariant is untouched, and nothing here clips.
+
+   Only transform and opacity animate, and the lift itself is not a transition:
+   a dragged row must track the pointer with no easing between it and the
+   finger, or the row lags behind the gesture (§3.1, immediately responsive). */
+.tk-rowcard{position:relative}
+.tk-drag{position:absolute;left:2px;top:var(--space-cosy);width:18px;height:22px;
+  display:flex;align-items:center;justify-content:center;background:none;border:0;
+  border-radius:var(--r-1);color:var(--ink-3);cursor:grab;opacity:0;
+  transition:opacity 120ms ease-out;touch-action:none;padding:0}
+.tk-rowcard:hover .tk-drag,.tk-drag:focus-visible{opacity:1}
+.tk-drag:active{cursor:grabbing}
+.tk-drag[aria-pressed="true"]{opacity:1;color:var(--accent)}
+/* In flight: lifted off the page, and above its neighbours. */
+.tk-rowcard[data-drag="lift"]{
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--accent);
+  position:relative;z-index:5;cursor:grabbing}
+.tk-rowcard[data-drag="ghost"]{opacity:.4}
+@media (prefers-reduced-motion:reduce){.tk-drag{transition:none}}
 .tk-pgadd:hover{color:var(--ink-2)}
 .tk-pgname{font:inherit;font-size:var(--t--1);color:var(--ink);
   background:var(--surface);border:1px solid var(--accent);
@@ -2405,6 +2429,18 @@ function DeletePageNotice({ page, moving, into, onCancel, onConfirm }) {
         </button>
       </div>
     </div>
+  );
+}
+
+/* Six dots, the conventional grip. aria-hidden because the button around it
+   carries the label. */
+function GripIcon() {
+  return (
+    <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true" focusable="false" fill="currentColor">
+      <circle cx="2.5" cy="3" r="1.2" /><circle cx="7.5" cy="3" r="1.2" />
+      <circle cx="2.5" cy="8" r="1.2" /><circle cx="7.5" cy="8" r="1.2" />
+      <circle cx="2.5" cy="13" r="1.2" /><circle cx="7.5" cy="13" r="1.2" />
+    </svg>
   );
 }
 
@@ -4822,6 +4858,207 @@ function Tracker({ session }) {
     mark(-1);
   };
 
+  /* ---- reorder -------------------------------------------------------
+     Pointer Events, not the HTML5 drag API. HTML5 DnD does not fire on touch
+     at all, which is where most reordering will happen; it also cannot be
+     styled and forces everything through dataTransfer. Pointer events give one
+     code path for mouse, touch and pen, plus setPointerCapture so the gesture
+     survives the pointer leaving the row.
+
+     Reordering is reversible, so per §3.1's threshold rule the order commits
+     DURING the drag — rows part as you pass them — rather than only on release.
+     Destructive gestures get the opposite treatment; this is not one. */
+  const [dragId, setDragId] = useState(null);
+  const [kbdLift, setKbdLift] = useState(null);
+  const dragRef = useRef(null);
+
+  /* Writes the new order. Only the rows whose position actually changed are
+     written — moving one row touches the span it crossed, not the whole list.
+     Optimistic with rollback of the entire array, and request-identity
+     validation through the same inFlight map every other mutation uses, so a
+     slow response cannot resurrect an order the user has moved on from. */
+  const commitOrder = async (ordered, baselineIds) => {
+    /* Compare against the order the drag STARTED from, not against current
+       local state. reorderLocal renumbers sortOrder live so the rows part
+       under the finger — so by release, local sortOrder already equals the new
+       index for every row, and a self-comparison finds nothing to write and
+       silently persists none of it. */
+    const wasAt = new Map((baselineIds || []).map((id, i) => [id, i]));
+    const changed = ordered
+      .map((r, i) => ({ r, i }))
+      .filter(({ r, i }) => (wasAt.has(r.id) ? wasAt.get(r.id) !== i : r.sortOrder !== i));
+    if (!changed.length) return;
+
+    const before = allRef.current;
+    const mid = ++mutationSeq.current;
+    changed.forEach(({ r }) => inFlight.current.set(r.id + "|sortOrder", mid));
+
+    setAll((prev) => {
+      const rank = new Map(ordered.map((r, i) => [r.id, i]));
+      return prev
+        .map((r) => (rank.has(r.id) ? { ...r, sortOrder: rank.get(r.id) } : r))
+        .sort((x, y) => x.sortOrder - y.sortOrder);
+    });
+
+    mark(1);
+    const results = await Promise.all(
+      changed.map(({ r, i }) =>
+        sb.from("applications").update({ sort_order: i }).eq("id", r.id)
+      )
+    );
+    mark(-1);
+
+    changed.forEach(({ r }) => {
+      const key = r.id + "|sortOrder";
+      if (inFlight.current.get(key) === mid) inFlight.current.delete(key);
+    });
+    if (mutationSeq.current !== mid) return; // superseded by a later drag
+
+    const failed = results.find((x) => x.error);
+    if (failed) {
+      setAll(before);
+      report("Saving the new order", failed.error);
+    }
+  };
+
+  /* Move a row to a new index among the rows currently on screen. Used by both
+     the pointer drag and the keyboard equivalent, so the two cannot diverge. */
+  const moveRowTo = (id, toIndex) => {
+    const list = orderedRows;
+    const from = list.findIndex((r) => r.id === id);
+    if (from === -1) return;
+    const to = Math.max(0, Math.min(list.length - 1, toIndex));
+    if (from === to) return;
+    const next = [...list];
+    next.splice(to, 0, next.splice(from, 1)[0]);
+    commitOrder(next, list.map((r) => r.id));
+  };
+
+  /* ACTIVATION. A drag must not fire when the user meant to click.
+       mouse/pen: 6px of travel — far enough to survive a shaky click, short
+                  enough that a deliberate drag feels immediate.
+       touch:     400ms long press, because any distance threshold on a finger
+                  competes with scrolling. touch-action:none on the handle only,
+                  so the rest of the row still scrolls the page. */
+  const DRAG_SLOP = 6;
+  const LONG_PRESS = 400;
+
+  const onDragPointerDown = (e, id) => {
+    if (e.button != null && e.button > 0) return;
+    const touch = e.pointerType === "touch";
+    const startY = e.clientY;
+    const handle = e.currentTarget;
+    let armed = !touch;                       // pointer arms on distance
+    let live = false;
+    let timer = null;
+
+    const rowsAt = () =>
+      [...document.querySelectorAll("[data-row-card]")].map((el) => ({
+        id: el.getAttribute("data-row-card"),
+        mid: el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2,
+      }));
+
+    const begin = () => {
+      live = true;
+      setDragId(id);
+      dragRef.current = { id, order: orderedRows.map((r) => r.id) };
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* older Safari */ }
+    };
+
+    if (touch) timer = setTimeout(begin, LONG_PRESS);
+
+    const move = (ev) => {
+      if (!live) {
+        if (!armed || Math.abs(ev.clientY - startY) < DRAG_SLOP) return;
+        begin();
+      }
+      ev.preventDefault();
+      /* Commit as you cross a neighbour's midpoint — reversible, so it happens
+         during the gesture rather than at its end. */
+      const cards = rowsAt();
+      const target = cards.findIndex((c) => ev.clientY < c.mid);
+      const to = target === -1 ? cards.length - 1 : target;
+      const from = cards.findIndex((c) => c.id === id);
+      if (from !== -1 && to !== from) reorderLocal(id, to);
+    };
+
+    const end = () => {
+      clearTimeout(timer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (!live) return;
+      setDragId(null);
+      const finalOrder = allRef.current
+        .filter((r) => !r.deleted && onActivePage(r))
+        .sort((x, y) => x.sortOrder - y.sortOrder);
+      const baseline = dragRef.current ? dragRef.current.order : null;
+      dragRef.current = null;
+      commitOrder(finalOrder, baseline);
+    };
+
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  /* Local-only reshuffle while the finger is down. The write happens once, on
+     release, so a drag across ten rows is one round of updates rather than ten. */
+  const reorderLocal = (id, toIndex) => {
+    setAll((prev) => {
+      const visible = prev
+        .filter((r) => !r.deleted && onActivePage(r))
+        .sort((x, y) => x.sortOrder - y.sortOrder);
+      const from = visible.findIndex((r) => r.id === id);
+      if (from === -1 || from === toIndex) return prev;
+      const next = [...visible];
+      next.splice(toIndex, 0, next.splice(from, 1)[0]);
+      const rank = new Map(next.map((r, i) => [r.id, i]));
+      return prev
+        .map((r) => (rank.has(r.id) ? { ...r, sortOrder: rank.get(r.id) } : r))
+        .sort((x, y) => x.sortOrder - y.sortOrder);
+    });
+  };
+
+  /* The keyboard equivalent, which is not optional: drag-only is unusable
+     without a pointer. Space or Enter picks the row up, the arrows move it,
+     Space/Enter drops it and Escape puts it back. */
+  const onDragKey = (e, id) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      if (kbdLift === id) {
+        const baseline = dragRef.current ? dragRef.current.order : null;
+        setKbdLift(null);
+        dragRef.current = null;
+        commitOrder(orderedRows, baseline);
+      } else {
+        dragRef.current = { id, order: orderedRows.map((r) => r.id) };
+        setKbdLift(id);
+      }
+      return;
+    }
+    if (e.key === "Escape" && kbdLift === id) {
+      e.preventDefault();
+      const snapshot = dragRef.current;
+      setKbdLift(null);
+      if (snapshot) {
+        const rank = new Map(snapshot.order.map((rid, i) => [rid, i]));
+        setAll((prev) =>
+          prev
+            .map((r) => (rank.has(r.id) ? { ...r, sortOrder: rank.get(r.id) } : r))
+            .sort((x, y) => x.sortOrder - y.sortOrder)
+        );
+      }
+      return;
+    }
+    if (kbdLift !== id) return;
+    const delta = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+    if (!delta) return;
+    e.preventDefault();
+    const at = orderedRows.findIndex((r) => r.id === id);
+    reorderLocal(id, at + delta);
+  };
+
   const setDeleted = (id, deleted) => patch(id, { deleted }, { deleted });
 
   /* Deleted rows land in a panel at the very bottom of the page, which is
@@ -4979,6 +5216,17 @@ function Tracker({ session }) {
       : groups
     : [{ key: "all", label: "", items: staged }];
   const visibleCount = sections.reduce((n, s) => n + s.items.length, 0);
+
+  /* The rows on screen, in the order they appear — the list a drag reorders. */
+  const orderedRows = sections.reduce((acc, sec) => acc.concat(sec.items), []);
+
+  /* Manual order is the default and the only order a drag can mean anything
+     in: if the list sorts itself, a position the user chose is discarded on the
+     next render. Grouping splits the list into sections, so an index across
+     them is ambiguous. In either case the handle is absent rather than inert —
+     an affordance that does nothing is worse than none — and the view bar says
+     why. */
+  const canReorder = !sort && !groupBy;
 
   /* Row numbers run across section boundaries, so arrowing down leaves one
      group and enters the next without a dead key press. */
@@ -5311,7 +5559,27 @@ function Tracker({ session }) {
                 /* The card wraps the row AND its drawer so the pair is one
                    box. It is presentational so the rows underneath stay the
                    table's direct children, which is what the roles require. */
-                <div className="tk-rowcard" role="presentation" key={row.id}>
+                <div
+                  className="tk-rowcard"
+                  role="presentation"
+                  key={row.id}
+                  data-row-card={row.id}
+                  data-drag={
+                    dragId === row.id || kbdLift === row.id ? "lift" : undefined
+                  }
+                >
+                  {canReorder && (
+                    <button
+                      className="tk-drag tk-focus"
+                      aria-label={`Reorder ${row.company || "application"}`}
+                      aria-pressed={kbdLift === row.id}
+                      title="Drag to reorder, or press Space and use the arrow keys"
+                      onPointerDown={(e) => onDragPointerDown(e, row.id)}
+                      onKeyDown={(e) => onDragKey(e, row.id)}
+                    >
+                      <GripIcon />
+                    </button>
+                  )}
                   <DesktopRow
                     row={row}
                     rowIndex={rowIndex.get(row.id)}

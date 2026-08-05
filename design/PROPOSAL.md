@@ -3236,3 +3236,60 @@ existing migration notice through the existing path. **No schema change.**
 **Verified 14/14**, including that the row promises nothing about inbound
 filing, and the shadow invariant re-checked because this changes content inside
 the card: radius 10px, inset ring present, no clipping ancestor.
+
+## 5. Drag to reorder (with item 6's rules built in)
+
+**Pointer Events, not the HTML5 drag API.** HTML5 DnD does not fire on touch at
+all — which is where most reordering will happen, and the case the brief calls
+the harder one. It also cannot be styled and forces everything through
+`dataTransfer`. Pointer events give one code path for mouse, touch and pen,
+plus `setPointerCapture` so the gesture survives the pointer leaving the row.
+
+**Activation.** `6px` of travel for mouse and pen — far enough to survive a
+shaky click on a cell, short enough that a deliberate drag feels immediate.
+`400ms` long press for touch, because any distance threshold on a finger
+competes with scrolling. `touch-action:none` is set on the handle alone, so the
+rest of the row still scrolls the page.
+
+**Commits during the drag, confirmed.** Rows part as you pass their midpoint,
+per §3.1's threshold rule: reversible actions trigger during the gesture,
+destructive ones only on release. Reordering is reversible, so it is the former.
+The *write* still happens once, on release, so a drag across ten rows is one
+round of updates rather than ten.
+
+**Persistence** is optimistic with rollback of the whole array, through the same
+`inFlight` request-identity map every other mutation uses — a slow response
+cannot resurrect an order the user has moved on from.
+
+**Keyboard equivalent**, because drag-only is not accessible: focus the handle,
+Space or Enter to pick up, arrows to move, Space/Enter to drop, Escape to put
+it back where it was.
+
+**Elevation in flight:** `--shadow-float` plus an accent inset ring, on the same
+element that already owns background, radius and shadow. The invariant is
+untouched; nothing new clips. Re-verified: radius 10px, inset ring present,
+`auto|visible` overflow.
+
+**Item 6's rules, as recommended and approved.** Manual order is the default and
+already was. The handle is **absent** — not disabled — whenever a sort or a
+grouping is active: an affordance that does nothing is worse than none, and
+grouping makes an index across sections ambiguous anyway.
+
+### A bug the test caught, and it would have been silent
+
+`commitOrder` compared each row's `sortOrder` against its new index to decide
+what to write. But `reorderLocal` renumbers `sortOrder` live during the drag so
+the rows part under the finger — so by release, local `sortOrder` already
+equalled the new index for every row. The comparison was local against local,
+found nothing changed, and **wrote nothing at all**. The screen showed the new
+order, the database kept the old one, and a reload would have quietly undone
+the work. No error, nothing on screen.
+
+Fixed by comparing against the order the drag *started* from, captured when the
+gesture begins. **0 writes → 3 writes for a three-position move**, with
+`sort_order` in the database matching the screen.
+
+**Verified 13/13**: 3px of travel does not start a drag; the order changes
+during the drag rather than on release; the row is lifted in flight; the write
+happens once per moved row; the database matches the screen; Space picks up;
+ArrowDown moves; Escape restores; the invariant survives; no JS faults.
