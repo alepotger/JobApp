@@ -416,6 +416,11 @@ textarea{resize:vertical}
   font:inherit;font-size:var(--t--1);line-height:1.2;padding:0 var(--space-tight);
   border-radius:var(--r-1);letter-spacing:.08em}
 .tk-pgmenu:hover{color:var(--ink-2)}
+.tk-pgselect{width:100%;font:inherit;font-size:var(--t-0);color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-2);padding:var(--space-snug) var(--space-base);
+  line-height:var(--lh-cell);cursor:pointer}
+.tk-pgselect:hover{border-color:var(--line-strong)}
 .tk-pgadd:hover{color:var(--ink-2)}
 .tk-pgname{font:inherit;font-size:var(--t--1);color:var(--ink);
   background:var(--surface);border:1px solid var(--accent);
@@ -3071,9 +3076,16 @@ function DateField({ label, value, onChange }) {
 
 /* Scores are always editable — you form a view on a company long before it
    makes an offer. The offer fields are the part that unlocks. */
-function DetailPanel({ row, onEdit, onClearScores }) {
+function DetailPanel({ row, onEdit, onClearScores, pages, onMovePage }) {
   const mean = aggregate(row);
   const atOffer = row.status === "offer";
+  /* Only when there is somewhere to move to. With one page this is a control
+     that can do nothing, which is worse than no control. */
+  const canMove = pages && pages.length > 1 && onMovePage;
+  /* A null page_id renders on the first page, so that is what the select must
+     show — otherwise a row that is visibly on "Applications" would display a
+     blank page field. */
+  const currentPage = row.pageId || (pages && pages[0] ? pages[0].id : "");
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -3116,6 +3128,31 @@ function DetailPanel({ row, onEdit, onClearScores }) {
             Replies from this address file themselves against this row.
           </p>
         </div>
+
+        {/* Moving between pages lives here, with the other per-application
+            settings, rather than on the row itself: it is a low-frequency
+            action and the row is already carrying the delete control. A native
+            select so it is keyboard-accessible and gets the platform picker on
+            a phone for free — no new primitive, no drag. */}
+        {canMove && (
+          <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--line-soft)" }}>
+            <label className="block">
+              <span className={LABEL}>Page</span>
+              <select
+                className="tk-pgselect tk-focus mt-1"
+                value={currentPage}
+                onChange={(e) => onMovePage(row.id, e.target.value)}
+              >
+                {pages.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </label>
+            <p className="mt-2 tk-cap leading-relaxed tk-tertiary">
+              Moving keeps everything — stage, notes, scores and history.
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="tk-panel p-4">
@@ -3760,6 +3797,8 @@ function MobileCard({
   onClearScores,
   fieldsOpen,
   onToggleFields,
+  pages,
+  onMovePage,
 }) {
   const mean = aggregate(row);
   const [showEmpty, setShowEmpty] = useState(false);
@@ -3938,7 +3977,8 @@ function MobileCard({
 
       {open && (
         <div className="mt-3">
-          <DetailPanel row={row} onEdit={onEdit} onClearScores={onClearScores} />
+          <DetailPanel row={row} onEdit={onEdit} onClearScores={onClearScores}
+            pages={pages} onMovePage={onMovePage} />
         </div>
       )}
     </div>
@@ -4640,6 +4680,47 @@ function Tracker({ session }) {
     mark(-1);
   };
 
+  /* Move one application to another page.
+     Optimistic, with the rollback that makes optimistic honest, and an undo —
+     because the row disappears from the page you are looking at, which is
+     indistinguishable from a deletion unless you are told otherwise. */
+  const moveRowToPage = async (id, pageId) => {
+    /* allRef, not `all`. The undo closure is created during the render that
+       performed the move, so it captures that render's `all`, in which the row
+       is still on its ORIGINAL page — moving it "back" then looks like a no-op
+       and the early return below silently does nothing. This is the stale
+       closure the ref exists to defeat. */
+    const row = allRef.current.find((r) => r.id === id);
+    const target = pages.find((p) => p.id === pageId);
+    if (!row || !target) return;
+    /* A null page_id already displays on the first page, so "moving" it there
+       is a no-op the user cannot see. Write it anyway: it turns an implicit
+       position into an explicit one, which is what survives the first page
+       later being deleted. */
+    const from = row.pageId;
+    if (from === pageId) return;
+
+    setAll((prev) => prev.map((r) => (r.id === id ? { ...r, pageId } : r)));
+    setExpanded(null);
+    mark(1);
+    const { error } = await sb
+      .from("applications")
+      .update({ page_id: pageId })
+      .eq("id", id);
+
+    if (error) {
+      setAll((prev) => prev.map((r) => (r.id === id ? { ...r, pageId: from } : r)));
+      report("Moving the application", error);
+    } else {
+      const back = from || (pages[0] && pages[0].id);
+      offerUndo(
+        `Moved ${row.company || "application"} to ${target.name}`,
+        back ? () => moveRowToPage(id, back) : undefined
+      );
+    }
+    mark(-1);
+  };
+
   const setDeleted = (id, deleted) => patch(id, { deleted }, { deleted });
 
   /* Deleted rows land in a panel at the very bottom of the page, which is
@@ -5143,7 +5224,8 @@ function Tracker({ session }) {
                   {expanded === row.id && (
                     <div role="row">
                       <div className="tk-detail" role="cell" aria-colspan={8}>
-                        <DetailPanel row={row} onEdit={editField} onClearScores={clearScores} />
+                        <DetailPanel row={row} onEdit={editField} onClearScores={clearScores}
+                          pages={pages} onMovePage={moveRowToPage} />
                       </div>
                     </div>
                   )}
@@ -5171,6 +5253,8 @@ function Tracker({ session }) {
                 onClearScores={clearScores}
                 onDelete={removeRow}
                 onAdvance={onAdvance}
+                pages={pages}
+                onMovePage={moveRowToPage}
               />
             ))}
           </div>

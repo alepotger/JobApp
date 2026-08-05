@@ -3042,3 +3042,67 @@ in the app and belongs in its own decision.
 No SQL has been run against a real database. The migration is idempotent and
 additive by construction and has been read closely, but the only place it has
 executed is in my head. Run it on your own project before trusting it.
+
+---
+
+# Moving an application between pages
+
+A gap in the original build: pages could be created, but nothing could be put
+in them except by creating it there.
+
+## Where it lives
+
+In the row's detail drawer, with the other per-application settings, as a
+native `<select>` labelled **Page**.
+
+- **The drawer, not the row.** Moving is low-frequency, and the row already
+  carries the delete control; a second destructive-looking affordance beside it
+  competes for the same glance.
+- **Native `<select>`.** Keyboard-accessible for free, and on a phone it opens
+  the platform picker rather than a bespoke sheet. No new primitive, and
+  explicitly not drag — same argument as page reordering (§5.5).
+- **Only when there are at least two pages.** With one page it is a control
+  that can do nothing, which is worse than no control.
+- **It shows the page the row is actually on.** A null `page_id` displays on
+  the first page, so the select resolves the same way; otherwise a row visibly
+  sitting under "Applications" would show a blank Page field.
+
+The copy says what survives: *"Moving keeps everything — stage, notes, scores
+and history."*
+
+## The undo is not decoration
+
+Moving a row makes it disappear from the page you are looking at, which is
+indistinguishable from a deletion. So the move offers the same undo the delete
+path does, naming both the row and its destination: *"Moved Northwind to
+Internships."*
+
+## A stale-closure bug the test caught
+
+The undo did nothing, and the reason is worth recording because the codebase
+already had the defence in place.
+
+`moveRowToPage` read `all` — the component's state. The undo closure is created
+during the render that performed the move, so it captures **that render's**
+`all`, in which the row is still on its original page. Moving it "back" then
+compared origin to destination, found them equal, and hit the early return.
+Silently. The write never fired.
+
+The fix is `allRef.current`, the mirror the file already maintains with the
+comment *"so a mutation can read the pre-change value without a stale
+closure"*. The defence existed; the new code just didn't use it.
+
+## Verification
+
+**23/23** in the page harness, including six new checks: the drawer offers a
+selector listing every page; it shows the page the row is on; the moved row
+leaves the current page; the move reaches the database; the tab counts follow
+it; an undo is offered; and undo returns the row to where it came from.
+
+One test assertion had to change too. The switch-cost check identified a page
+by its row count, and after the move both pages held three rows — so it
+reported "nothing switched" on a switch that worked. It now identifies the page
+by its first company.
+
+27/27 unmigrated-and-migrated behaviour and all ten inviolable behaviours still
+pass.
