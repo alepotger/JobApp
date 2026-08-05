@@ -421,6 +421,10 @@ textarea{resize:vertical}
   border-radius:var(--r-2);padding:var(--space-snug) var(--space-base);
   line-height:var(--lh-cell);cursor:pointer}
 .tk-pgselect:hover{border-color:var(--line-strong)}
+/* The contact line under a company name. Muted and one step down the scale so
+   it reads as belonging to the name above it rather than competing. */
+.tk-contactline{color:var(--ink-3)}
+.tk-contactline:hover{color:var(--ink-2)}
 .tk-pgadd:hover{color:var(--ink-2)}
 .tk-pgname{font:inherit;font-size:var(--t--1);color:var(--ink);
   background:var(--surface);border:1px solid var(--accent);
@@ -2654,7 +2658,10 @@ function StatusCell({ row, onAdvance, cell }) {
   );
 }
 
-function EditableCell({ value, placeholder, onChange, cell }) {
+/* `compact` is the secondary line under a company name: same editor, same
+   commit-on-blur, smaller and quieter, and one row tall because the thing it
+   holds is an email address rather than a paragraph. */
+function EditableCell({ value, placeholder, onChange, cell, compact }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const box = useRef(null);
@@ -2698,7 +2705,7 @@ function EditableCell({ value, placeholder, onChange, cell }) {
     return (
       <textarea
         ref={box}
-        rows={4}
+        rows={compact ? 1 : 4}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => close(true, false)}
@@ -2706,7 +2713,9 @@ function EditableCell({ value, placeholder, onChange, cell }) {
           if (e.key === "Escape") close(false, true);
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) close(true, true);
         }}
-        className="tk-edit w-full resize-y tk-r2 p-2 tk-body leading-snug focus:outline-none"
+        className={`tk-edit w-full tk-r2 focus:outline-none ${
+          compact ? "resize-none p-1 tk-cap leading-snug" : "resize-y p-2 tk-body leading-snug"
+        }`}
       />
     );
   }
@@ -2715,8 +2724,10 @@ function EditableCell({ value, placeholder, onChange, cell }) {
     <button
       ref={btn}
       onClick={open}
-      {...cell}
-      className="tk-cell tk-focus w-full tk-r2 p-2 text-left tk-body leading-snug transition-colors"
+      {...(cell || {})}
+      className={`tk-cell tk-focus w-full tk-r2 text-left leading-snug transition-colors ${
+        compact ? "tk-contactline px-2 pb-1 pt-0 tk-cap" : "p-2 tk-body"
+      }`}
     >
       {current ? current : <span className="tk-tertiary">{placeholder}</span>}
     </button>
@@ -3175,7 +3186,8 @@ function DetailPanel({ row, onEdit, onClearScores, pages, onMovePage }) {
             onChange={(v) => onEdit(row.id, "contactEmail", v)}
           />
           <p className="mt-2 tk-cap leading-relaxed tk-tertiary">
-            Replies from this address file themselves against this row.
+            Who to chase at this company. If you have set up inbound email,
+            replies from this address also file themselves here.
           </p>
         </div>
 
@@ -3754,6 +3766,24 @@ const DesktopRow = React.memo(function DesktopRow({ row, rowIndex, open, onToggl
               cell={cell(0)}
               onChange={(v) => onEdit(row.id, "company", v)}
             />
+            {/* The contact address sits under the company name because that is
+                what it identifies — who you are dealing with — and Company is
+                the identity column. Not a ninth column: the row carries eight
+                already, and a new one would take width from fields doing more
+                work (§1.1, extraneous load). Set at caption size in the muted
+                ink so it reads as subordinate to the name rather than
+                competing with it.
+
+                The copy is deliberately plain. Automatic filing needs deployed
+                Edge Functions and a mail provider, which almost nobody has, so
+                nothing here promises it — this is a contact address, useful on
+                its own terms to everyone. */}
+            <EditableCell
+              value={row.contactEmail}
+              placeholder="+ contact email"
+              compact
+              onChange={(v) => onEdit(row.id, "contactEmail", v)}
+            />
           </div>
           <button
             onClick={() => onDelete(row.id)}
@@ -3891,6 +3921,14 @@ function MobileCard({
             value={row.location}
             placeholder="City"
             onChange={(v) => onEdit(row.id, "location", v)}
+          />
+          {/* Same treatment as the desktop row: under the identity, quiet,
+              no promise about inbound filing. */}
+          <EditableCell
+            value={row.contactEmail}
+            placeholder="+ contact email"
+            compact
+            onChange={(v) => onEdit(row.id, "contactEmail", v)}
           />
         </div>
         <button

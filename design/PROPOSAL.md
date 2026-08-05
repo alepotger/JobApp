@@ -3191,3 +3191,48 @@ everyone's expanded/collapsed preference for a string nobody sees.
 Item 1: **8/8** in the diagnosis harness, before and after. Item 2 and 3:
 **9/9**. Plus **27/27** and **23/23** in the page harnesses and **8/8** source
 checks of the inviolable behaviours, all unchanged.
+
+## 4. Contact email in the row
+
+**Placement: a second line under the company name**, not a ninth column.
+
+The row carries eight columns. A ninth takes width from every field doing more
+work, which is extraneous load charged to all rows to serve a field most rows
+will not have (§1.1). Under the company name it costs no width at all, and it
+belongs there on meaning as well as geometry: an email address identifies *who
+you are dealing with*, and Company is the identity column.
+
+Set at `--t--1` in `--ink-3` — one step down the scale and muted — so it reads
+as subordinate to the name rather than competing with it. When empty it shows
+**`+ contact email`**, an invitation rather than a blank.
+
+**The cost, measured: row height 61px → 82.5px.** That is +35%, and it is the
+real price of the brief's "prominent in the main body of the row" — a field
+cannot be both prominent and free. Reported rather than buried, because the
+cheaper alternative exists and is one line of code: render the second line only
+for rows that have an address, leaving the rest at 61px. That trades discovery
+for density, which is the wrong way round given the stated problem is that
+people are missing the field entirely.
+
+**The copy promises nothing.** Automatic filing needs deployed Edge Functions
+and a configured mail provider, which almost nobody has, so the row says
+`+ contact email` and nothing else — a contact address, useful on its own terms
+to everyone. Of the three options in the brief, this is the recommendation:
+detection is not possible without calling the function, and hedged wording in
+the row would spend the row's scarcest resource, its width, on a caveat.
+
+The drawer carries the one conditional sentence, for people who have read the
+README: *"Who to chase at this company. If you have set up inbound email,
+replies from this address also file themselves here."* It states the primary
+use first and the secondary use as a condition, so it is true for everyone.
+
+**Schema drift: nothing to do.** `contact_email` is in `setup.sql:29` and in
+migration `001` — not only in `002` — so anyone who has run either has it, and
+`SELECT_COLUMNS` already probes for it. A database predating it raises the
+existing migration notice through the existing path. **No schema change.**
+
+**Mobile** gets the identical treatment, under City in the card.
+
+**Verified 14/14**, including that the row promises nothing about inbound
+filing, and the shadow invariant re-checked because this changes content inside
+the card: radius 10px, inset ring present, no clipping ancestor.
