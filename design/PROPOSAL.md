@@ -1883,3 +1883,1034 @@ point of the panel is that it holds a batch you have already decided about.
 **Verified 11/11** by driving the reported scenario: delete five → bulk restore
 (one PATCH, all five back) → undo (all five back in the bin) → bulk purge (one
 DELETE, bin empty) → confirm the controls disappear at one row. No page errors.
+
+---
+
+# Multi-page support — proposal
+
+Step 1 only. No code written; `index.html` is untouched.
+
+Several independent collections of applications within one account, switchable
+like sheets in a spreadsheet.
+
+---
+
+## 0. Is this the right design at all?
+
+Two things worth arguing before any of it gets built.
+
+### 0.1 A table, or just a column?
+
+A page is an exclusive saved filter, and the app already has grouping. So the
+cheap design is a single `page text not null default 'Applications'` column on
+`applications`, switched through the existing `groupBy` machinery. No table, no
+foreign key, no RLS policy, no bootstrap problem, and the migration reduces to
+one `add column if not exists` inside the mechanism that already exists.
+
+That is genuinely tempting and I looked hard at it. It fails on one
+requirement, and the brief states that requirement itself:
+
+**You cannot create an empty page.** A page that is only a value in a column
+comes into existence when a row carries it and vanishes when the last row
+stops. There is no "new page" to land on, so there is no empty state to design,
+and deleting the last application on a page silently deletes the page. The
+brief asks for a new page's empty state as an onboarding surface — that alone
+settles it.
+
+Two lesser failures confirm it: renaming a page becomes an `update` across
+every row that carries the old value, which splits a page in half if it fails
+partway; and page order has nowhere to live, so ordering could only ever be
+alphabetical.
+
+**A table is justified, not assumed.**
+
+### 0.2 The real cost of this feature is analytical, not structural
+
+The schema barely moves. What pages actually cost you is that they fragment
+every number the app computes. That is not a side effect to be managed — it is
+the point of the feature (internship and graduate conversion rates are
+different numbers and mixing them destroys both), and it is also the thing that
+will make the app feel worse if handled carelessly. §4.1 below is the whole
+answer and it is the part of this proposal I would most want you to push on.
+
+Everything else here I hold loosely. That part I have thought hardest about.
+
+---
+
+## 1. The deployment problem
+
+Every user loads one hosted page against their own database. A push reaches
+everybody in seconds; their schema does not change. So new code meets an old
+schema, for every existing user, at once.
+
+### 1.1 Detection — reuse, do not invent
+
+The app already solves this, at `index.html:954-971` and `:3675-3742`. Columns
+are named explicitly in `SELECT_COLUMNS` rather than `select *`, **so asking
+for them is itself the schema check**; `isMissingColumn` recognises Postgres
+`42703` and PostgREST `PGRST204`; the loader sets `needsMigration` and then
+**re-fetches with `select("*")`** so the reader still sees every application
+they own; `MigrationNotice` (`:3128`) shows the SQL with a copy button.
+
+The whole of multi-page detection is one string:
+
+```js
+const SELECT_COLUMNS = [ …twenty-one existing columns…, "page_id" ].join(", ")
+```
+
+An unmigrated database now fails that probe on `page_id`, exactly as a
+pre-scoring database fails it on `benefits_score`. No new detector, no new
+error code, no second notice, no new UI. `MIGRATION_SQL` grows a section.
+
+### 1.2 Why the detection cannot itself error
+
+This is the part worth being careful about, because the obvious implementation
+breaks it.
+
+`tracker_pages` does not exist on an unmigrated database. Querying it raises
+`42P01` / `PGRST205`, which `isMissingColumn` does **not** recognise — it would
+fall through to `report()` and surface a raw Postgres error, which is precisely
+the outcome the brief forbids.
+
+So the ordering is a hard rule, not a preference:
+
+> **Nothing queries `tracker_pages` until the `page_id` probe has come back
+> clean.**
+
+Sequentially, on load:
+
+1. `select(SELECT_COLUMNS)` — includes `page_id`. This is the probe.
+2. `isMissingColumn(error)` → `setNeedsMigration(true)`, re-fetch with `*`,
+   set `multiPage = false`, **return without touching `tracker_pages`**.
+3. Clean → `page_id` exists → the pages query is now safe to run.
+
+These cannot race: step 3 is in the same `await` chain as step 1. There is no
+parallel fetch, no `Promise.all`, and no realtime subscription to
+`tracker_pages` created before step 3 succeeds.
+
+**Secondary guard.** A half-run migration could leave `page_id` present and
+`tracker_pages` absent. That is not reachable through the notice — the SQL is
+one script — but a hand-edited database could get there. So add
+`isMissingTable` (`42P01`, `PGRST205`, `/relation .* does not exist/i`) and, on
+that error only, fall back to single-page mode and raise the migration notice.
+Degrade, never throw.
+
+**Detection cost: zero extra requests.** `page_id` rides along on the query
+that already runs.
+
+### 1.3 Fully usable, not degraded
+
+Unmigrated, the app runs exactly as it does today:
+
+| Surface | Unmigrated behaviour |
+|---|---|
+| Rows | All of them, via the existing `select("*")` fallback |
+| Page switcher | Not rendered at all |
+| Overflow menu | No "New page" item |
+| Funnel, stage rail, view bar | Unchanged — they read `rows`, which is every row |
+| Recently deleted | Unchanged |
+| Add application | Unchanged; no `page_id` in the insert |
+| Realtime | Unchanged, single `applications` channel |
+| Migration notice | The one existing notice, dismissible |
+
+The single boolean `multiPage` gates every new surface. With it false the
+feature is not present, rather than present-and-disabled. **Someone who never
+migrates sees one dismissible notice and nothing else.**
+
+### 1.4 The migration
+
+Idempotent, additive, never destructive. `create table if not exists`,
+`add column if not exists`, and two backfills guarded by `where not exists` /
+`where page_id is null`.
+
+```sql
+create table if not exists public.tracker_pages (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid()
+               references auth.users(id) on delete cascade,
+  name       text not null default 'Applications',
+  sort_order bigint not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists tracker_pages_user_idx
+  on public.tracker_pages (user_id, sort_order);
+
+alter table public.tracker_pages enable row level security;
+
+drop policy if exists "owner full access pages" on public.tracker_pages;
+create policy "owner full access pages"
+  on public.tracker_pages for all to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.tracker_pages to authenticated;
+
+-- Nullable on purpose: see 2.3.
+alter table public.applications
+  add column if not exists page_id uuid
+    references public.tracker_pages(id) on delete set null;
+
+create index if not exists applications_page_idx
+  on public.applications (user_id, page_id, sort_order);
+
+-- One default page per account that has applications and no page yet.
+insert into public.tracker_pages (user_id, name, sort_order)
+select distinct a.user_id, 'Applications', 0
+  from public.applications a
+ where not exists (
+   select 1 from public.tracker_pages p where p.user_id = a.user_id
+ );
+
+-- Nothing becomes invisible.
+update public.applications a
+   set page_id = (
+     select p.id from public.tracker_pages p
+      where p.user_id = a.user_id
+      order by p.sort_order, p.created_at
+      limit 1
+   )
+ where a.page_id is null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime'
+       and schemaname = 'public'
+       and tablename = 'tracker_pages'
+  ) then
+    alter publication supabase_realtime add table public.tracker_pages;
+  end if;
+end $$;
+```
+
+Shipped as `supabase/migrations/003-pages.sql`, and appended to
+`MIGRATION_SQL` and `setup.sql`. Deliberately **not** folded into `002`: that
+migration is the Edge Function feature, which almost nobody runs, and pages
+must not inherit its irrelevance.
+
+### 1.5 The default page is called "Applications"
+
+Considered and rejected: `Default` and `Untitled` read as placeholder text a
+one-page user is left staring at; `2026` presumes a taxonomy and is wrong for
+anyone who started last year; `Main` and `General` are filing-cabinet words for
+something that holds one specific thing.
+
+`Applications` is what the collection actually is, so a one-page user reading
+the label — on the rare occasion they see it — reads a true statement.
+
+**The honest weakness:** the moment you create `Internships`, the first page
+still reading `Applications` is imprecise, because internships are applications
+too. The mitigation is that creating a second page is exactly the moment
+renaming the first becomes worth offering, and the switcher should surface it
+inline at that moment. Cheap, and it turns the weakness into the prompt.
+
+### 1.6 Migrate on the laptop, then open the phone
+
+**Confirmed, and it needs no special handling.** Same code, migrated database:
+the phone's probe includes `page_id`, succeeds, so the pages query runs and
+multi-page mode turns on by itself. Nothing is stored client-side that gates
+the feature.
+
+The one wrinkle is the *active* page. The phone's `localStorage` has no
+`tracker.page` yet, so the lookup misses. §4.7 makes that a fallback to the
+first page, never a blank screen.
+
+Reverse direction — phone unmigrated, laptop migrated — cannot happen: it is
+one database.
+
+---
+
+## 2. Schema
+
+### 2.1 Named `tracker_pages`, called "pages" in the interface
+
+`boards` imports a kanban model this app does not have — the pipeline is a
+table with a stage column, not columns of cards. `lists` collides with ordinary
+UI copy ("the list of applications") and with the trash panel.
+
+`pages` matches your own framing and the spreadsheet-sheet metaphor.
+
+Prefixed to `tracker_pages` for two reasons: it matches `tracker_settings`,
+the convention already established for tables this app added after the first
+release; and `pages` is a generic enough name to squat on in a database the
+user owns and may use for something else.
+
+### 2.2 Ownership, ordering, renaming
+
+- `user_id` with `default auth.uid()` and `on delete cascade` — the same shape
+  as `applications` (`setup.sql:24`), so inviolable #1 covers the new table by
+  construction.
+- `sort_order bigint` — same type and role as on `applications`. Reordering is
+  a write of two integers.
+- `created_at timestamptz` — the stable tiebreak when two pages share a
+  `sort_order`, which a botched reorder can produce.
+- **Renaming is `update tracker_pages set name = … where id = …`.** One row,
+  one field. This is the clearest advantage of a table over a text column,
+  where a rename is a multi-row update that can split a page if it fails
+  partway.
+
+No `deleted` column. Pages are not soft-deleted, because deleting one destroys
+nothing (§2.4) — a trash can for an action that loses no data is ceremony.
+
+### 2.3 `page_id` is nullable, and that is the safety mechanism
+
+```sql
+page_id uuid references public.tracker_pages(id) on delete set null
+```
+
+`not null` is the instinct and it is wrong here. Nullable buys three things:
+
+1. **The migration cannot fail.** Adding a nullable column to a live table is
+   metadata-only. `not null` would need a default or a backfill inside the same
+   statement, on a table holding the user's real data.
+2. **`on delete set null` is a database-enforced floor.** Whatever happens to
+   the application-level move in §2.4 — a crash, a lost connection, a client on
+   an old build — Postgres guarantees a deleted page leaves its rows *pointing
+   nowhere*, not pointing at something wrong.
+3. **A null is renderable.** The client rule is: **a row with `page_id is null`
+   appears on the first page.** So there is no state in which an application
+   exists and is invisible. That is the property that actually matters, and it
+   holds without any trigger, constraint or repair job.
+
+### 2.4 Deleting a page moves its applications; the last page cannot be deleted
+
+The three options, and why the third wins.
+
+**Cascade — rejected outright.** One click destroying an unbounded amount of
+the user's work, in an app whose entire delete story is a soft-delete bin with
+an undo. It contradicts the grammar of everything around it.
+
+**Refuse to delete a non-empty page — rejected.** It is safe and it is
+useless: emptying a 30-row page one row at a time to be allowed to delete it is
+worse than the problem. It also has no coherent answer for trashed rows — is a
+page holding only deleted rows empty or not? Every answer to that is arbitrary.
+
+**Move to the first remaining page — chosen.**
+
+```
+Deleting page X moves every application on X — live and trashed alike —
+to the lowest-sort_order remaining page. The last page cannot be deleted.
+```
+
+Why it is the safest reasonable option: **no application is ever destroyed,
+hidden, or made unreachable.** The only thing lost is the grouping, which is
+the metadata the user just asked to discard. The result is fully visible and
+fully editable the instant the action completes.
+
+Why "first remaining" rather than "a default page": it needs no `is_default`
+flag, no protected row, and it is total — there is always a lowest
+`sort_order` among the survivors. Blocking deletion of the last page is then
+the only special case, and it is one the user can see and understand.
+
+Order of operations, and what each layer is for:
+
+1. `update applications set page_id = <survivor> where page_id = <doomed>` —
+   makes the outcome *predictable*.
+2. `delete from tracker_pages where id = <doomed>` — the actual deletion.
+3. If step 1 never ran, `on delete set null` plus the null-renders-on-first-
+   page rule makes the outcome *safe*.
+
+Step 3 is why step 1 does not need a transaction.
+
+### 2.5 RLS
+
+Matched to the existing `FOR ALL` pattern, which exists specifically so an
+insert cannot succeed while the read-back silently returns nothing — the
+failure inviolable #2 was written to catch:
+
+```sql
+create policy "owner full access pages"
+  on public.tracker_pages for all to authenticated
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+`for all` covers select, insert, update and delete with one `using` and one
+`with check`. A `for insert`-only policy would let page creation appear to
+succeed and then vanish, which is the bug the app already has a dedicated error
+message for (`index.html:3903-3907`). The page-create path gets the same
+`insert().select()` empty-array check and the same message.
+
+### 2.6 No database default for `page_id`, and no trigger
+
+The brief asks whether `page_id` wants a default the way `user_id` has
+`auth.uid()`.
+
+**It cannot have one.** `auth.uid()` works because the database knows who is
+connected. Nothing in the database knows which page the user is *looking at*,
+and a Postgres column default may not contain a subquery, so
+`default (select id from tracker_pages …)` is not expressible. The nearest
+equivalent is a `before insert` trigger on `applications` filling a null
+`page_id` with the user's first page.
+
+**Recommended against**, on grounds of proportionality:
+
+- The null-renders-on-first-page rule (§2.3) already delivers the identical
+  user-visible outcome — a client that forgets `page_id` produces a row on the
+  first page — with no trigger.
+- The rule additionally covers a case the trigger cannot: a row whose page was
+  deleted *after* insert.
+- A trigger is a write-path intervention on the live `applications` table,
+  firing on every insert forever, to protect against a bug in a client we
+  control and can test.
+
+The client sets `page_id` on insert. The null rule is the floor. That is
+enough.
+
+### 2.7 Every account gets a page — where, and what if it fails
+
+**Migration** creates it for existing accounts and backfills every row (§1.4).
+
+**App code** creates it for everyone else. After the probe comes back clean,
+the app reads `tracker_pages`; if the result is empty it inserts one named
+`Applications`. Idempotent, and it covers new signups, an account created
+before the migration ran, and a migration whose insert matched nothing because
+the account had no applications yet.
+
+**A trigger on `auth.users` is not recommended**, despite `002` using one for
+`tracker_settings`. It is the most fragile of the three: it requires elevated
+privileges, it silently does not exist for anyone who has not run the
+migration — which is every new signup on an unmigrated project, exactly the
+case it is supposed to cover — and it cannot be retried. The app-code path
+subsumes it completely.
+
+**If page creation fails:** `pages` is empty, `multiPage` stays false, and the
+app renders every row on an unlabelled single page. The failure surfaces
+through the existing `report()` path. **It cannot blank the screen**, because
+the row query and the page query are independent and the rows have already
+loaded.
+
+---
+
+## 3. Realtime, and why switching is free
+
+Current subscription (`index.html:3745-3767`): one channel, `event: "*"`,
+`table: "applications"`, no filter. RLS scopes it to the user. Every change
+merges into `all`.
+
+**Recommendation: change nothing about it.**
+
+The page filter belongs at the derivation step, one line below where the
+delete filter already is (`:4028`):
+
+```js
+const rows = all.filter((r) => !r.deleted && onActivePage(r));
+```
+
+This satisfies both halves of the requirement at once:
+
+- **Other pages' rows never enter the current view** — they are in `all`, and
+  `all` is not what renders.
+- **A page you are not looking at still updates** — the merge into `all` is
+  unconditional, so when you switch, the data is already current. No refetch,
+  no stale window.
+
+And it answers the latency budget as a side effect: see §5.2.
+
+**A second subscription, on `tracker_pages`**, so a rename or a new page made
+on the laptop appears on the phone. Created **only when `multiPage` is true**,
+which per §1.2 means only after the probe proved the table exists. On an
+unmigrated database it is never created, so it cannot error.
+
+Cost of holding every page's rows in memory: this is a personal job tracker.
+Tens of rows, low hundreds at the far end. The initial query is already
+unfiltered and already returns all of them.
+
+---
+
+## 4. Everything else this touches
+
+### 4.1 The funnel threshold — the decision that matters
+
+`RATE_THRESHOLD = 20`, gating `replyStats` on `reachedApplied(rows)`
+(`index.html:1103`, `:1134`). Split 25 applications across two pages and both
+sides fall under the gate. **The user loses a number by organising their work.**
+That is a regression caused by using the product correctly, and it is not
+acceptable.
+
+The three options as posed are: count across all pages, count per page, or let
+the user choose. I think **the option list is missing the answer**, and this is
+the one place I want to push back on the framing rather than pick.
+
+**Counting globally and displaying per page is not safe.** The gate is not
+arbitrary — the code says why it exists: *"Ratios on single-digit counts are
+noise, so nothing derived shows below a threshold"* (`:1100-1102`). It is a
+**sample-size** guarantee for the number on screen. Unlocking on a global count
+of 25 and then rendering a rate computed from the 12 on this page shows exactly
+the noisy figure the gate was built to suppress. It fixes the complaint by
+breaking the thing being complained about.
+
+**Counting per page** keeps the guarantee and keeps the regression.
+
+**Letting the user choose** is a settings toggle about a statistical subtlety
+the user should never have to hold in working memory — textbook extraneous
+load (§1.1), and a preference that then needs storing, explaining and
+migrating.
+
+**Recommendation: gate globally, compute on the largest population that clears
+the gate, and say which population it is.**
+
+```
+reply rate is unlocked when applications across ALL pages ≥ 20
+
+the number shown is computed from:
+  this page      if this page alone has ≥ 20
+  all pages      otherwise
+and the line names which
+```
+
+- Organising never removes a number you already had — the global count only
+  grows when you split.
+- Every rate displayed is still computed on ≥ 20. The guarantee is intact.
+- The label carries the difference: *"Reply rate · 31% · across all pages"*
+  versus *"Reply rate · 28% · on this page"*. Rams 6 and §1.2 material honesty
+  — the number states its own population instead of implying a scope it does
+  not have.
+- It self-resolves. A page that grows past 20 starts reporting itself, with no
+  setting and no announcement.
+
+The existing one-time unlock marker (`:2821-2831`) fires on the global
+transition, once, as it does now.
+
+### 4.2 The funnel itself — per page
+
+Stage occupancy has no threshold, so it carries no sample-size risk, and your
+argument is the right one: internship and graduate conversion are different
+numbers and averaging them destroys both. The collapsed summary line
+(*"N live in the funnel · applied 4 · interview 2"*) is per page too, or it
+contradicts the panel it summarises.
+
+The inter-stage means already print their own `sampled` count next to them
+(`:1166-1167`), so they are self-labelling about sample size and are safe to
+narrow.
+
+**Per page, with the single exception of the reply rate in §4.1.**
+
+### 4.3 Stage rail — per page. Confirmed.
+
+It is a filter control over the rows on screen. Counting rows you cannot see
+and then filtering to nothing would be incoherent. It reads `rows`, which is
+already page-scoped by §3.
+
+### 4.4 Group, sort, filter — per page in effect, not remembered per page
+
+They operate on the current page's rows automatically, since they read `rows`.
+
+**They should not be remembered per page.** Switching pages would then silently
+change your sort order and active filters — a hidden state change on the
+highest-frequency interaction in the feature, which is the "where am I"
+re-orientation tax §1.1 identifies as the deep cost of context switching. View
+controls should mean the same thing everywhere they are visible.
+
+So the view carries across the switch, and the existing machinery already
+handles the consequences: a `groupValue` that does not exist on the new page
+falls back to showing every group (`:4054-4063`, already built), and a filter
+that hides everything produces the existing self-explaining empty state, which
+already names the active filters and offers one-click reset (`:4072`).
+
+### 4.5 Inbound email — no change needed. Confirmed.
+
+`inbound-email/index.ts:143-147` selects
+`id, company, role_title, status, replies, contact_email, activity,
+stage_history` filtered on `user_id` and `deleted` only. It never mentions
+`page_id`, so it already searches every page, and a reply files against
+whichever application matches wherever it sits. The update at `:182-186` keys
+on `id` and `user_id`. Adding a nullable column changes neither.
+
+`service_role` needs no grant on `tracker_pages`, because the function never
+reads it.
+
+**One behavioural note, not a defect:** `pickApplication` returns nothing when
+two rows tie on score (`_shared/inbound.ts:189`). Two pages each holding a
+"Northwind" makes that marginally likelier. The behaviour is unchanged and
+correct — refusing to guess is the design — and the existing fix still applies:
+set `contact_email` on one of them.
+
+### 4.6 Weekly digest — one email, and no change this release
+
+One email covering everything is right: the digest answers "what has gone
+quiet", and that is a single actionable list regardless of which page a row
+sits on. Splitting it into one email per page would make a weekly nudge into
+weekly nagging.
+
+**On grouping: recommend shipping no digest change at all.** Grouping the
+stale list under page headings means the function must read `tracker_pages`,
+which gives a function that runs unattended — on a schedule, with its response
+body discarded by `pg_cron` — a hard dependency on a table that does not exist
+on most users' databases. That is a new silent failure mode bought for a
+cosmetic gain.
+
+The digest keeps working, untouched, whether or not the user has migrated.
+Group it later if the flat list turns out to be the wrong shape in practice.
+
+### 4.7 Active page persistence
+
+`localStorage`, key `tracker.page`, matching the existing key convention
+(`tracker.theme`, `tracker.funnel`, `tracker.examplesDismissed`). It stores a
+page UUID, which carries no personal identifier — inviolable #7 holds, and the
+bar is set by `tracker.config`, which already stores the project URL and key.
+
+Resolution, in order, with two fallbacks so a blank screen is unreachable:
+
+```js
+activePage =
+     pages.find(p => p.id === stored)   // normal
+  ?? pages[0]                           // stored page deleted elsewhere
+  ?? null                               // no pages at all → single-page mode
+```
+
+A stored page deleted on another device resolves to the first page, and the
+stored key is rewritten to match so it self-heals. `null` renders every row
+unfiltered, which is the unmigrated behaviour — correct, not broken.
+
+### 4.8 Soft delete — per page
+
+The Recently deleted panel shows the **current page's** trashed rows.
+
+The deciding argument is the bulk actions built last round. "Delete all
+permanently" must destroy exactly what is listed above it. A global bin sitting
+at the bottom of one page, whose purge silently takes another page's rows with
+it, is the kind of surprise that bins exist to prevent.
+
+**Restoring returns a row to its original page automatically** — soft delete
+writes `deleted`, never `page_id`, so the association survives untouched.
+
+**If that page no longer exists:** it cannot, through the app — page deletion
+moves trashed rows along with live ones (§2.4). Through a hand-edited database,
+`on delete set null` leaves `page_id` null and the row restores onto the first
+page. Visible either way.
+
+### 4.9 Add application — lands on the current page. Confirmed.
+
+`addRow` (`:3877`) gains `page_id: activePage?.id ?? null` and nothing else.
+
+**Inviolable #9 holds by construction:** the three filter-clearing lines
+(`setFilter(null); setGroupValue(null); setMinScore("")` at `:3899-3901`) are
+untouched, and the new row is on the active page, so it is visible after the
+clear. To be explicit about the thing that would break it — **adding a row must
+not switch pages**, and nothing in the change does.
+
+`sort_order` stays a global max (`:3878`). A new row on page B taking a number
+above everything on page A is harmless: ordering is only ever compared within a
+page.
+
+### 4.10 Export / share — current page
+
+`window.print()` prints the DOM, so today it prints what is on screen, already
+filtered and grouped, and the print header names those narrowings
+(`:4226-4231`). Pages join that sentence:
+
+```
+Pipeline export · 5 Aug 2026 · 12 of 12 applications · page: Internships
+```
+
+All-pages export would mean rendering pages you are not looking at into the DOM
+for print only, which breaks the "print what you see" grammar the feature
+already has and would surprise anyone who filtered first.
+
+---
+
+## 5. Interface
+
+`docs/design-dossier.md` governs; sections cited inline.
+
+### 5.1 It does not animate
+
+**§3.1, "When NOT to animate":** *high-frequency, low-novelty interactions
+(command menus opened hundreds of times a day, macOS right-click menus, the
+Cmd-Tab switcher) should often appear without animation — after the hundredth
+viewing, a fade becomes a tax on perceived speed.* Freiberg found his own tool
+felt **faster** after removing motion from core keyboard interactions. Key
+Finding 5 states the same rule at the top of the document.
+
+Page switching is the canonical instance: high frequency, zero novelty, and
+entirely about arriving somewhere rather than about the journey. Content swaps
+in one frame.
+
+The active indicator does not slide either. A 150-200ms travelling underline is
+a delay imposed on every switch, forever, to show the user something they
+already know — which tab they just clicked.
+
+**The counter-argument, taken seriously and rejected:** §3.3 shared-element
+transitions preserve object permanence and cut re-orientation cost. That
+applies when an object *becomes* a different view of itself — a thumbnail
+zooming into its detail. Switching pages replaces one set of objects with a
+different set. There is no shared element, so there is nothing for the
+transition to be honest about, and animating it would assert a continuity that
+does not exist.
+
+Motion is used in exactly one place in this feature: nowhere.
+
+### 5.2 Latency budget: one frame, and nothing to prefetch
+
+**Budget: < 16ms.** Not the 100ms instant tier (§3.2) and not the 400ms
+Doherty threshold — one frame.
+
+That is not ambition, it is arithmetic. §3 loads every page's rows in the
+query that already runs, and holds them in `all`. Switching pages sets one
+piece of React state and re-runs a `filter`. **There is no network request on
+switch, so there is nothing to prefetch, cache or make optimistic.**
+
+This is why §3 keeps the subscription user-scoped rather than filtering it per
+page: a page-filtered subscription would need tearing down and re-establishing
+on every switch, which converts a free operation into a round trip and a
+visible loading state. The naive optimisation is the thing that would make it
+slow.
+
+Measurement after build: switch between two pages of ~50 rows and record the
+React commit duration. It must not exceed one frame at 60Hz.
+
+### 5.3 Placement — existing empty space, no new vertical band
+
+The constraint is threefold: do not compete with "Add application" for primary
+status; do not push the rows down; do not add extraneous load (§1.1).
+
+The header today (`:4150-4223`) is `flex justify-between items-end`, with a
+lone `<h1>JobApp</h1>` on the left and `SyncChip · Add application ·
+OverflowMenu` on the right. **The left block is one short word and a large
+amount of empty space, and the header's height is already set by the 36px
+controls on the right.**
+
+The switcher goes there, under the wordmark, inside the existing header box:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  JobApp │ Applications  Internships  2027  +   ● live  [+ Add…]  [⋯]  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Corrected after measuring.** My first draft of this section stacked the strip
+on a second line under the wordmark and asserted it added no height. Built and
+measured, that grew the header from **56.2px to 90.3px — +34.1px**, which
+pushes every row down and breaks the brief's requirement outright.
+
+So the strip shares **one baseline row** with the wordmark, separated by a
+hairline divider. Measured in `design/preview.html`, at 1024 / 1100 / 1280 /
+1440px, with three pages: **56.2px with the strip, 56.2px without it, at every
+width.** No horizontal overflow at any of them.
+
+The lesson is worth recording because it nearly shipped as prose: *"it fits in
+the space already there"* was a plausible-sounding claim about a layout I had
+not rendered. It was wrong by 34 pixels.
+- **No competition for primary status.** "Add application" is the only filled
+  control in the interface. Tabs are text with a 2px underline on the active
+  one — quieter than the sync chip. §1.2: restraint is what gives the single
+  emphasis its force, so adding a second filled control would weaken the
+  primary action rather than just sitting beside it.
+- **Rows do not move.** Everything below the header is untouched.
+
+### 5.4 One page shows nothing at all
+
+Not a greyed-out strip, not a single tab, not a "1 page" chip. **Nothing.**
+
+§1.1, the expertise-reversal effect: *the same scaffolding that reduces
+extraneous load for a novice becomes extraneous load itself for an expert.* A
+tab strip with one tab is a permanent piece of chrome explaining a feature the
+user is not using.
+
+Discovery lives in the overflow menu — **"New page"** — alongside Share/Export
+and the theme controls, which is already the home for low-frequency
+configuration. Create a second page and the strip appears, with both tabs. That
+is the moment the affordance becomes useful and the moment it arrives.
+
+### 5.5 Create, rename, reorder, delete
+
+**Create** — overflow menu → "New page" → an inline text input appears at the
+end of the strip, focused, committing on Enter and cancelling on Escape. **Not
+a modal:** §1.1 names every modal as a forced working-memory reload, and naming
+a page is not worth one.
+
+**Rename** — click the active tab a second time, or "Rename" in the tab's own
+menu, turning it into the same inline input. This matches the app's existing
+grammar, which the empty state states outright: *"Every cell is editable —
+click one and type."*
+
+**Reorder** — "Move left" / "Move right" in the tab's menu. **Not drag.**
+Honest about the trade: drag is the nicer gesture and it is what a spreadsheet
+does. It is also expensive to build well, hostile on touch, and needs its own
+keyboard equivalent regardless. Two menu items are the whole feature for a
+handful of pages. If pages routinely reach eight or more, revisit.
+
+**Delete** — the destructive path, and it gets the care "delete for good" gets,
+with one difference that the copy must be honest about: **nothing is destroyed**
+(§2.4). So the confirmation states the actual consequence rather than
+performing danger:
+
+```
+Delete "Internships"?
+
+Its 14 applications move to "Applications". Nothing is deleted —
+they keep their stage, notes, scores and history.
+
+               [ Cancel ]  [ Delete page ]
+```
+
+The count is real, read from the rows in hand. A page with no applications says
+so and is a one-line confirmation. The last remaining page cannot be deleted:
+the menu item is disabled and says why — *"This is your only page"* — rather
+than being absent, so the rule is learnable instead of mysterious.
+
+Rams 6 and §1.2: a dialogue that shouts about danger it cannot deliver teaches
+the user to click through dialogues.
+
+### 5.6 A new page's empty state
+
+§3.3: *the first-run empty state is the single best onboarding surface* — and a
+new page is a second chance at it. But the same section's neighbour, §1.1's
+expertise-reversal effect, says re-teaching an expert is a tax.
+
+So **two states, chosen on total rows across all pages, not on this page's**:
+
+- **Genuinely new account** (`all.length === 0`) — the existing full first-run
+  state, unchanged: the sentence, the Add button, and the ghost row carrying
+  the real table geometry with a one-word instruction per cell.
+- **New page on an established account** — one line and the button:
+  *"Nothing on this page yet."* + `+ Add application`. Someone with 40
+  applications does not need to be told cells are editable.
+
+The distinction is one condition and it is the difference between an onboarding
+surface and a lecture.
+
+### 5.7 Mobile
+
+Below `lg`, a horizontal tab strip is the wrong control: it truncates, it
+scrolls sideways off the screen, and the tab you want is the one you cannot
+see. The brief is right to rule that out.
+
+**Below `lg`: one full-width button showing the current page, opening a menu of
+all pages.**
+
+```
+┌──────────────────────────────────────────┐
+│  Internships · 14                     ▾  │
+└──────────────────────────────────────────┘
+```
+
+- **Always fully visible.** No horizontal scroll, no truncation, no hidden
+  tabs, and it does not degrade as pages are added.
+- **Recognition over recall** (§1.1) — the control states where you are rather
+  than requiring you to find it among peers.
+- **Full-width tap target.** Fitts's law is robust for pointing (dossier
+  caveats), and this is the largest target the layout allows.
+- **It is the existing `OverflowMenu` primitive**, already built, already
+  keyboard-accessible, already positioned and dismissed correctly. No new
+  mechanism, no new dependency.
+- Precedent is the correct one: Google Sheets on a phone uses a sheet-list
+  button, not a tab strip.
+
+Create, rename, reorder and delete live in the same menu, so mobile is not a
+reduced version of the feature.
+
+### 5.8 Keyboard
+
+- `role="tablist"` / `role="tab"`, with the table container as
+  `role="tabpanel"` and `aria-selected` on the active tab.
+- Roving tabindex: the strip is **one** tab stop. Left/Right move between
+  pages, Home/End jump to first/last. This is the standard pattern and screen
+  readers announce it without extra ARIA.
+- No conflict with the grid's existing `onGridKey` — separate focus zones, and
+  the strip's handler does not reach the grid.
+- `tk-focus` on every tab, with the ring following the tab's own radius rather
+  than a rectangle around it. Re-verified after build.
+
+**On a global shortcut: recommend against.** The obvious binding is
+`Cmd/Ctrl+1…9`, which is browser tab switching on every major browser, and
+`Alt+1…9` is the same on Windows and Linux. Stealing it from someone who
+reaches for it out of habit is worse than not having it. Pages get switched a
+handful of times a day, not hundreds — below the bar where a global shortcut
+earns a collision that severe. Arrow keys within the strip are enough.
+
+This is a decision to revisit only if a command palette lands, where page
+switching becomes a search result and the collision disappears. That is a
+separate feature and is not proposed here.
+
+### 5.9 Shape, elevation, and re-verifying the invariant
+
+Tabs use `tk-r2` and the existing focus ring. No new shadow token, no new
+radius, no new surface colour. The active tab is a 2px underline in
+`var(--accent)` — not a filled pill, which would compete with the primary
+button (§5.3).
+
+**The invariant, restated because this change sits directly above the rows:**
+
+> One element owns `background`, `border-radius` and `box-shadow`. The hairline
+> is an `inset` ring on that same element. No clipping ancestor.
+
+Nothing in this feature touches `.tk-rowcard`, `.tk-grid`, `.tk-scroll` or the
+subgrid structure. But the header gaining a second line changes what sits above
+the rows, and the R1 round proved that layout above the rows can move their
+edges. So after build, re-run both probes:
+
+1. **Corner probe** — sample the four corners of a row card, with the pointer
+   parked away from the grid so `--hover` is not active. (That second clause is
+   the round-4 detector fault; it is not repeated.)
+2. **Bottom-edge probe** — sample below the last card with a window smaller
+   than the current row gap, so it measures the card's own shadow and not the
+   next card's edge.
+
+Both must match their pre-change values. **If either moves, the placement is
+wrong and gets revised before anything ships**, not tuned with box-shadow
+values.
+
+---
+
+## 6. Constraints
+
+| Constraint | How it is met |
+|---|---|
+| Single self-contained `index.html`, no build step | No new file, no new script tag |
+| Pinned CDN dependencies | Unchanged |
+| No new typeface | Tabs use the existing `tk-micro` scale |
+| No new dependency | Tabs are markup; mobile reuses `OverflowMenu` |
+| Ten inviolable behaviours | Re-verified individually, pass/fail each, via `design/verify-inviolable.js` after build. #1 (`user_id` + `auth.uid()` default) extends to `tracker_pages`; #2 (`FOR ALL` read-back) extends to page creation; #7 (no personal identifier in `localStorage`) covers `tracker.page`; #9 (add clears the stage filter) is explicitly re-tested with two pages, per §4.9 |
+| Works with no Edge Functions and no email provider | Unchanged. `tracker_pages` is a client table with an RLS policy; neither function reads it, and §4.6 ships no function change at all |
+| Do not commit or push | Nothing committed. `index.html` untouched |
+
+One statement in the prior verification needs updating rather than repeating:
+the round-4 check recorded *"`SELECT_COLUMNS` reads only from
+`public.applications`"*. After this the app reads two tables. The property that
+actually mattered — **no Edge Function dependency, no email provider
+dependency** — is unchanged, and that is what the re-run will assert.
+
+---
+
+## 7. Where I think the brief is wrong
+
+Four places, in descending order of how much I would argue.
+
+1. **The funnel threshold options are all wrong** (§4.1). Counting globally and
+   displaying per page breaks the guarantee the gate exists to provide; per
+   page keeps the regression; a user setting makes the user think about
+   sampling. The answer is to gate globally, compute on the largest qualifying
+   population, and label which. I would push hardest here.
+
+2. **Per-page view settings should not exist** (§4.4). The brief asks whether
+   each page remembers its own group/sort/filter. It should not — silently
+   changing the view on switch is a hidden state change on the feature's
+   highest-frequency action.
+
+3. **The digest should get no change at all** (§4.6), not merely "one email".
+   Grouping by page gives an unattended scheduled function a hard dependency on
+   a table most databases do not have, for a cosmetic gain, in a system whose
+   response body nobody reads.
+
+4. **Reordering should not be drag** (§5.5). It is the nicer gesture and the
+   wrong cost for a handful of pages, especially on touch.
+
+And one thing the brief gets exactly right, worth saying because it is the
+part most easily lost: **remaining fully usable while unmigrated is the hard
+requirement here**, not a courtesy. §1.2's ordering rule — nothing queries
+`tracker_pages` before the column probe returns clean — is the single line most
+likely to be broken by a later change, and it is the one that turns this from a
+feature into an outage.
+
+---
+
+## 8. Measured in the preview, not asserted
+
+`design/preview.html` renders all seven states on the shipped token block
+(`index.html:22-122`, lifted verbatim). Four things were measured in it rather
+than claimed. Two changed the design.
+
+### 8.1 Header height — the claim was wrong, the design changed
+
+Covered in §5.3. First draft: strip on a second line, "no added height".
+Measured: **+34.1px**. Revised to a shared baseline row and re-measured:
+
+| Viewport | Header without strip | Header with strip | Equal |
+|---|---|---|---|
+| 1024px | 56.2 | 56.2 | yes |
+| 1100px | 56.2 | 56.2 | yes |
+| 1280px | 56.2 | 56.2 | yes |
+| 1440px | 56.2 | 56.2 | yes |
+
+`lg` is 1024px, and the strip does not exist below it — that is the mobile
+control in §5.7. So those four rows are the entire range in which the claim
+has to hold, and it holds across all of it.
+
+**Below 1024 the numbers diverge (768: 56.2 vs 108.2; 390: 108.2 vs 190.3), and
+that is a preview artifact, not a result.** The preview renders the desktop
+frame at every width so it can be inspected; the app swaps to the mobile
+control. Recorded rather than omitted, because a table of measurements that
+quietly drops its inconvenient rows is worse than no table.
+
+**No horizontal page scroll at 390 / 768 / 1024 / 1280 / 1440px**, and no
+console or page errors at any of them.
+
+One preview bug found and fixed on the way, worth noting because it is a trap
+the shipped page already knows about: the frames were written with bare `fr`
+tracks, and a grid item's `min-width` is `auto`, so the longest word blew the
+track out and dragged the whole page sideways — 517px of content in a 390px
+viewport. `index.html` writes `minmax(0,13fr)` and friends for exactly this
+reason. The preview now does too.
+
+### 8.2 Contrast of the new control — passes, both themes
+
+WCAG ratios, measured by converting each OKLCH token to sRGB through a canvas
+and computing the real luminance ratio. (String-parsing the computed colour is
+the obvious approach and it is wrong — `oklch(98.6% .003 255)` split on numbers
+yields a nonsense RGB triple, which is what my first attempt did and why it
+reported 1.00 for everything.)
+
+| | Light | Dark | Floor |
+|---|---|---|---|
+| Active tab label | **14.88** | **15.52** | 4.5 |
+| Idle tab label | **4.75** | **5.69** | 4.5 |
+| Row count beside label | **4.75** | **5.69** | 4.5 |
+| Active underline vs page | **5.40** | **7.62** | 3.0 (non-text) |
+
+Every value clears its floor. The idle tab at 4.75 is the tightest and is
+deliberate — idle tabs should recede — but it has no headroom, so it is a value
+to re-measure rather than adjust casually.
+
+### 8.3 A pre-existing defect the measurement exposed
+
+Not caused by this feature, not in its scope, and reported because it is real
+and I would rather you heard it from the measurement than not at all.
+
+**"+ Add application" fails contrast in dark mode.** The button is `#fff` on
+`var(--accent)`, and dark's accent is `oklch(72% .150 258)` — a light blue.
+
+| | Light | Dark |
+|---|---|---|
+| White label on accent | 5.61 | **2.50** |
+
+The floor for normal text is 4.5:1. Dark mode misses it by a wide margin, on
+the single most important control in the interface. Light mode is fine.
+
+Source: `index.html:4170-4174` sets `color: "#fff"` unconditionally;
+`index.html:100` defines the dark accent. Nothing about pages touches either.
+
+Two plausible fixes, neither applied here: darken the dark-mode accent enough
+to carry white, or switch the label to a dark ink on the light accent in dark
+mode only. The second keeps the accent hue consistent across themes and is
+what §2.3 of the dossier implies — dark mode is a distinct design problem, not
+an inversion — but it is a change to the app's most prominent control and
+belongs in its own decision, not smuggled in with this one.
+
+### 8.4 Switching genuinely does not animate
+
+The preview's switch handler is nine lines: set `aria-selected`, toggle
+`hidden`. No transition property is declared anywhere on `.pgtab`, `.pages` or
+the panels, so there is nothing to remove under `prefers-reduced-motion` —
+which is the strongest form of honouring it.
+
+---
+
+## 9. What is still unverified
+
+Stated plainly, because the preview proves less than a build would.
+
+- **The switch-cost budget (§5.2) is unmeasured.** The preview toggles
+  `hidden` on static markup; the real thing re-renders a React list. One frame
+  is the budget and it is met in the preview trivially, which is not evidence.
+  It gets measured on the real build with ~50 rows per page.
+- **The shadow probes have not run.** Nothing in the preview reproduces the
+  full grid, subgrid and scroll container, so the corner and bottom-edge checks
+  are listed as build gates (§5.9), not results.
+- **No SQL has been executed.** The migration in §1.4 is written to be
+  idempotent and additive and has been read carefully; it has not been run
+  against a database with real rows on it. That happens before it is offered to
+  anyone.
+- **The ten inviolable behaviours have not been re-run.** They cannot be —
+  there is no new build to run them against. They are a gate on Step 2.
