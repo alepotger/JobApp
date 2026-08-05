@@ -3293,3 +3293,45 @@ gesture begins. **0 writes → 3 writes for a three-position move**, with
 during the drag rather than on release; the row is lifted in flight; the write
 happens once per moved row; the database matches the screen; Space picks up;
 ArrowDown moves; Escape restores; the invariant survives; no JS faults.
+
+## 6. Urgency and stage as sorts — the remainder
+
+`SORTS` gains two options. Manual stays first and stays the default.
+
+- **Needs chasing first** — live rows by days untouched, descending. Rows that
+  are not live sink below them, because nothing is owed on an application not
+  yet sent or already closed.
+- **Furthest along first** — Offer, Interview, Replied, Applied, To apply,
+  Closed. `sortOrder` breaks ties, so manual order survives inside each stage.
+
+Neither is the default, and the reason is worth keeping written down: `patch`
+stamps `activity` on every edit, so under urgency **the row you just touched
+drops to the bottom**. Stage order has the milder form of the same fault. Manual
+order is the only one that never moves under you, and the only one in which
+dragging a row means anything.
+
+No persistence, as recommended: `resetView` already clears sort, and a
+remembered sort means returning to a list ordered by something set once and
+forgotten — which is the "it resorts itself" problem wearing a different hat.
+
+## The dark-mode contrast defect, fixed
+
+Reported in §8.3 and left for a decision. Taking it now, since it is one token.
+
+`+ Add application` was `#fff` on `var(--accent)`, and dark mode's accent has to
+be *light* to read against a dark page — so the app's most important control was
+its least legible: **2.50:1 against a 4.5 floor**.
+
+Fixed with a new `--on-accent` token rather than by darkening the accent, which
+keeps the accent hue identical across themes — §2.3, dark mode is a distinct
+design problem, not an inversion. White in light mode, near-black in dark.
+
+| | Before | After | Floor |
+|---|---|---|---|
+| Light | 5.61 | **5.61** | 4.5 |
+| Dark | **2.50** | **7.24** | 4.5 |
+
+All three accent buttons use the token; no `color: "#fff"` on an accent remains.
+
+**Regression after both:** 13/13 drag, 27/27 and 23/23 pages, 16/16 theme and
+sorts, 8/8 inviolable source checks, contact email still 0 writes while typing.

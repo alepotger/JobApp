@@ -29,6 +29,7 @@
   --ink-3:oklch(54.5% .016 255); --ink-2:oklch(47.5% .016 255); --ink:oklch(26% .020 255);
   --accent:oklch(52% .170 258); --accent-ink:oklch(44% .150 258);
   --accent-wash:oklch(96.5% .022 258); --accent-hover:oklch(46% .170 258);
+  --on-accent:#fff;
   --danger-ink:oklch(46% .165 25); --danger-wash:oklch(96% .025 25);
   --warn-ink:oklch(46% .110 75);   --warn-wash:oklch(96% .035 85);
   --good-ink:oklch(45% .120 155);  --good-wash:oklch(96% .030 155);
@@ -106,6 +107,13 @@
   --ink-3:oklch(64% .016 255); --ink-2:oklch(76% .014 255); --ink:oklch(93% .006 255);
   --accent:oklch(72% .150 258); --accent-ink:oklch(80% .120 258);
   --accent-wash:oklch(27% .045 258); --accent-hover:oklch(78% .140 258);
+  /* Dark mode is a distinct design problem, not an inversion (§2.3). The
+     accent has to be light here to read against a dark page, and white text on
+     a light accent measured 2.50:1 against a 4.5 floor — the least legible
+     thing in the app was its most important control. The hue is kept and the
+     label is darkened instead, which is the change that preserves the accent
+     across both themes. Measured after: see PROPOSAL §8.3. */
+  --on-accent:oklch(20% .04 258);
   --danger-ink:oklch(78% .130 25); --danger-wash:oklch(27% .050 25);
   --warn-ink:oklch(82% .110 80);   --warn-wash:oklch(27% .045 80);
   --good-ink:oklch(80% .130 155);  --good-wash:oklch(26% .045 155);
@@ -505,7 +513,7 @@ textarea{resize:vertical}
     --page:#fff;--surface:#fff;--sunken:#f3f5f7;--raised:#fff;--hover:#fff;
     --line-soft:#e7eaee;--line:#d6d9de;--line-strong:#8a9097;
     --ink-3:#6a717a;--ink-2:#565d65;--ink:#1e252e;
-    --accent:#1c65c8;--accent-ink:#0f4ea3;--accent-wash:#ebf4ff;
+    --accent:#1c65c8;--accent-ink:#0f4ea3;--accent-wash:#ebf4ff;--on-accent:#fff;
     --danger-ink:#a01e23;--danger-wash:#ffece9;--warn-ink:#7b4d00;--warn-wash:#fdf1d8;
     --good-ink:#006836;--good-wash:#e3f8e9;
     --cold-line:#f0c4bd;--warn-line:#e8d09a;
@@ -3536,11 +3544,28 @@ function buildGroups(rows, field) {
 /* One control for how the pipeline is arranged. "None" is the field dropdown's
    own resting value, so an ungrouped list needs no explanatory chip; the
    category dropdown only exists once there is something to categorise. */
+/* Manual order is first and is the default. The two added here are the ones
+   the pipeline actually wants to be read by — but they are OPTIONS, not the
+   default, and the reasoning is worth keeping:
+
+   Urgency sorts by how long a live row has sat untouched, which is the
+   tracker's premise. It is still not the default, because `patch` stamps
+   `activity` on every edit — so under urgency the row you just touched drops
+   to the bottom. Stage order has the milder version of the same fault: change
+   a status and the row you were working on relocates.
+
+   Manual order is the only one that never moves under you, and it is the only
+   one in which dragging a row means anything. */
 const SORTS = [
   { key: "", label: "Pipeline order" },
+  { key: "urgency", label: "Needs chasing first" },
+  { key: "stage", label: "Furthest along first" },
   { key: "score-desc", label: "Score, best first" },
   { key: "score-asc", label: "Score, worst first" },
 ];
+
+/* Furthest along first, so Offer leads and To apply trails. */
+const STAGE_RANK = ["offer", "interview", "replied", "applied", "to-apply", "closed"];
 
 const MIN_SCORES = [
   { key: "", label: "Any score" },
@@ -5193,7 +5218,18 @@ function Tracker({ session }) {
     : byStage;
 
   let staged = scored;
-  if (sort) {
+  if (sort === "urgency") {
+    /* Only live rows can be stale — nothing is owed on a row not yet sent or
+       already closed — so those sink below the ones actually waiting. */
+    const wait = (r) => (LIVE.includes(r.status) ? daysSince(r.activity) : -1);
+    staged = [...scored].sort((a, b) => wait(b) - wait(a) || a.sortOrder - b.sortOrder);
+  } else if (sort === "stage") {
+    const rank = (r) => {
+      const i = STAGE_RANK.indexOf(r.status);
+      return i === -1 ? STAGE_RANK.length : i;
+    };
+    staged = [...scored].sort((a, b) => rank(a) - rank(b) || a.sortOrder - b.sortOrder);
+  } else if (sort) {
     const dir = sort === "score-asc" ? -1 : 1;
     staged = [...scored].sort((a, b) => {
       const x = aggregate(a);
@@ -5367,7 +5403,7 @@ function Tracker({ session }) {
             style={{
               background: "var(--accent)",
               borderColor: "var(--accent)",
-              color: "#fff",
+              color: "var(--on-accent)",
             }}
           >
             + Add application
@@ -5649,7 +5685,7 @@ function Tracker({ session }) {
                   style={{
                     background: "var(--accent)",
                     borderColor: "var(--accent)",
-                    color: "#fff",
+                    color: "var(--on-accent)",
                   }}
                 >
                   + Add application
@@ -5675,7 +5711,7 @@ function Tracker({ session }) {
                   style={{
                     background: "var(--accent)",
                     borderColor: "var(--accent)",
-                    color: "#fff",
+                    color: "var(--on-accent)",
                   }}
                 >
                   + Add application
