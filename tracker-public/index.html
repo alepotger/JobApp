@@ -4252,6 +4252,11 @@ function Tracker({ session }) {
      key clears and the next event applies normally, so a genuine remote change
      is delayed by one round trip, never lost. */
   const merge = useCallback((record) => {
+    /* A payload with no id is not a row. Without this guard fromDb produces an
+       object with id undefined, the findIndex below misses, and it is appended
+       as a phantom row that renders as an empty application. Found when a
+       malformed realtime frame did exactly that. */
+    if (!record || !record.id) return;
     const row = fromDb(record);
     const busy = [...inFlight.current.keys()].some((k) => k.startsWith(row.id + "|"));
     if (busy) return;
@@ -4927,8 +4932,11 @@ function Tracker({ session }) {
 
     mark(1);
     const results = await Promise.all(
+      /* .select("id") so a zero-row update cannot pass as success. PostgREST
+         returns error:null when the filter matches nothing, which is the same
+         class of silent failure as the original insert-without-read-back. */
       changed.map(({ r, i }) =>
-        sb.from("applications").update({ sort_order: i }).eq("id", r.id)
+        sb.from("applications").update({ sort_order: i }).eq("id", r.id).select("id")
       )
     );
     mark(-1);
@@ -4940,9 +4948,14 @@ function Tracker({ session }) {
     if (mutationSeq.current !== mid) return; // superseded by a later drag
 
     const failed = results.find((x) => x.error);
-    if (failed) {
+    const missed = results.find((x) => !x.error && Array.isArray(x.data) && x.data.length === 0);
+    if (failed || missed) {
       setAll(before);
-      report("Saving the new order", failed.error);
+      report(
+        "Saving the new order",
+        failed ? failed.error
+               : { message: "The new order was not saved — no matching row. Re-run the setup SQL; the policy must be FOR ALL." }
+      );
     }
   };
 
