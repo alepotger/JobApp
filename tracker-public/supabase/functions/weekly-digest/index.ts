@@ -22,7 +22,11 @@ import { constantTimeEqual } from "../_shared/verify.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
+/* Trimmed here, not just at the comparison. HTTP already strips whitespace
+   around header values, so trimming the incoming header alone protected the
+   side that was never at risk; a secret pasted into the dashboard with a
+   trailing newline would have failed this check forever, silently. */
+const CRON_SECRET = (Deno.env.get("CRON_SECRET") ?? "").trim();
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const DIGEST_FROM = Deno.env.get("DIGEST_FROM") ?? "";
 const APP_URL = Deno.env.get("APP_URL") ?? "";
@@ -112,12 +116,29 @@ Deno.serve(async (req) => {
         digestHtml(report, APP_URL)
       );
 
-      await db
+      /* Not thrown: the email has already gone, so failing the account here
+         would report "error" for a digest that was delivered. But it must not
+         be discarded either — supabase-js returns errors rather than throwing,
+         so an unchecked update is a failure with no symptom at all. A missing
+         service_role grant looked exactly like success. */
+      const { error: stampError } = await db
         .from("tracker_settings")
         .update({ last_digest_at: new Date().toISOString() })
         .eq("user_id", account.user_id);
 
-      results.push({ user_id: account.user_id, status: "sent", stale: report.count });
+      if (stampError) {
+        console.error(
+          `weekly-digest: sent to ${account.user_id} but could not stamp ` +
+            `last_digest_at — ${stampError.message}`
+        );
+      }
+
+      results.push({
+        user_id: account.user_id,
+        status: "sent",
+        stale: report.count,
+        ...(stampError ? { stamped: false } : {}),
+      });
     } catch (err) {
       // One account's failure must not stop the rest of the run.
       const message = err instanceof Error ? err.message : String(err);

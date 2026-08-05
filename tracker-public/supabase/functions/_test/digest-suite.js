@@ -7,6 +7,7 @@ const t = (n, ok, d) => { out.push(ok); console.log((ok?"PASS  ":"FAIL  ")+n+(d?
 const days = (n) => new Date(Date.now() - n * 86400000).toISOString();
 const reset = (s) => fetch(DB + "/__reset", { method: "POST", body: JSON.stringify(s) });
 const state = () => fetch(DB + "/__state").then((r) => r.json());
+const fail = (spec) => fetch(DB + "/__fail", { method: "POST", body: JSON.stringify(spec) });
 const run = (secret) => fetch(FN, { method: "POST", headers: secret ? { "x-cron-secret": secret } : {} })
   .then(async (r) => ({ status: r.status, body: await r.json() }));
 const outbox = () => { try { return fs.readFileSync(BOX, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); } catch { return []; } };
@@ -89,6 +90,21 @@ const stale = (n, o = {}) => ({ id: "s" + n, user_id: U1, company: "Co " + n, ro
   t("last_digest_at is stamped only on the account that was sent to",
     st.tracker_settings.find((s) => s.user_id === U1).last_digest_at !== null &&
     st.tracker_settings.find((s) => s.user_id === U2).last_digest_at === null);
+
+  /* ---- a stamp that fails is reported, not swallowed ----
+     The email has already gone by this point, so the account is not an error.
+     But an unchecked update is a failure with no symptom: a missing
+     service_role grant on tracker_settings produced a response identical to a
+     completely healthy run. */
+  await reset({ tracker_settings: [settings()], applications: [stale(1)] });
+  clearBox();
+  await fail({ table: "tracker_settings", method: "PATCH" });
+  r = await run(process.env.CRON_SECRET);
+  t("a digest whose last_digest_at stamp fails is still reported as sent",
+    r.body.results[0].status === "sent", JSON.stringify(r.body.results[0]));
+  t("and the failed stamp is visible rather than swallowed",
+    r.body.results[0].stamped === false, JSON.stringify(r.body.results[0]));
+  t("the mail itself went out regardless", outbox().length === 1);
 
   console.log("\n" + out.filter(Boolean).length + "/" + out.length + " digest checks passed");
 })();
