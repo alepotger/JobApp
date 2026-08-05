@@ -3495,3 +3495,80 @@ pages · 14/14 theme and contact line · 8/8 inviolable source checks · contact
 email still 0 writes while typing.
 
 `design/preview.html` gains a live reorder demo — grab a handle and drag.
+
+---
+
+# Dragging was laggy — measured, and fixed
+
+Reported as "ridiculously laggy". That is a measurable claim, so it was
+measured before anything was changed: frame deltas and forced layouts during
+one drag over eight rows, on a 60-row list.
+
+## Root cause: three costs, all mine, all per pointermove
+
+1. **The move handler re-measured the DOM every time.** `querySelectorAll` plus
+   `getBoundingClientRect()` on every card, on every `pointermove` — a forced
+   synchronous layout per event.
+2. **`reorderLocal` called `setAll` on every crossing**, replacing every row
+   object, so React re-rendered the entire list.
+3. **The FLIP layout effect then ran after each of those renders** and measured
+   every card again — a second forced layout per render, and it restarted the
+   220ms transitions mid-gesture.
+
+Measured, 60 rows, one drag:
+
+| | Before | After |
+|---|---|---|
+| `getBoundingClientRect` calls | **15,480** | **240** |
+| p90 frame | 31.0ms | **17.2ms** |
+| worst frame | 433ms | 120ms |
+| dropped frames (>33ms) | 9% | **2%** |
+
+p90 is the number that matters: 31ms is a visibly stuttering ninetieth
+percentile; 17.2ms is vsync.
+
+## The fix: measure once, transform during, commit once
+
+Geometry is read a single time when the gesture begins. Nothing is read from
+the DOM after that. The dragged row tracks the pointer by transform with no
+transition; displaced rows step aside by transform with the spring curve. The
+target slot comes from cached midpoints — arithmetic, not measurement. React
+state is touched exactly once, on release, and the layout effect is suppressed
+for that commit because the rows are already where they belong, so there is
+nothing left to animate and nothing to flash.
+
+The keyboard path still goes through `reorderLocal`: one re-render per arrow
+key is nothing.
+
+**A note on the earlier metric.** The first run reported "41% of frames over
+16.7ms" — but a frame at 60Hz *is* 16.7ms, so that counted healthy vsync as
+failure. A dropped frame is one that took two intervals. Corrected to >33ms.
+
+## Three bugs this exposed, in order
+
+**`[data-row-card]` matched every row twice.** Both the desktop row and the
+mobile card carry it, and the hidden one is still in the DOM — so an
+unfiltered query returned 8 elements with duplicate ids and the reorder
+arithmetic silently scrambled. Now filtered to cards with a non-zero height.
+
+**The drag harness's stub returned `[]` from PATCH.** The app now asks for
+`.select("id")` and treats an empty result as a zero-row update, so it
+correctly rolled back a perfectly good write. The stub was wrong; it now
+returns the matched rows. The guard working as designed is what surfaced it.
+
+**Two assertions were stale by design change**, and were corrected rather than
+relaxed: rows no longer reorder the DOM during a drag — they move by transform,
+which is the whole point of the fix — so the check is that they are visibly
+displaced, not that document order changed. And under `prefers-reduced-motion`
+rows still move by transform; what disappears is the transition. Playwright's
+own emulation forces `transition-duration: 1e-06s` on everything, so "not 0s"
+was a false positive; the threshold is now 10ms.
+
+## Regression
+
+13/13 drag · 8/8 touch · 15/15 animation · 7/7 realtime · 27/27 and 23/23
+pages · 14/14 theme and contact line · 8/8 inviolable · contact email still 0
+writes while typing.
+
+`design/verify-drag-performance.js` is now in the repo, so this is measurable
+again rather than argued about.

@@ -1,8 +1,4 @@
-/* A REAL touch device: hasTouch, an iPhone user-agent, and genuine
-   PointerEvents of pointerType "touch". The desktop drag was reported working
-   after being driven with a mouse at 1440px, which is exactly how a touch path
-   that never executes gets called done. This file exists so that cannot
-   happen twice. Needs a server on :8777 serving tracker-public. */
+/* A REAL touch device: hasTouch, iPhone UA, and genuine touch/pointer events.
    The desktop drag was reported working after being driven with a mouse at
    1440px; this exists so that cannot happen again. */
 const { chromium } = require('playwright'); const fs = require('fs');

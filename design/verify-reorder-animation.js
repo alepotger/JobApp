@@ -1,7 +1,3 @@
-/* The theme row and the reorder animation. Samples MID-DRAG, because a
-   transition that is correct at rest and wrong in flight is the likeliest
-   place for the old corner defect to resurface. Also runs the whole thing a
-   second time under prefers-reduced-motion. Needs a server on :8777. */
 const { chromium } = require('playwright'); const fs = require('fs');
 const SP='/tmp/claude-0/-home-user-Officient/70073ebc-e76e-5840-bec6-bc987ac23da4/scratchpad/';
 const CDN={'https://unpkg.com/react@18.3.1/umd/react.production.min.js':'react.js',
@@ -108,11 +104,24 @@ async function boot(b,reduced){
  const b4=await r2.pg.evaluate(()=>[...document.querySelectorAll('.tk-grid .tk-rowcard [data-c="0"]')].map(e=>e.textContent.trim()));
  await r2.pg.mouse.move(h2.x,h2.y); await r2.pg.mouse.down();
  await r2.pg.mouse.move(h2.x,h2.y+hs2[1]+hs2[2],{steps:8}); await r2.pg.waitForTimeout(60);
+ /* Displaced rows are ALWAYS moved by transform now — that is the mechanism,
+    not the animation. Under reduced motion they move without a transition, so
+    the transition is what to assert on. */
  const rm=await r2.pg.evaluate(()=>[...document.querySelectorAll('.tk-rowcard')]
-   .filter(c=>c.getAttribute('data-drag')!=='lift'&&getComputedStyle(c).transform!=='none').length);
+   .filter(c=>c.getAttribute('data-drag')!=='lift'
+     && getComputedStyle(c).transform!=='none'
+     /* Playwright's reduced-motion emulation forces transition-duration to
+        1e-06s on everything, so "not 0s" is not the test — "long enough to
+        see" is. Anything under 10ms is instantaneous. */
+     && parseFloat(getComputedStyle(c).transitionDuration) > 0.01).length);
  await r2.pg.mouse.up(); await r2.pg.waitForTimeout(700);
  const af=await r2.pg.evaluate(()=>[...document.querySelectorAll('.tk-grid .tk-rowcard [data-c="0"]')].map(e=>e.textContent.trim()));
- check('prefers-reduced-motion: nothing animates', rm===0, rm+' animating');
+ const rmDetail=await r2.pg.evaluate(()=>[...document.querySelectorAll('.tk-rowcard')]
+   .map((c,i)=>({i,lift:c.getAttribute('data-drag'),tr:getComputedStyle(c).transitionDuration,
+     prop:getComputedStyle(c).transitionProperty,xf:getComputedStyle(c).transform!=='none'}))
+   .filter(x=>x.tr!=='0s'));
+ console.log('    reduced-motion detail:', JSON.stringify(rmDetail));
+ check('prefers-reduced-motion: rows move without a transition', rm===0, rm+' still transitioning');
  check('prefers-reduced-motion: the reorder still happens', JSON.stringify(af)!==JSON.stringify(b4), JSON.stringify(af));
 
  console.log('\n'+out.filter(Boolean).length+'/'+out.length+' checks passed');
