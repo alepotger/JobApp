@@ -2227,7 +2227,13 @@ function OverflowMenu({ items, label, triggerContent, triggerClass, block }) {
               <button
                 key={it.key || it.label}
                 data-i={i}
-                role={it.checked == null ? "menuitem" : "menuitemradio"}
+                role={
+                  it.checked == null
+                    ? "menuitem"
+                    : it.toggle
+                    ? "menuitemcheckbox"
+                    : "menuitemradio"
+                }
                 aria-checked={it.checked == null ? undefined : it.checked}
                 aria-disabled={it.disabled ? true : undefined}
                 tabIndex={-1}
@@ -2237,7 +2243,13 @@ function OverflowMenu({ items, label, triggerContent, triggerClass, block }) {
                      visible — a rule you can read is learnable, one that
                      silently removes the control is not. */
                   if (it.disabled) return;
-                  hide(true);
+                  /* A toggle keeps the menu open. The point of flipping the
+                     theme is watching it flip; closing the menu would hide the
+                     result and cost a re-open to undo — a context switch
+                     (§1.1) charged for the one action most likely to be tried
+                     twice. Everything else closes, because everything else
+                     takes you somewhere. */
+                  if (!it.keepOpen) hide(true);
                   it.onPick();
                 }}
                 className={`tk-focus flex w-full items-center justify-between gap-3 tk-r2 px-3 py-2 text-left tk-micro transition-colors ${
@@ -2976,17 +2988,55 @@ function Rating({ label, value, onChange }) {
   );
 }
 
-function Field({ label, value, onChange, type, placeholder }) {
+/* Typing here used to be close to impossible, and the reason is worth keeping
+   written down because it was three faults compounding, not one:
+
+   1. The input was fully controlled from `value` — shared application state,
+      which realtime reconciles — with no local draft.
+   2. onChange called through to a database UPDATE on EVERY keystroke. Twenty-one
+      characters of an email address produced twenty-one writes.
+   3. Each of those writes echoes back as a postgres_changes event, and `merge`
+      replaced the row wholesale. The echoes land out of order and stale against
+      real network latency, so each one reset `value` mid-word: characters
+      dropped and the caret jumped to the end.
+
+   The draft below fixes 1 and 2 — the input owns what you are typing, and the
+   write happens once, on blur or Enter. `merge` is guarded separately for 3.
+   Fixing any one alone leaves the fault reachable from the other two.
+
+   `value` is still honoured when it changes from OUTSIDE an edit, so a genuine
+   remote change is not ignored — the draft is only authoritative while the
+   field has focus. */
+function Field({ label, value, onChange, type, placeholder, inputMode, hint }) {
+  const [draft, setDraft] = useState(null);
+  const editing = draft !== null;
+  const shown = editing ? draft : value || "";
+
+  const commit = () => {
+    if (draft === null) return;
+    const next = draft;
+    setDraft(null);
+    if (next !== (value || "")) onChange(next);
+  };
+
   return (
     <label className="block">
       <span className={LABEL}>{label}</span>
       <input
         type={type || "text"}
-        value={value}
+        inputMode={inputMode}
+        value={shown}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+          /* Escape abandons the edit rather than saving it, matching the cells. */
+          if (e.key === "Escape") { e.preventDefault(); setDraft(null); }
+        }}
         className="tk-input tk-focus mt-1 w-full tk-r2 px-2 py-2 tk-body"
       />
+      {hint ? <span className="mt-1 block tk-cap leading-relaxed tk-tertiary">{hint}</span> : null}
     </label>
   );
 }
@@ -3259,15 +3309,15 @@ function Funnel({ rows, allRows, scoped, open, onToggle }) {
           className="tk-focus flex items-center gap-2 tk-r2 tk-micro tk-secondary"
         >
           <Caret open={open} />
-          Funnel
+          Your numbers
         </button>
         {open ? (
           <p className="tk-mono tk-cap tk-tertiary">
-            Live count of where each application sits now
+            Where each application sits now, and how it is converting
           </p>
         ) : (
           <p className="tk-mono tk-cap tk-secondary">
-            {inFunnel} live in the funnel ·{" "}
+            {inFunnel} live ·{" "}
             {steps
               .filter((s) => s.count)
               .map((s) => `${s.label.toLowerCase()} ${s.count}`)
@@ -4091,8 +4141,21 @@ function Tracker({ session }) {
     setSync(pending.current > 0 ? "saving" : "live");
   }, []);
 
+  /* A row with a write still in flight must NOT be replaced by a realtime
+     echo. The echo is this client's own change coming back — it carries no
+     news — and it arrives out of order and stale against real latency, so
+     applying it overwrites newer local state with older server state. That is
+     what made typing into a field impossible: every keystroke's echo reset the
+     value under the caret.
+
+     Skipping is right rather than merely convenient: while a mutation is in
+     flight the optimistic local row IS the newer truth. Once it settles the
+     key clears and the next event applies normally, so a genuine remote change
+     is delayed by one round trip, never lost. */
   const merge = useCallback((record) => {
     const row = fromDb(record);
+    const busy = [...inFlight.current.keys()].some((k) => k.startsWith(row.id + "|"));
+    if (busy) return;
     setAll((prev) => {
       const i = prev.findIndex((r) => r.id === row.id);
       if (i === -1) return [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -5034,25 +5097,24 @@ function Tracker({ session }) {
                 ? [{ key: "newpage", label: "New page", onPick: () => setCreatingPage(true) },
                    { separator: true }]
                 : []),
-              /* Each row states a STATE, not an action, and the pair is a
-                 radio group — so the current theme is unambiguous from inside
-                 the menu now that the toggle is not visible at a glance. */
-              {
-                label: "Light mode",
-                icon: "light",
-                checked: theme !== "dark",
-                onPick: () => {
-                  applyTheme("light");
-                  setTheme("light");
-                },
-              },
+              /* ONE row, not two. It names a MODE and its checkbox says
+                 whether that mode is on — so the current theme is unambiguous
+                 from inside the menu, which matters because the toggle is not
+                 visible at a glance from outside. Naming the ACTION instead
+                 ("Switch to dark") would leave the current state unstated, and
+                 mixing the two is the classic way this control confuses
+                 people. menuitemcheckbox, so screen readers announce the state
+                 rather than a bare label. */
               {
                 label: "Dark mode",
                 icon: "dark",
+                toggle: true,
+                keepOpen: true,
                 checked: theme === "dark",
                 onPick: () => {
-                  applyTheme("dark");
-                  setTheme("dark");
+                  const next = theme === "dark" ? "light" : "dark";
+                  applyTheme(next);
+                  setTheme(next);
                 },
               },
               {

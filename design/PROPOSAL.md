@@ -3106,3 +3106,88 @@ by its first company.
 
 27/27 unmigrated-and-migrated behaviour and all ten inviolable behaviours still
 pass.
+
+---
+
+# Six items — round 1 (items 1, 2, 3)
+
+## 1. Contact email was unusable — root cause
+
+Three faults compounding, in `Field` (`index.html:2979`). Fixing any one alone
+would have left it reachable from the other two, which is how this class of bug
+comes back from another angle.
+
+1. **Controlled-input round trip.** No local draft. `value` came straight from
+   `row.contactEmail` — shared state that realtime reconciles.
+2. **Save-on-change.** `onChange` → `editField` → `patch` fired a database
+   `UPDATE` per keystroke. **Measured: 21 writes for a 21-character address.**
+3. **Realtime echo with no edit guard.** `merge` replaced the row wholesale on
+   every `postgres_changes` event. Each of those 21 writes echoes back; the
+   echoes arrive out of order and stale against real latency, and each one
+   resets `value` mid-word — dropping characters and throwing the caret to the
+   end.
+
+**What was executed and what was read.** Faults 1 and 2 are proven by running
+the app: 21 writes, and 0 after the fix. Fault 3 is established by reading
+`merge` — a stubbed Supabase has no realtime WebSocket, so the echo never
+arrives and the text survives all 21 writes intact in the harness. That is
+exactly why the bug is worst on a real project with a second device syncing,
+and why it could not have been found by the existing tests.
+
+**Fixed at all three layers.** `Field` now owns a draft and writes once, on
+blur or Enter, with Escape abandoning. `merge` skips any row with a write in
+flight, because while a mutation is in flight the optimistic local row is the
+newer truth — a genuine remote change is delayed one round trip, never lost.
+
+**Result: 21 writes → 0 while typing, 1 on blur, value intact.**
+
+**Other fields.** `Field` is also used by **salary** and **equity**, which had
+the identical fault and are fixed by the same change. The grid cells — company,
+role, location, replies, next steps, notes — use `EditableCell`, which already
+kept a local draft and committed on blur, so typing there was never affected.
+`DateField` likewise has its own draft.
+
+## 2. Theme: one row, not two
+
+A single `menuitemcheckbox` labelled **Dark mode**, carrying the moon glyph and
+a tick when on. It names a MODE and its checkbox states whether that mode is
+active — so the current theme is unambiguous from inside the menu, which is
+what matters given the control is invisible from outside. Naming the ACTION
+instead ("Switch to dark") would leave the current state unstated; mixing the
+two is the classic way this control confuses people, so it does one thing.
+
+**The menu stays open on toggle.** The point of flipping the theme is watching
+it flip, and closing would hide the result and charge a re-open to undo — a
+context switch (§1.1) levied on the one action most likely to be tried twice.
+Everything else in the menu still closes, because everything else takes you
+somewhere.
+
+## 3. "Funnel" → "Your numbers"
+
+What the panel actually shows: stage occupancy, mean days between stages, reply
+rate, median days to a reply — and, below the threshold, progress toward 20
+applications and no conversion at all.
+
+**"Conversion" fails the locked state outright** — there is none to show.
+**"Pipeline health"** implies a verdict the panel does not deliver, and
+"pipeline" is the jargon being escaped. **"Progress"** collides with stage
+progress, which is what the rows already show.
+
+**"Your numbers"** is true in both states, uses no jargon, and sets the right
+expectation: this panel is statistics about your own data, not another view of
+the rows or a benchmark against anyone else.
+
+Two labels inside were equally opaque and changed with it: the collapsed
+summary read *"7 live in the funnel"* → **"7 live"**, and the open-state
+subtitle read *"Live count of where each application sits now"* → **"Where each
+application sits now, and how it is converting"**, which describes both halves
+of the panel rather than only the top.
+
+The `tracker.funnel` localStorage key is unchanged — renaming it would discard
+everyone's expanded/collapsed preference for a string nobody sees.
+
+## Verification
+
+Item 1: **8/8** in the diagnosis harness, before and after. Item 2 and 3:
+**9/9**. Plus **27/27** and **23/23** in the page harnesses and **8/8** source
+checks of the inviolable behaviours, all unchanged.
