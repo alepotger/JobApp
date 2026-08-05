@@ -3335,3 +3335,77 @@ All three accent buttons use the token; no `color: "#fff"` on an accent remains.
 
 **Regression after both:** 13/13 drag, 27/27 and 23/23 pages, 16/16 theme and
 sorts, 8/8 inviolable source checks, contact email still 0 writes while typing.
+
+---
+
+# Regression report — reorder and theme
+
+Diagnosis only. No application code changed; the findings are the deliverable.
+
+## What the last pass actually did
+
+**The mobile drag was built and was unreachable by construction.** The touch
+code exists — `pointerType === "touch"`, the 400ms `LONG_PRESS`,
+`touch-action:none` — and it is attached to a handle rendered in exactly one
+place: inside the container at `index.html:5576`, which is `hidden lg:block`.
+Below 1024px that container is `display:none`. `MobileCard` contains no drag
+handle at all. The touch branch has never executed.
+
+It was then "verified" at 1440px with a mouse and reported done.
+
+Measured in a real touch context (390×844, `hasTouch`, iPhone UA):
+
+| | |
+|---|---|
+| mobile cards rendered | 4 |
+| drag handles in DOM | 4 — all inside the hidden desktop table |
+| drag handles visible | **0** |
+| desktop grid visible | false |
+
+Even if one were rendered on a card, `.tk-drag` is `opacity:0` revealed by
+`.tk-rowcard:hover`, and there is no hover on a phone.
+
+## Item 1 is not a persistence failure
+
+Two signed-in devices against one shared database, device A dragging three
+positions (`design/verify-reorder-sync.js`):
+
+| | |
+|---|---|
+| writes sent | 3 |
+| rows matched per write | 1, 1, 1 — not silent zero-row updates |
+| database order after drag | Bravo, Charlie, Alpha, Delta |
+| device A screen | Bravo, Charlie, Alpha, Delta |
+| **device B, fresh load** | **Bravo, Charlie, Alpha, Delta** |
+
+`sort_order` is written, each write matches its row, and a second device
+loading fresh gets the new order. The first two hypotheses in the brief are
+ruled out by execution.
+
+That leaves realtime propagation, and **it remains unverified**. Every harness
+in this project is HTTP-only: there is no WebSocket, so no `postgres_changes`
+event has ever fired in any test here. Everything reported about realtime has
+been read from source, never executed. That blind spot hid the contact-email
+echo and now this.
+
+**One real hazard found by reading**, which the brief predicted: `commitOrder`
+calls `.update(…).eq("id", …)` with no `.select()`, so PostgREST returns
+`error: null` even when zero rows match. It matches today; it would fail
+silently the day it stopped.
+
+## Item 3 works as built, which is the problem
+
+The row is the fixed string `"Dark mode"` with a checkbox state; only a small
+`✓` changes. The convention was "name the mode, let the checkbox carry the
+state", argued for on the grounds that it makes the current theme unambiguous.
+Read in use it registers as stuck — and a state change nobody notices is not a
+state change, whatever the argument for it. It needs the state-reflecting
+convention instead: label and glyph both changing.
+
+## Open decision
+
+Meeting "verified on a second signed-in device without a manual refresh"
+requires a WebSocket server speaking Supabase's realtime protocol. That is a
+substantial piece of work, and given it has now hidden two bugs it is probably
+worth building before anything else here. Awaiting a decision rather than
+spending the effort unannounced.
