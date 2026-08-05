@@ -61,6 +61,29 @@ create policy "owner reads inbound"
 
 grant select on public.inbound_messages to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Privileges for the Edge Functions.
+--
+-- The functions connect as service_role, not as a signed-in user. Everything
+-- above this line — and all of setup.sql — grants only to `authenticated`,
+-- which was right while the browser was the only client. It leaves the
+-- functions unable to read anything: PostgREST returns
+--   {"error": "permission denied for table tracker_settings"}
+-- on the digest's first query.
+--
+-- service_role bypasses RLS, so no policy is needed or changed here; bypassing
+-- RLS is not the same as holding table privileges, and it held none. Granted
+-- to match what the two functions actually do, and no more — neither deletes,
+-- so neither gets DELETE.
+--
+-- Harmless to run on a project that never deploys the functions: service_role
+-- is not reachable from the browser, which authenticates as `authenticated`.
+-- ---------------------------------------------------------------------------
+
+grant select, update         on public.applications     to service_role;
+grant select, update         on public.tracker_settings to service_role;
+grant select, insert, update on public.inbound_messages to service_role;
+
 -- Give every existing account its settings row.
 insert into public.tracker_settings (user_id)
 select id from auth.users

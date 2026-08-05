@@ -18,7 +18,9 @@ themselves instead: `inbound-email` verifies the provider's signature, and
 
 Run [`../migrations/002-inbound-and-digest.sql`](../migrations/002-inbound-and-digest.sql)
 in the SQL Editor. It adds `contact_email`, a `tracker_settings` row per
-account, and the ledger that stops a retried delivery being logged twice.
+account, the ledger that stops a retried delivery being logged twice, and the
+`service_role` grants both functions need — see below if you ran an older copy
+of it.
 
 Find your inbound token:
 
@@ -87,7 +89,31 @@ Logs**, which persists and can be searched. Check there first — `pg_cron`
 throws away the digest's response body, so the log line is the only record that
 an account's digest failed.
 
-Two lines worth knowing:
+### `permission denied for table tracker_settings`
+
+A missing `GRANT`, not RLS — RLS refusals return zero rows and a `200`, and a
+missing table comes back as `Could not find the table … in the schema cache`.
+The functions connect as `service_role`, and every grant in `setup.sql` and in
+early copies of `002` went to `authenticated` only. Re-run
+[`../migrations/002-inbound-and-digest.sql`](../migrations/002-inbound-and-digest.sql)
+(it is idempotent) or just the grants at the end of its privileges block.
+
+Check what a role actually holds with:
+
+```sql
+select table_name, grantee,
+       string_agg(privilege_type, ', ' order by privilege_type) as privileges
+  from information_schema.role_table_grants
+ where table_schema = 'public'
+   and table_name in ('applications', 'tracker_settings', 'inbound_messages')
+   and grantee in ('anon', 'authenticated', 'service_role')
+ group by table_name, grantee order by table_name, grantee;
+```
+
+`REFERENCES, TRIGGER, TRUNCATE` and nothing else against `service_role` is the
+signature of this fault.
+
+Two log lines worth knowing:
 
 - `weekly-digest: <user_id> failed — …` — that account got no email this week.
   The rest of the run continued.
