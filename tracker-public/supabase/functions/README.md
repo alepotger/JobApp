@@ -70,6 +70,15 @@ reply+<inbound_token>@inbound.yourdomain.com
 
 Then forward or reply-to that address when you apply for something.
 
+### Without a domain
+
+Both providers need MX records, so neither works without a domain you control.
+[`../../tools/gmail-inbound.gs`](../../tools/gmail-inbound.gs) stands in: a
+Google Apps Script in your own account posts labelled Gmail threads to the
+function using `INBOUND_SHARED_SECRET`. Same endpoint, same payload shape, same
+authentication — only the caller differs, and it is set up entirely in a
+browser. Setup instructions are in the file's header.
+
 ## Scheduling the digest
 
 Uncomment the `pg_cron` block at the bottom of the migration, substitute your
