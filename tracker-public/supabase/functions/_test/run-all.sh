@@ -18,6 +18,14 @@ cd "$HERE"
 command -v deno >/dev/null || { echo "deno not found on PATH"; exit 1; }
 command -v node >/dev/null || { echo "node not found on PATH"; exit 1; }
 
+# The paste-to-create parser runs first: it is pure, it needs neither deno nor
+# the stub database, and it is the cheapest failure in the suite to read. It
+# reads its subject straight out of tracker-public/index.html, so a change to
+# the heuristics is covered here without a second copy to keep in step.
+echo "=== paste-to-create parser ==="
+node "$HERE/parser-suite.js" || exit 1
+echo
+
 # The dashboard bundles are generated from these same sources. If someone edits
 # _shared/ or a function entry point and forgets to rebuild, the browser deploy
 # path would ship code these tests never ran. Fail here rather than there.

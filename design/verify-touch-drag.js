@@ -43,7 +43,13 @@ const writes=[];
    user:{id:'00000000-0000-4000-8000-000000000001',email:'t@e.com',aud:'authenticated',role:'authenticated',
     app_metadata:{},user_metadata:{},created_at:new Date().toISOString()}}));});
  await pg.goto('http://127.0.0.1:8777/index.html',{waitUntil:'networkidle'});
- await pg.waitForTimeout(1500);
+ /* Wait for the thing being tested, not for a guess at how long it takes.
+    This was a flat 1500ms, which sat right on the render boundary: Babel
+    compiles the whole file at runtime, so first paint moves whenever the file
+    grows, and the check failed or passed depending on the machine. A sleep
+    tuned to today's file size is a test that breaks on unrelated edits. */
+ await pg.waitForSelector('.tk-mcard',{timeout:20000});
+ await pg.waitForTimeout(300);
 
  const order=()=>pg.evaluate(()=>[...document.querySelectorAll('.tk-mcard')].map(c=>{
    const t=c.textContent.trim(); return t.split('Analyst')[0].trim();}));

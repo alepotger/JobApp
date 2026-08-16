@@ -3572,3 +3572,211 @@ writes while typing.
 
 `design/verify-drag-performance.js` is now in the repo, so this is measurable
 again rather than argued about.
+
+---
+
+# Paste to create
+
+Paste a job description, correct what was guessed, create the row. No LLM, no
+API key, no network call — the parser is a pure function in the shipped page.
+
+## The number, before the interface
+
+The brief asked for accuracy before any UI, and for honesty about it. Two
+scoreboards, kept apart, because merging them would flatter the parser:
+
+| field | tuned (15 fixtures) | holdout (8 fixtures) |
+|---|---|---|
+| role | 14/14 · 100% | 7/8 · 88% |
+| company | 14/14 · 100% | 6/8 · 75% |
+| location | 15/15 · 100% | 8/8 · 100% |
+| contact email | 15/15 · 100% | 4/4 · 100% |
+| **overall** | **59/59 · 100%** | **26/29 · 90%** |
+
+**The tuned column is not evidence.** Those fixtures were written alongside the
+rules and the rules were changed until they passed; 100% there means the rules
+do what they were built to do, nothing more. The holdout set was written after
+the parser already passed everything else and run once. **90% on first contact
+is the number that predicts anything**, and it is the one to quote.
+
+The three holdout misses were all genuine defects with principled fixes, so
+they were fixed:
+
+- **A posting opening with its location** gave the company field
+  `"Manchester, UK"`. A company is not a city — but *"University of Edinburgh"*
+  contains one, so the test cannot be "does a city appear". It subtracts the
+  recognised cities and country words and asks whether anything substantive is
+  left. Nothing left means it is a place, and the line is stepped over.
+- **A recruiter advert** gave the company as `"Location: London (hybrid, 3
+  days in office)"`. A labelled field is never the name of anything, so
+  labelled lines are excluded from the structural pair. The same posting also
+  wanted to yield `"Our client, a leading asset manager"` as the employer — a
+  pronoun stoplist rejects it, and the field is correctly left empty.
+- **A reference number** rode along in the role: `"Research Assistant (Ref:
+  RA-2291)"`. A trailing `(Ref: …)` / `(Req …)` parenthetical is stripped.
+
+After those fixes both sets are 100% — **and that makes the holdout no longer a
+holdout.** The honest reading of this feature's accuracy is 90%, not 100%. New
+fixtures go in the tuned set; the holdout number moves only when genuinely new
+postings are added to it.
+
+## What the parser does
+
+Rules run in confidence order and stop at the first hit, and `matchedBy` names
+which one fired, so a wrong answer says which heuristic to distrust.
+
+Boilerplate is stripped first, and that is the single biggest lever: a LinkedIn
+paste carries more chrome than posting, and every line of chrome is a chance
+for a structural rule to grab the wrong thing. Sign-in links, cookie banners,
+"47 applicants", "Powered by Greenhouse", EEO statements, section headings,
+job-board branding — English and Italian.
+
+Confidence is set honestly. `Company:` is high. "Bloomberg is hiring" is high.
+The second line is **low**, because position is a guess, and the review step
+says so in words.
+
+## Three things it got wrong that mattered
+
+**The email regex was quadratic.** `[A-Za-z0-9._%+-]+@` on text with no spaces
+matches to the end of the line, fails to find an `@`, backtracks a character at
+a time, and repeats from every start position. 50,000 characters of one long
+word cost **3,351ms of blocked main thread** — a frozen page on a paste nobody
+would think twice about. Bounded to RFC 5321's limits (64 local, 63 per label):
+**3,351ms → 22.7ms.** The harness found this, not review.
+
+**Cities came back in list order, not reading order.** "Dublin or Amsterdam"
+parsed as `"Amsterdam / Dublin"`. Both cities right, and it still reads as a
+bug. Sorted by position in the text.
+
+**The "looking for…" rule was anchored to `$`.** It only fired when the role
+happened to be the last thing on the line, which silently lost every posting
+that announces the role mid-paragraph — the commonest shape in prose-heavy
+descriptions. It now stops at sentence punctuation.
+
+## Latency
+
+Measured, not asserted. 5,000-word posting: **4.4ms**. Worst case at the
+50,000-character cap: **22.7ms**. Both inside the 100ms instant tier
+(section 3.2), so **a paste parses on the spot with no debounce** — debouncing
+would only add latency it does not need. Typing is debounced at 200ms, because
+re-parsing a long description on every keystroke is work nobody asked for.
+
+**Input cap: 50,000 characters** (~8,000 words). Over that it truncates rather
+than refuses, because the top of a paste is where the company, role and
+location live — refusing would throw away a parse that was going to succeed.
+
+## Where things live
+
+**Entry point: beside the primary action, not in the overflow menu.** Both are
+the same intent — create an application — differing only in whether the advert
+is on your clipboard, and section 2.1 keeps one decision in one fixation zone.
+The overflow menu holds configuration; a creation action filed under settings
+is a category error and undiscoverable besides. It stays subordinate by having
+**no accent fill** — the single filled control is what makes the primary action
+unambiguous (section 1.2), so anything unfilled beside it reads as secondary
+without being shrunk or greyed. Verified: exactly one accent-filled control
+remains in the header. It also appears in both empty states, which are the best
+onboarding surface there is (section 3.3).
+
+**Uncertainty is expressed by adding information, not colour.** A weak guess
+carries a caption naming the rule — *"Guessed from the first line — worth a
+look"*. A field the parser is sure of carries nothing, so the eye lands on
+exactly what needs checking (section 2.3, contrast used compositionally). It
+survives greyscale, print and colour blindness, and reaches a screen reader
+through `aria-describedby` (section 4.2 — expose reasoning, show provenance,
+let users intervene). Not-found fields add a dashed edge and *"Not found"*, so
+nothing has to be located by scanning for blanks.
+
+**The source stays visible through review**, so a field can be checked against
+what was actually pasted without a second trip to the clipboard.
+
+## The source URL question — recommendation (a), into `notes`
+
+No schema change, so it goes where free text already lives. `replies` is a log
+of inbound mail and `next_steps` is actionable; `notes` is the only field that
+is genuinely free. It is written as **`Source: <url>` on its own first line**, a
+fixed prefix that can be read past or deleted in one stroke, and **only when a
+URL was found**. Critically it is shown as an **editable review field**, so
+nothing is written anywhere the user did not see first. The URL is never
+fetched: browser CORS makes cross-origin fetching of job boards impossible, and
+no proxy workaround was entertained.
+
+## Duplicate detection
+
+Normalise, then compare. Fold accents, delete full stops so `L.P.` closes up
+into `lp` and `S.p.A.` into `spa`, replace remaining punctuation with spaces,
+then strip trailing legal forms repeatedly. `Bloomberg L.P.`, `BLOOMBERG LP`
+and `bloomberg` are one company.
+
+Containment catches `Bloomberg` against `Bloomberg Intelligence`, guarded at
+four characters so `BP` does not match `BP Chemicals` on a two-letter prefix.
+**Warn only, never block**, shown during review before the row exists.
+9/9 on the rule table.
+
+## Two defects this exposed elsewhere
+
+**Two of the ten inviolable behaviours were not being verified at all.** Checks
+9 and 10 set `tracker.config` and no session, so the app did the right thing —
+showed the sign-in screen — and the harness sat out a 30-second timeout waiting
+for a `.tk-grid` that could never appear, then died before reporting. It now
+signs in against a small real store. Check 9 also targeted `/^Offer 1$/`, and
+the seed is applied/to-apply/interview with no Offer, so it filtered to zero
+rows and "passed the add" for the wrong reason; it now derives the target from
+the rendered counts. **10/10 now genuinely run.**
+
+**`onClick={addRow}` passed the click event as the seed.** Harmless while
+`addRow` took no arguments, wrong the moment it did. Fixed at all three call
+sites.
+
+## Cost, stated plainly
+
+Leaving the parser inside the `text/babel` block cost **257ms of Babel compile
+on every page load** — paid by everyone, on every visit, for a feature used
+occasionally — and pushed first paint past the point where the touch-drag
+harness could find a row. The parser is plain ES2015 with no JSX, so Babel
+never needed to touch it: it now sits in a classic `<script>` and runs
+natively. Residual cost of the feature is **+173ms** on a ~2.2s cold start,
+which is the `PasteCreate` component itself.
+
+That harness failure was also racing on a flat `waitForTimeout(1500)` sitting
+right on the render boundary — a sleep tuned to yesterday's file size is a test
+that breaks on unrelated edits. It now waits for the selector.
+
+## Verification
+
+`design/verify-paste.js` — **39/39**, in a real browser against a stub
+PostgREST, including a genuine clipboard paste.
+
+Parse-on-paste with no button press · role/company/location/email/URL extracted
+· a weak guess names its rule · a sure one carries no caption · not-found is
+distinguishable without colour · a hand-corrected field survives a re-parse ·
+the source stays visible · the duplicate warns and does not block · Escape
+closes and creates nothing · focus is trapped and returns to its trigger · the
+created row carries the reviewed values, the email in its own column, the URL
+prefixed into notes, on the current page, in the default stage · one element
+owns background, radius and shadow with an inset hairline and no clipping
+ancestor · at 390px the sheet is full-bleed, nothing overflows, and type is
+16px so iOS does not zoom on focus.
+
+Regression: **10/10 inviolable · 13/13 drag · 8/8 touch · 15/15 animation ·
+7/7 realtime · 8/8 reorder sync · 88/88 parser fixtures.**
+
+`supabase/functions/_test/parser-suite.js` slices the parser out of
+`index.html` by sentinel comments and runs it in Node, so there is exactly one
+copy and no drift. It is wired into `run-all.sh`. Adding a fixture is the whole
+maintenance story: paste a real posting, write down what it should produce,
+re-run.
+
+## Known limitations, named
+
+- A posting whose company is only ever a bare nav line matching a job-board
+  brand name (`LinkedIn`, `Indeed`) loses it — those lines are stripped as
+  chrome. `Company:` and "X is hiring" still work.
+- `The Daily Grind, Shoreditch` keeps the comma clause. Splitting on commas
+  would break `Smith, Jones & Partners`, and the review step fixes it in one
+  edit.
+- Non-Latin scripts get structural guesses at low confidence and nothing else.
+  The parser does not throw and does not claim certainty, which is the honest
+  behaviour for a vocabulary it does not have.
+- On an unmigrated database `contact_email` is not seeded, because naming a
+  column that is not there fails the whole insert. The row is still created.

@@ -294,6 +294,36 @@ ul.pv-list{margin-top:var(--space-room);padding-left:1.1rem;line-height:1.8}
 .rgrip:active{cursor:grabbing}
 .rowcard[data-lift]{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--accent);
   z-index:5;transition:none!important}
+
+/* ── paste to create ── */
+.pcard{background:var(--raised);border-radius:var(--r-4);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--line);padding:20px}
+.pbox{background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:var(--r-2);width:100%;display:block;padding:12px;
+  font:inherit;font-size:var(--t--1);line-height:var(--lh-prose);color:var(--ink);
+  min-height:120px;white-space:pre-wrap;overflow:auto}
+.pbox.short{min-height:64px;max-height:64px}
+.pbox.ph{color:var(--ink-3)}
+.pfield{background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:var(--r-2);width:100%;display:block;padding:7px 8px;
+  font-size:var(--t-0);color:var(--ink);margin-top:4px}
+.pmiss .pfield{border-style:dashed;color:var(--ink-3)}
+.pguess{display:block;margin-top:4px;font-size:var(--t--1);color:var(--ink-3)}
+.pflds{display:grid;gap:12px;margin-top:12px}
+.psrc{background:var(--sunken);border:1px solid var(--line-soft);
+  border-radius:var(--r-2);max-height:86px;overflow:auto;white-space:pre-wrap;
+  padding:12px;font-size:var(--t--2);line-height:var(--lh-prose);
+  color:var(--ink-2);margin-top:4px}
+.pdupe{background:var(--warn-wash);border:1px solid var(--warn-line);
+  border-radius:var(--r-2);color:var(--warn-ink);padding:8px 12px;
+  font-size:var(--t--1);line-height:1.5;margin-top:16px}
+.pacts{display:flex;justify-content:flex-end;gap:12px;margin-top:20px}
+.pacts button{height:var(--control-h);padding:0 16px;border-radius:var(--r-2);
+  border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);
+  font-size:var(--t--2);font-weight:var(--w-semibold);text-transform:uppercase;
+  letter-spacing:var(--ls-caps)}
+.pacts button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+
 </style>
 </head>
 <body>
@@ -767,6 +797,212 @@ update public.applications a
   motion, not the shipped implementation — the real one persists to
   <code>sort_order</code>, syncs across devices, and has a keyboard equivalent
   (Space to lift, arrows to move, Escape to cancel).</p>
+</section>
+
+
+<!-- ─────────────────────────────────────────── paste to create -->
+<section class="pv-sec">
+  <p class="pv-n">Paste to create</p>
+  <h2 class="pv-t">The entry point</h2>
+  <p class="pv-note">Paste sits <strong>beside</strong> the primary action, not
+  inside the overflow menu. Both are the same intent &mdash; create an
+  application &mdash; differing only in whether the advert is already on your
+  clipboard, and section&nbsp;2.1 keeps one decision in one fixation zone
+  rather than splitting it across two places. The overflow menu holds
+  configuration; a creation action filed under settings is a category error and
+  undiscoverable besides. It stays subordinate by the one mechanism that
+  matters here: <strong>no accent fill</strong>. The single filled control is
+  what makes the primary action unambiguous (section&nbsp;1.2), so anything
+  unfilled beside it reads as secondary without being shrunk or greyed &mdash;
+  contrast doing compositional work rather than decorative
+  (section&nbsp;2.3).</p>
+  <div class="stage">
+    <div class="hdr">
+      <div class="hdr-l"><div class="tk-display">JobApp</div></div>
+      <div class="hdr-r">
+        <span class="sync">Live</span>
+        <button class="addbtn" style="background:var(--surface);border-color:var(--line-strong);color:var(--ink)">Paste</button>
+        <button class="addbtn">+ Add application</button>
+        <button class="ovf">&#8943;</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="pv-n" style="margin-top:32px">State 1</p>
+  <h2 class="pv-t">Empty &mdash; a box that says what it wants</h2>
+  <p class="pv-note">A large textarea, not a single-line input: the control has
+  to look like it expects a wall of text, because that is what arrives. The
+  caption states the cap rather than discovering it at 50,001 characters.</p>
+  <div class="stage">
+    <div class="pcard">
+      <div class="tk-body" style="font-weight:var(--w-semibold)">Paste a job description</div>
+      <p class="tk-cap tk-secondary" style="margin-top:4px">Everything is read in
+      your browser. Nothing is uploaded, and no row is created until you confirm.</p>
+      <div style="margin-top:16px">
+        <span class="k">Job description</span>
+        <div class="pbox ph">Paste the advert here &mdash; nav text, footers and cookie banners and all.</div>
+        <span class="pguess">Up to 50,000 characters.</span>
+      </div>
+      <div class="pacts"><button>Cancel</button><button class="go" style="opacity:.45">Create application</button></div>
+    </div>
+  </div>
+
+  <p class="pv-n" style="margin-top:32px">State 2</p>
+  <h2 class="pv-t">Review &mdash; everything found</h2>
+  <p class="pv-note">A field the parser is <em>sure</em> of carries no caption
+  at all. That is the point: captions appear only where the evidence is weak,
+  so the eye lands on exactly what needs checking instead of scanning five
+  equally-decorated rows. Uncertainty is expressed by <strong>adding
+  information</strong> &mdash; which rule fired &mdash; not by adding colour,
+  so it survives greyscale, print and colour blindness, and it reaches a screen
+  reader through <code>aria-describedby</code> (section&nbsp;4.2: show
+  provenance, let users intervene).</p>
+  <div class="stage">
+    <div class="pcard">
+      <div class="tk-body" style="font-weight:var(--w-semibold)">Paste a job description</div>
+      <div style="margin-top:16px">
+        <span class="k">Job description</span>
+        <div class="pbox short">Investment Analyst
+Bloomberg &middot; London, United Kingdom
+Hybrid
+About the job
+Bloomberg is looking for an Investment Analyst to join the EMEA equities desk.
+Write to careers@bloomberg.example.com to apply.</div>
+      </div>
+      <p class="k" style="margin-top:20px">Check before creating</p>
+      <div class="pflds">
+        <label><span class="k">Role</span><span class="pfield">Investment Analyst</span>
+          <span class="pguess">Guessed from a &ldquo;looking for&hellip;&rdquo; sentence</span></label>
+        <label><span class="k">Company</span><span class="pfield">Bloomberg</span></label>
+        <label><span class="k">Location</span><span class="pfield">London (Hybrid)</span>
+          <span class="pguess">Guessed from a city named near the top</span></label>
+        <label><span class="k">Contact email</span><span class="pfield">careers@bloomberg.example.com</span></label>
+        <label><span class="k">Source link</span><span class="pfield">https://boards.greenhouse.io/bloomberg/jobs/771</span></label>
+      </div>
+      <div style="margin-top:20px">
+        <span class="k">What you pasted</span>
+        <div class="psrc">Skip to main content
+LinkedIn
+Sign in
+Investment Analyst
+Bloomberg &middot; London, United Kingdom
+Hybrid
+3 weeks ago &middot; 47 applicants
+Easy Apply
+About the job
+Bloomberg is looking for an Investment Analyst to join the EMEA equities desk.</div>
+      </div>
+      <div class="pacts"><button>Cancel</button><button class="go">Create application</button></div>
+    </div>
+  </div>
+  <p class="pv-note">The source stays on screen through review, so a field can
+  be checked against what was actually pasted without a second trip to the
+  clipboard.</p>
+
+  <p class="pv-n" style="margin-top:32px">State 3</p>
+  <h2 class="pv-t">Review &mdash; fields missing, guesses weak</h2>
+  <p class="pv-note">Three lines with no structure. The parser says so rather
+  than inventing a location: a dashed edge and <em>Not found</em> tell you
+  where to type, so nothing has to be found by scanning for blanks.</p>
+  <div class="stage">
+    <div class="pcard">
+      <div style="margin-top:0">
+        <span class="k">Job description</span>
+        <div class="pbox short">Barista wanted
+The Daily Grind, Shoreditch
+Drop in with a CV or email hello@dailygrind.co.uk</div>
+      </div>
+      <p class="k" style="margin-top:20px">Check before creating</p>
+      <div class="pflds">
+        <label><span class="k">Role</span><span class="pfield">Barista wanted</span>
+          <span class="pguess">Guessed from the first line &mdash; worth a look</span></label>
+        <label><span class="k">Company</span><span class="pfield">The Daily Grind, Shoreditch</span>
+          <span class="pguess">Guessed from the second line &mdash; worth a look</span></label>
+        <label class="pmiss"><span class="k">Location</span><span class="pfield">City, or Remote</span>
+          <span class="pguess">Not found &mdash; add it if you want it</span></label>
+        <label><span class="k">Contact email</span><span class="pfield">hello@dailygrind.co.uk</span></label>
+        <label class="pmiss"><span class="k">Source link</span><span class="pfield">https://&hellip;</span>
+          <span class="pguess">Not found &mdash; add it if you want it</span></label>
+      </div>
+      <div class="pacts"><button>Cancel</button><button class="go">Create application</button></div>
+    </div>
+  </div>
+  <p class="pv-note">Both structural guesses are labelled <em>worth a look</em>
+  because position is the weakest rule in the set. A parser that claimed
+  certainty here would be worse than one that admits it: false confidence is
+  what puts bad data in the pipeline unnoticed.</p>
+
+  <p class="pv-n" style="margin-top:32px">State 4</p>
+  <h2 class="pv-t">The duplicate warning</h2>
+  <p class="pv-note">Matching ignores case, accents, punctuation and legal form
+  &mdash; <code>Bloomberg L.P.</code>, <code>BLOOMBERG LP</code> and
+  <code>bloomberg</code> are one company. It <strong>warns and never
+  blocks</strong>: two roles at one employer is normal, and the user knows
+  better than the parser. Shown during review, before the row exists, because a
+  warning after creation is just a chore.</p>
+  <div class="stage">
+    <div class="pcard">
+      <div class="pflds">
+        <label><span class="k">Role</span><span class="pfield">Investment Analyst</span></label>
+        <label><span class="k">Company</span><span class="pfield">Bloomberg</span></label>
+      </div>
+      <div class="pdupe">You already have <strong>Bloomberg L.P.</strong> &mdash; Equity
+      Research on this page. Two roles at one company is perfectly normal; this is
+      only a heads-up.</div>
+      <div class="pacts"><button>Cancel</button><button class="go">Create application</button></div>
+    </div>
+  </div>
+
+  <p class="pv-n" style="margin-top:32px">State 5</p>
+  <h2 class="pv-t">Mobile</h2>
+  <p class="pv-note">Pasting on a phone is the likeliest case, not the degraded
+  one &mdash; people browse jobs on a phone. So the dialog is a full-bleed
+  sheet rather than a shrunken desktop card: edge to edge, square where the
+  screen ends, review fields at full width. Type in the textarea and the review
+  inputs is forced to <strong>16px</strong> here: below that, iOS Safari zooms
+  the viewport on focus and does not zoom back, so the first tap would leave
+  the reader scrolled sideways through a dialog they had not read. The desktop
+  scale is 12.48px, which is precisely the trap.</p>
+  <div class="cols two">
+    <div class="stage narrow">
+      <span class="pv-tag">empty</span>
+      <div class="phone" style="padding:0">
+        <div style="padding:14px">
+          <div class="tk-body" style="font-weight:var(--w-semibold)">Paste a job description</div>
+          <p class="tk-cap tk-secondary" style="margin-top:4px">Nothing is uploaded.</p>
+          <div style="margin-top:12px">
+            <span class="k">Job description</span>
+            <div class="pbox ph" style="font-size:16px">Paste the advert here.</div>
+          </div>
+          <div class="pacts"><button>Cancel</button><button class="go" style="opacity:.45">Create</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage narrow">
+      <span class="pv-tag">review</span>
+      <div class="phone" style="padding:0">
+        <div style="padding:14px">
+          <div style="margin-top:0">
+            <span class="k">Job description</span>
+            <div class="pbox short" style="font-size:16px;min-height:48px;max-height:48px">Investment Analyst
+Bloomberg &middot; London</div>
+          </div>
+          <div class="pflds">
+            <label><span class="k">Role</span><span class="pfield" style="font-size:16px">Investment Analyst</span></label>
+            <label><span class="k">Company</span><span class="pfield" style="font-size:16px">Bloomberg</span></label>
+            <label><span class="k">Location</span><span class="pfield" style="font-size:16px">London (Hybrid)</span>
+              <span class="pguess">Guessed from a city near the top</span></label>
+          </div>
+          <div class="pacts"><button>Cancel</button><button class="go">Create</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="pv-note">The dialog card owns background, radius and shadow
+  together, with its hairline as an <code>inset</code> ring on that same
+  element and no clipping ancestor &mdash; the invariant the row cards
+  established, re-measured in <code>design/verify-paste.js</code> rather than
+  assumed.</p>
 </section>
 
 </div>

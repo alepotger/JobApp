@@ -246,6 +246,64 @@ textarea{resize:vertical}
 .tk-toast{background:var(--raised);border:var(--capsule-edge);
   border-radius:var(--capsule-r);box-shadow:var(--capsule-lift);white-space:nowrap}
 
+/* ── paste to create ──
+   The card owns background, radius and shadow together, and carries its
+   hairline as an inset ring on that same element. This is the invariant the
+   row cards established: a border on a parent with a shadow on a child rounds
+   at two different radii and the corner splits visibly. Nothing above it
+   clips, so the bottom edge keeps its shadow.
+
+   align-items:flex-start with the scroll on the overlay, rather than centring
+   a fixed-height card: a review panel that has grown past the viewport must
+   scroll the whole dialog, and a centred flex child with overflow cannot be
+   scrolled back up to its own top. */
+.tk-pastewrap{position:fixed;inset:0;z-index:40;display:flex;
+  align-items:flex-start;justify-content:center;overflow-y:auto;
+  padding:var(--space-loose) var(--space-cosy);
+  background:oklch(26% .02 255/.42)}
+.tk-pastecard{width:100%;max-width:46rem;margin:auto 0;background:var(--raised);
+  border-radius:var(--r-4);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--line)}
+.tk-pastebox{background:var(--surface);border:1px solid var(--line-strong);
+  color:var(--ink);border-radius:var(--r-2);width:100%;display:block;
+  resize:vertical;font:inherit;font-size:var(--t--1);
+  line-height:var(--lh-prose);padding:var(--space-cosy)}
+.tk-pastebox:focus{border-color:var(--accent);outline:2px solid var(--accent);
+  outline-offset:1px}
+.tk-pastebox::placeholder{color:var(--ink-3)}
+/* The source stays on screen through review so a field can be checked against
+   what was actually pasted, without a second trip to the clipboard. */
+.tk-pastesrc{background:var(--sunken);border:1px solid var(--line-soft);
+  border-radius:var(--r-2);max-height:8.5rem;overflow:auto;white-space:pre-wrap;
+  overflow-wrap:anywhere;padding:var(--space-cosy);font-size:var(--t--2);
+  line-height:var(--lh-prose);color:var(--ink-2)}
+/* Uncertainty is expressed by ADDING INFORMATION, not by adding colour: a
+   caption naming the rule that fired. It survives greyscale, print and colour
+   blindness, it is readable by a screen reader in the field's own description,
+   and it tells you which heuristic to distrust (§4.2 — show provenance, let
+   users intervene). A field the parser is sure of gets no caption at all, so
+   the eye is drawn to exactly the fields that need checking (§2.3 — contrast
+   used compositionally). */
+.tk-guess{display:block;margin-top:var(--space-tight)}
+.tk-miss .tk-pastefield{border-style:dashed}
+.tk-dupe{background:var(--warn-wash);border:1px solid var(--warn-line);
+  border-radius:var(--r-2);color:var(--warn-ink)}
+@media (max-width:640px){
+  /* A phone is the likeliest place to paste a job advert, so the dialog
+     becomes a full-bleed sheet rather than a shrunken desktop card: edge to
+     edge, square at the bottom where the screen ends. */
+  .tk-pastewrap{padding:0}
+  .tk-pastecard{max-width:none;min-height:100%;border-radius:0;
+    box-shadow:none;border:0;outline:0}
+  .tk-pastesrc{max-height:6rem}
+  /* 16px is not a taste decision. Below it, iOS Safari zooms the viewport
+     when a text field takes focus, and it does not zoom back out — so the
+     first tap on the paste box would leave the reader scrolled sideways
+     through a dialog they had not read yet. The desktop scale is 12.48px
+     here, which is precisely the trap. */
+  .tk-pastebox,.tk-pastecard .tk-input{font-size:16px}
+}
+
 /* ── rows are cards, and the card is ONE element ─────────────────────────
    background, border-radius and box-shadow used to be split: radius and
    background on each <td>, shadow on the <tr>. A <tr> has no radius of its
@@ -570,6 +628,7 @@ textarea{resize:vertical}
 .items-end{align-items:flex-end}
 .items-baseline{align-items:baseline}
 .justify-between{justify-content:space-between}
+.justify-end{justify-content:flex-end}
 .justify-center{justify-content:center}
 .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .mx-auto{margin-left:auto;margin-right:auto}
@@ -860,6 +919,613 @@ textarea{resize:vertical}
   window.addEventListener("unhandledrejection", function (e) {
     window.__bootError("Unhandled promise rejection:\n" + (e.reason && e.reason.message ? e.reason.message : e.reason));
   });
+</script>
+
+<!-- The parser is plain ES2015 with no JSX in it, so Babel has nothing to
+     do here. Leaving it inside the text/babel block cost 257ms of compile on
+     every single page load — paid by everyone, on every visit, for a feature
+     used occasionally — and that pushed first paint past the point where the
+     touch-drag harness could find a row. A classic script runs it natively at
+     zero cost, and the two scripts share one global lexical scope, so the
+     compiled code below calls these directly. Still one self-contained file.
+
+     supabase/functions/_test/parser-suite.js slices this block out by its
+     sentinel comments and runs it in Node, so there is exactly one copy. -->
+<script>
+/* ==== paste-to-create parser: START ====================================
+ *
+ * Pure functions. No DOM, no React, no state, no network — text in,
+ * structured result out. supabase/functions/_test/parser-suite.js slices this
+ * block out of index.html by these sentinel comments and runs it in Node
+ * against the fixtures, so everything between them must stay plain ES2015+
+ * with no JSX and no reference to anything outside the block.
+ *
+ * The contract that matters: parseJobDescription NEVER throws. Malformed,
+ * empty, enormous or non-Latin input returns nulls. A parser that can break
+ * the page is worse than no parser, because the paste box is reached from the
+ * header of a working app.
+ */
+
+/* Someone will paste an entire careers page. 50,000 characters is roughly
+   8,000 words — several times the longest real posting — and is truncated
+   rather than refused, because the top of a paste is where the company, role
+   and location live. Refusing would throw away a parse about to succeed. */
+const PJ_LIMIT = 50000;
+
+/* Page furniture, matched against a whole trimmed line. This list is the
+   single biggest lever on accuracy: a LinkedIn or Greenhouse paste carries
+   more chrome than posting, and every line of chrome is a chance for a
+   structural rule to grab the wrong thing. English and Italian. */
+const PJ_NOISE = [
+  /^(skip|jump) to\b/i,
+  /^(sign|log) ?(in|up|out)\b/i,
+  /^(join now|get started|create account|new to \w+)\b/i,
+  /^(accedi|registrati|esci|iscriviti)\b/i,
+  /^(share|save|report|print|flag|follow)( this)?( job| post| posting| offer| company)?$/i,
+  /^(condividi|salva|segnala|segui)( questo)?( annuncio| lavoro| offerta)?$/i,
+  /^(apply|apply now|easy apply|quick apply|apply for this job|apply on \w+|submit application|submit your application)$/i,
+  /^(candidati|candidati ora|invia (la tua )?candidatura|candidatura rapida)$/i,
+  /^(back to|return to|view all|see all|browse|more jobs|similar jobs)\b/i,
+  /^(torna a|vedi tutt|altre offerte|annunci simili)/i,
+  /^(home|jobs|careers|company|companies|about|contact|search|menu|login|blog|news|press|team|products?|pricing|help|support|legal|overview)$/i,
+  /^(lavoro|lavora con noi|chi siamo|contatti|cerca|carriere)$/i,
+  /* Job-board branding pasted as a bare nav line. A company genuinely called
+     one of these still parses, because "X is hiring" and "Company:" both rank
+     above the structural rules that this protects. */
+  /^(linkedin|indeed|glassdoor|greenhouse|lever|workday|smartrecruiters|monster|reed|totaljobs|infojobs|wellfound|angellist|otta)$/i,
+  /^(cookies?|cookie policy|privacy policy|terms( of (use|service))?|accept all|manage preferences|reject all|we use cookies)\b/i,
+  /^(informativa|preferenze|accetta tutt|rifiuta tutt|utilizziamo i cookie)/i,
+  /^(powered by|posted by|posted on|posted|published|first posted|date posted)\b/i,
+  /^(pubblicato|data di pubblicazione)\b/i,
+  /^\d+\+? (applicants?|candidati|people clicked apply)\b/i,
+  /^(be (among|an early)|your profile|see who|see how you compare|show (more|less)|read more|mostra (altro|meno))\b/i,
+  /^(seniority level|employment type|job function|industries|livello di esperienza|tipo di impiego|settori)$/i,
+  /^\d+ (second|minute|hour|day|week|month)s? ago\b/i,
+  /^\d+ (second|minut|or|giorn|settiman|mes)\w* fa\b/i,
+  /^(attach|dropbox|google drive|enter manually|autofill with|resume\/cv|cover letter|linkedin profile|website|portfolio)\b/i,
+  /^(required|optional|\*|—|–|-{2,}|_{2,}|={2,})$/,
+  /^(equal opportunity|we are an equal|all qualified applicants|regardless of race|without regard to)\b/i,
+  /^(siamo un datore di lavoro|indipendentemente da)/i,
+  /* Section headings. Without these, "About the job" becomes the company via
+     the join/about rule and "The role" becomes the role by position. */
+  /^(about (the|this|our) (job|role|position|company|team)|about us|job description|role description|the role|the opportunity|responsibilities|key responsibilities|requirements|what you'?ll do|what you'?ll bring|what we offer|who you are|qualifications|benefits|perks|how to apply)\b/i,
+  /^(descrizione|il ruolo|la posizione|responsabilit[àa]|requisiti|cosa offriamo|competenze|profilo|come candidarsi)\b/i,
+];
+
+/* Cities worth recognising: UK, Italy, and the European hubs this user's
+   applications actually reach. Left side is matched case- and accent-
+   insensitively; right side is what gets written into the row. */
+const PJ_CITIES = [
+  ["london", "London"], ["manchester", "Manchester"], ["birmingham", "Birmingham"],
+  ["edinburgh", "Edinburgh"], ["glasgow", "Glasgow"], ["bristol", "Bristol"],
+  ["leeds", "Leeds"], ["cambridge", "Cambridge"], ["oxford", "Oxford"],
+  ["reading", "Reading"], ["brighton", "Brighton"], ["cardiff", "Cardiff"],
+  ["belfast", "Belfast"], ["liverpool", "Liverpool"], ["newcastle", "Newcastle"],
+  ["sheffield", "Sheffield"], ["nottingham", "Nottingham"],
+  ["milano", "Milano"], ["milan", "Milan"], ["roma", "Roma"], ["rome", "Rome"],
+  ["torino", "Torino"], ["turin", "Turin"], ["bologna", "Bologna"],
+  ["firenze", "Firenze"], ["florence", "Florence"], ["napoli", "Napoli"],
+  ["naples", "Naples"], ["venezia", "Venezia"], ["venice", "Venice"],
+  ["genova", "Genova"], ["genoa", "Genoa"], ["padova", "Padova"],
+  ["verona", "Verona"], ["bergamo", "Bergamo"], ["brescia", "Brescia"],
+  ["trieste", "Trieste"], ["bari", "Bari"], ["catania", "Catania"],
+  ["palermo", "Palermo"], ["modena", "Modena"], ["parma", "Parma"],
+  ["pisa", "Pisa"], ["trento", "Trento"], ["cagliari", "Cagliari"],
+  ["biella", "Biella"], ["varese", "Varese"], ["como", "Como"],
+  ["paris", "Paris"], ["berlin", "Berlin"], ["munich", "Munich"],
+  ["munchen", "München"], ["frankfurt", "Frankfurt"], ["hamburg", "Hamburg"],
+  ["cologne", "Cologne"], ["amsterdam", "Amsterdam"], ["rotterdam", "Rotterdam"],
+  ["the hague", "The Hague"], ["brussels", "Brussels"], ["bruxelles", "Bruxelles"],
+  ["madrid", "Madrid"], ["barcelona", "Barcelona"], ["valencia", "Valencia"],
+  ["lisbon", "Lisbon"], ["lisboa", "Lisboa"], ["porto", "Porto"],
+  ["dublin", "Dublin"], ["zurich", "Zürich"], ["geneva", "Geneva"],
+  ["geneve", "Genève"], ["basel", "Basel"], ["bern", "Bern"],
+  ["vienna", "Vienna"], ["wien", "Wien"], ["copenhagen", "Copenhagen"],
+  ["stockholm", "Stockholm"], ["oslo", "Oslo"], ["helsinki", "Helsinki"],
+  ["warsaw", "Warsaw"], ["krakow", "Kraków"], ["prague", "Prague"],
+  ["budapest", "Budapest"], ["luxembourg", "Luxembourg"], ["athens", "Athens"],
+  ["bucharest", "Bucharest"], ["sofia", "Sofia"], ["tallinn", "Tallinn"],
+  ["riga", "Riga"], ["vilnius", "Vilnius"], ["new york", "New York"],
+  ["san francisco", "San Francisco"], ["singapore", "Singapore"],
+  ["hong kong", "Hong Kong"], ["dubai", "Dubai"], ["sydney", "Sydney"],
+  ["toronto", "Toronto"], ["zug", "Zug"],
+];
+
+/* Words that mark a line as a job title rather than a company name. Used only
+   to decide which way round an unlabelled two-line header runs — some
+   postings lead with the role, some with the employer, and getting it
+   backwards writes both fields wrong at once. */
+const PJ_ROLEWORD = /\b(analyst|analista|engineer|ingegner\w*|developer|sviluppator\w*|designer|manager|responsabile|director|direttor\w*|associate|assistant|assistente|consultant|consulente|specialist|specialista|coordinator|coordinatore|advisor|scientist|researcher|ricercator\w*|intern|internship|stage|stagista|tirocin\w*|trainee|graduate|officer|executive|lead|principal|head of|chief|accountant|contabile|controller|auditor|revisore|technician|tecnico|writer|editor|recruiter|architect|administrator|amministrat\w*|teacher|docente|solicitor|lawyer|avvocato|paralegal|banker|trader|broker|actuary|attuario|strategist|planner|buyer|representative|agente|supervisor|apprentice|apprendista|barista|chef|cuoco|waiter|cameriere|driver|autista|receptionist|secretary|segretari\w*|nurse|infermier\w*|junior|senior|apprenticeship|wanted|cercasi)\b/i;
+
+/* Legal-form suffixes stripped before two company names are compared. Used by
+   the duplicate check only — the row keeps whatever the posting called it. */
+const PJ_SUFFIX = [
+  "ltd", "limited", "inc", "incorporated", "llc", "llp", "lp", "plc", "corp",
+  "corporation", "co", "company", "gmbh", "mbh", "ag", "kg", "ug", "sa", "sas",
+  "sarl", "srl", "spa", "snc", "sapa", "bv", "nv", "oy", "oyj", "ab", "as",
+  "asa", "aps", "pty", "pte", "kft", "zrt", "doo", "group", "holdings",
+  "holding", "international", "global",
+];
+
+/* Addresses that are never a human you can write to. */
+const PJ_BAD_MAIL = [
+  /^(no-?reply|do-?not-?reply|donotreply)/i,
+  /^(unsubscribe|bounce|mailer-daemon|postmaster|abuse|webmaster|admin|root)@/i,
+  /@(example|test|localhost|sentry|wixpress)\./i,
+  /\.(png|jpe?g|gif|svg|webp|css|js)$/i,
+  /^[0-9a-f]{16,}@/i,
+];
+
+/* Accent- and case-insensitive comparison key. normalize("NFD") splits é into
+   e + a combining mark, which the range then removes. */
+function pjFold(s) {
+  return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+function pjTidy(s) {
+  let v = String(s).replace(/\s+/g, " ").trim()
+    .replace(/^[\s"'`([{<*·•\-–—|:]+/, "")
+    .replace(/[\s"'`>*·•\-–—|,;:]+$/, "");
+  /* A closing bracket is only junk when it closes nothing. Stripping it
+     unconditionally turned "Alba (CN)" into "Alba (CN", which is worse than
+     leaving the bracket alone. */
+  while (/[)\]}]$/.test(v)) {
+    const open = (v.match(/[([{]/g) || []).length;
+    const close = (v.match(/[)\]}]/g) || []).length;
+    if (close <= open) break;
+    v = v.slice(0, -1).replace(/[\s,;:]+$/, "");
+  }
+  /* Strip a trailing full stop, but not the one closing an initialism —
+     "S.p.A." must survive intact while "Based in Leeds." loses its stop. */
+  if (/\.$/.test(v) && !/\b[A-Z]\.$/.test(v)) v = v.replace(/\.+$/, "").trim();
+  return v;
+}
+
+/* Pronouns and placeholders that the sentence rules will happily capture:
+   "We are looking for…" yields "We", and a recruiter's "Our client, a leading
+   asset manager, is seeking…" yields the whole apposition. Neither is an
+   employer, and writing one into the row is worse than leaving it blank —
+   the review step can show "not found", but it cannot know that "We" is
+   wrong. */
+const PJ_NOT_A_COMPANY = /^(we|us|our (client|team|customer|partner)|the (team|company|client|role|position|successful candidate)|you|they|i|this (company|role|client)|a (leading|growing|global|fast))\b/i;
+
+/* Postings separate a headline's parts with pipes, bullets and dashes:
+   "Bloomberg · London, United Kingdom", "Analyst | Full-time". Only the first
+   part is the name. */
+function pjChunk(s) {
+  return pjTidy(String(s).split(/\s*[·•|]\s*|\s+[—–]\s+/)[0]);
+}
+
+/* A candidate has to look like a name, not a sentence or a clause. This is
+   what stops the structural rules writing a paragraph into the company field
+   when a posting opens with prose. */
+function pjPlausible(value, maxLen) {
+  const v = pjTidy(value);
+  if (v.length < 2 || v.length > (maxLen || 80)) return null;
+  if (!/[A-Za-zÀ-ÿ]/.test(v)) return null;
+  if (/[.!?]\s+\S/.test(v)) return null;          // more than one sentence
+  if (v.split(" ").length > 10) return null;      // a clause, not a name
+  return v;
+}
+
+/* Company names start with a capital (or a digit — 3M, 23andMe). Guessing
+   rules that capture mid-sentence text produce "a team of twelve analysts";
+   this is what rejects it. Deliberately not applied to labelled values, where
+   the user's own posting said what the company was. */
+function pjNamey(v) {
+  if (PJ_NOT_A_COMPANY.test(String(v))) return false;
+  return /^[A-Z0-9ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝ]/.test(String(v));
+}
+
+function pjNoise(line) {
+  /* Long lines are prose, and prose is content. Only short lines are tested
+     against the furniture list, so a body paragraph opening with "About" is
+     not thrown away. */
+  if (line.length > 160) return false;
+  for (let i = 0; i < PJ_NOISE.length; i++) if (PJ_NOISE[i].test(line)) return true;
+  /* A bare URL or bare email on its own line is a link, not a heading, and
+     must not become the role by position. Both are still harvested from the
+     raw text by their own rules. */
+  if (/^https?:\/\/\S+$/i.test(line)) return true;
+  if (/^\S+@\S+\.\S+$/.test(line)) return true;
+  return false;
+}
+
+function pjLines(src) {
+  const raw = src.replace(/\r\n?/g, "\n").split("\n");
+  const kept = [];
+  for (let i = 0; i < raw.length; i++) {
+    const t = pjTidy(raw[i].replace(/\s+/g, " "));
+    if (!t) continue;
+    if (pjNoise(t)) continue;
+    kept.push(t);
+  }
+  return kept;
+}
+
+function pjHit(value, confidence, matchedBy, maxLen) {
+  const v = pjPlausible(value, maxLen);
+  return v ? { value: v, confidence: confidence, matchedBy: matchedBy } : null;
+}
+
+/* ---- field rules -------------------------------------------------------- */
+
+const PJ_LABEL = {
+  company: /^(?:company|employer|organisation|organization|hiring company|azienda|societ[àa]|datore di lavoro|impresa)\s*[:\-–—]\s*(.+)$/i,
+  role: /^(?:role|position|job title|title|vacancy|posizione|ruolo|mansione|qualifica)\s*[:\-–—]\s*(.+)$/i,
+  location: /^(?:location|based in|office|work location|place of work|city|sede|luogo|localit[àa]|sede di lavoro|citt[àa])\s*[:\-–—]\s*(.+)$/i,
+};
+
+function pjLabelled(lines, field) {
+  const re = PJ_LABEL[field];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(re);
+    if (m) {
+      const hit = pjHit(m[1], "high", "label", field === "role" ? 90 : 70);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/* "Salary: competitive", "Closing date: 12 September" — a labelled field is
+   never the name of anything, so it must not be picked up by position. */
+const PJ_FIELDLINE = /^(?:salary|compensation|pay|contract|contract type|grade|band|hours|closing date|deadline|start date|department|division|team|reference|ref|req|job id|apply by|type|category|industry|function|experience|education|languages?|visa|contact|email|e-mail|telephone|phone|stipendio|retribuzione|contratto|scadenza|dipartimento|settore|orario|livello|esperienza|contatto|telefono)\s*[:\-–—]\s/i;
+
+/* Is this string nothing but a place? "Manchester, UK" is — and a posting
+   that opens with its location would otherwise hand that line to the company
+   field. "University of Edinburgh" is not, even though a city is inside it,
+   which is why this subtracts the city and asks what is left rather than
+   just testing whether a city appears. */
+function pjOnlyPlace(v) {
+  const cities = pjCityIn(v);
+  if (!cities.length) return false;
+  let rest = pjFold(v);
+  for (let i = 0; i < cities.length; i++) rest = rest.split(pjFold(cities[i])).join(" ");
+  rest = rest.replace(
+    /\b(uk|united kingdom|england|scotland|wales|ireland|italy|italia|germany|deutschland|france|francia|spain|espana|spagna|netherlands|belgium|belgio|switzerland|svizzera|austria|portugal|poland|sweden|norway|denmark|finland|greece|europe|europa|eu|usa|us|united states|canada|remote|hybrid|ibrido|onsite|area|region|regione|metropolitan|greater|city of|provincia|prov|and|or|e|o)\b/g, " "
+  );
+  rest = rest.replace(/[^a-z0-9]+/g, " ").trim();
+  return rest.length === 0;
+}
+
+/* Which way round is the unlabelled header? Decided once and shared, so role
+   and company can never disagree about it. Lines that are labelled fields or
+   bare locations are stepped over rather than counted, so a posting that
+   opens with "Manchester, UK" still yields the two lines that carry names. */
+function pjPair(lines) {
+  const cand = [];
+  for (let i = 0; i < lines.length && cand.length < 2; i++) {
+    if (PJ_FIELDLINE.test(lines[i])) continue;
+    if (PJ_LABEL.company.test(lines[i]) || PJ_LABEL.role.test(lines[i]) ||
+        PJ_LABEL.location.test(lines[i])) continue;
+    const c = pjChunk(lines[i]);
+    if (!c || pjOnlyPlace(c)) continue;
+    cand.push(c);
+  }
+  const a = cand[0] || "";
+  const b = cand[1] || "";
+  if (!a) return { role: "", company: "", flipped: false };
+  if (!b) return { role: a, company: "", flipped: false };
+  if (PJ_ROLEWORD.test(b) && !PJ_ROLEWORD.test(a)) {
+    return { role: b, company: a, flipped: true };
+  }
+  return { role: a, company: b, flipped: false };
+}
+
+function pjCompany(lines, pair) {
+  const labelled = pjLabelled(lines, "company");
+  if (labelled) return labelled;
+
+  const head = lines.slice(0, 6);
+
+  /* "Bloomberg is hiring", "Intesa Sanpaolo cerca" — the subject of that
+     sentence is the employer, and this pattern is almost never wrong. */
+  for (let i = 0; i < head.length; i++) {
+    const m = head[i].match(
+      /^(.{2,60}?)\s+(?:is hiring|are hiring|is looking for|are looking for|is seeking|are seeking|is recruiting|cerca|ricerca|assume)\b/i
+    );
+    if (m && pjNamey(pjTidy(m[1]))) {
+      const hit = pjHit(m[1], "high", "is-hiring", 60);
+      if (hit) return hit;
+    }
+  }
+
+  /* "Analyst at Bloomberg", "Analista presso Intesa Sanpaolo". Restricted to
+     the head: "at" is one of the commonest words in English and in body prose
+     it means nothing. */
+  for (let i = 0; i < head.length; i++) {
+    const m = head[i].match(/\s(?:at|@|presso)\s+(.{2,60})$/i);
+    if (m) {
+      const cut = pjChunk(m[1].split(/\s+(?:in|located|based|for)\s+/i)[0]);
+      if (pjNamey(cut)) {
+        const hit = pjHit(cut, "medium", "at-construction", 60);
+        if (hit) return hit;
+      }
+    }
+  }
+
+  /* "Join Bloomberg", "About Bloomberg", "Lavora con Intesa". */
+  for (let i = 0; i < head.length; i++) {
+    const m = head[i].match(/^(?:join|about|welcome to|work at|unisciti a|lavora (?:con|in))\s+(.{2,60})$/i);
+    if (m && pjNamey(pjTidy(m[1]))) {
+      const hit = pjHit(m[1], "medium", "join-about", 60);
+      if (hit) return hit;
+    }
+  }
+
+  if (pair.company && pjNamey(pair.company)) {
+    const hit = pjHit(pair.company, "low", pair.flipped ? "first-line" : "second-line", 60);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/* "Research Assistant (Ref: RA-2291)" is a job title with an applicant
+   tracking number stapled to it. The number is real and belongs to the
+   posting, but nobody types it into a tracker as part of the role. */
+function pjDeRef(s) {
+  return pjTidy(String(s).replace(
+    /\s*[([]\s*(?:ref|req|reference|requisition|id|job\s?id|vacancy|posting|codice|rif)\b[^)\]]*[)\]]\s*$/i, ""
+  ));
+}
+
+function pjRole(lines, pair) {
+  const labelled = pjLabelled(lines, "role");
+  if (labelled) return { value: pjDeRef(labelled.value), confidence: "high", matchedBy: "label" };
+
+  const head = lines.slice(0, 6);
+
+  /* "... is hiring a Senior Analyst", "Cerchiamo un Analista".
+     The capture stops at sentence punctuation rather than at end-of-line.
+     Anchoring it to $ only worked when the role happened to be the last
+     thing on the line, which silently lost every posting that announces the
+     role mid-paragraph — the commonest shape in prose-heavy descriptions. */
+  for (let i = 0; i < head.length; i++) {
+    const m = head[i].match(
+      /(?:is hiring|are hiring|is looking for|are looking for|is seeking|are seeking|we seek|cerchiamo|ricerchiamo|selezioniamo|stiamo cercando|cerca|ricerca|assume)\s+(?:an?|the|un[ao']?|il|la|lo)?\s*([^.,;:!?()\n]{2,70})/i
+    );
+    if (m) {
+      const cut = m[1].split(/\s+(?:to \w+|in our|at our|for our|da inserire|da assumere|per |presso )/i)[0];
+      const hit = pjHit(pjChunk(cut), "medium", "hiring-for", 90);
+      if (hit) return hit;
+    }
+  }
+
+  /* "Analyst at Bloomberg" — everything before the preposition. */
+  for (let i = 0; i < Math.min(2, head.length); i++) {
+    const m = head[i].match(/^(.{2,70}?)\s+(?:at|@|presso)\s+\S/i);
+    if (m) {
+      const hit = pjHit(m[1], "medium", "at-construction", 90);
+      if (hit) return hit;
+    }
+  }
+
+  if (pair.role) {
+    const hit = pjHit(pjDeRef(pair.role), "low", pair.flipped ? "second-line" : "first-line", 90);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function pjCityIn(text) {
+  const folded = pjFold(text);
+  const found = [];
+  for (let i = 0; i < PJ_CITIES.length; i++) {
+    const needle = PJ_CITIES[i][0];
+    const at = folded.indexOf(needle);
+    if (at === -1) continue;
+    const before = at === 0 ? " " : folded[at - 1];
+    const after = folded[at + needle.length] === undefined ? " " : folded[at + needle.length];
+    if (/[a-z0-9]/.test(before) || /[a-z0-9]/.test(after)) continue;   // word boundary
+    let seen = false;
+    for (let k = 0; k < found.length; k++) if (found[k].name === PJ_CITIES[i][1]) seen = true;
+    if (!seen) found.push({ name: PJ_CITIES[i][1], at: at });
+  }
+  /* Reading order, not list order. "Dublin or Amsterdam" must come back as
+     "Dublin / Amsterdam" — a location that reorders what the posting said
+     reads as a parser error even when both cities are right. */
+  found.sort(function (x, y) { return x.at - y.at; });
+  const names = [];
+  for (let i = 0; i < found.length; i++) names.push(found[i].name);
+  return names;
+}
+
+const PJ_REMOTE = /\b(fully remote|remote[- ]first|remote|da remoto|full remote|smart working|telelavoro)\b/i;
+const PJ_HYBRID = /\b(hybrid|ibrido|part[- ]remote)\b/i;
+
+function pjLocation(lines, joined) {
+  const head = lines.slice(0, 8).join("  ");
+
+  const labelled = pjLabelled(lines, "location");
+  if (labelled) {
+    /* A labelled location is still worth tidying: "London, UK (Hybrid — 3
+       days in office)" is a location wrapped in commentary. When no known
+       city is inside it the label is trusted verbatim, which is what keeps
+       cities missing from the list — Biella, Shoreditch — working. */
+    const cities = pjCityIn(labelled.value);
+    if (cities.length > 1) {
+      return { value: cities.join(" / "), confidence: "high", matchedBy: "label+cities" };
+    }
+    if (cities.length === 1) {
+      const suffix = PJ_HYBRID.test(labelled.value) ? " (Hybrid)"
+        : PJ_REMOTE.test(labelled.value) ? " (Remote)" : "";
+      return { value: cities[0] + suffix, confidence: "high", matchedBy: "label+city" };
+    }
+    return labelled;
+  }
+
+  const cities = pjCityIn(head);
+  if (cities.length > 1) {
+    return { value: cities.slice(0, 3).join(" / "), confidence: "medium", matchedBy: "cities" };
+  }
+  if (cities.length === 1) {
+    const suffix = PJ_HYBRID.test(head) ? " (Hybrid)" : PJ_REMOTE.test(head) ? " (Remote)" : "";
+    return { value: cities[0] + suffix, confidence: "medium", matchedBy: "city" };
+  }
+
+  /* No city, but the posting says remote — that IS the location, stated
+     outright rather than inferred, so it is not a low-confidence guess. */
+  if (PJ_REMOTE.test(head)) return { value: "Remote", confidence: "high", matchedBy: "remote" };
+  if (PJ_HYBRID.test(head)) return { value: "Hybrid", confidence: "medium", matchedBy: "hybrid" };
+
+  const anywhere = pjCityIn(joined);
+  if (anywhere.length === 1) {
+    return { value: anywhere[0], confidence: "low", matchedBy: "city-in-body" };
+  }
+  return null;
+}
+
+function pjEmail(src) {
+  /* Every quantifier here is bounded, and that is load-bearing rather than
+     tidiness. The unbounded form — [A-Za-z0-9._%+-]+@ — is quadratic on input
+     containing no spaces: the run matches to the end of the line, fails to
+     find an @, backtracks a character at a time, and repeats from every start
+     position. 50,000 characters of one long word cost 3.3 seconds of blocked
+     main thread, which is a frozen page on a paste nobody would think twice
+     about. The bounds are RFC 5321's: 64 for the local part, 255 for the
+     domain, so nothing legitimate is excluded. */
+  const re = /[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}(?:\.[A-Za-z0-9\-]{1,63}){0,8}\.[A-Za-z]{2,24}/g;
+  const lines = src.replace(/\r\n?/g, "\n").split("\n");
+  const clean = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const found = lines[i].match(re);
+    if (!found) continue;
+    for (let k = 0; k < found.length; k++) {
+      const addr = found[k];
+      let bad = false;
+      for (let n = 0; n < PJ_BAD_MAIL.length; n++) if (PJ_BAD_MAIL[n].test(addr)) bad = true;
+      if (bad) continue;
+      const near = /\b(apply|application|applications|contact|send|email|e-mail|write to|enquiries|inquiries|questions|cv|resume|candidat\w*|invia|contatt\w*|scriv\w*|domande|informazioni)\b/i.test(lines[i]);
+      clean.push({ addr: addr, near: near });
+    }
+  }
+
+  if (!clean.length) return null;
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i].near) {
+      return { value: clean[i].addr, confidence: "high", matchedBy: "email-near-apply" };
+    }
+  }
+  return { value: clean[0].addr, confidence: "medium", matchedBy: "email" };
+}
+
+function pjUrl(src) {
+  const all = src.match(/https?:\/\/[^\s<>"'`)\]}]+/g);
+  if (!all) return null;
+  const cleaned = [];
+  for (let i = 0; i < all.length; i++) {
+    const u = all[i].replace(/[.,;:!?]+$/, "");
+    if (/\.(png|jpe?g|gif|svg|webp|css|js|ico|woff2?)$/i.test(u)) continue;
+    if (/(facebook|twitter|x\.com|instagram|youtube|tiktok)\./i.test(u)) continue;
+    if (/\/(privacy|cookie|terms|legal)\b/i.test(u)) continue;
+    if (cleaned.indexOf(u) === -1) cleaned.push(u);
+  }
+  if (!cleaned.length) return null;
+  /* Prefer something that looks like the posting itself over a company
+     homepage that happened to sit in a footer. */
+  for (let i = 0; i < cleaned.length; i++) {
+    if (/(greenhouse\.io|lever\.co|workday|smartrecruiters|ashbyhq|teamtailor|personio|linkedin\.com\/jobs|indeed\.|glassdoor\.|\/jobs?\/|\/careers?\/|\/vacanc|\/position|\/offerta|\/lavoro)/i.test(cleaned[i])) {
+      return { value: cleaned[i], confidence: "high", matchedBy: "job-url" };
+    }
+  }
+  return { value: cleaned[0], confidence: "medium", matchedBy: "url" };
+}
+
+/* ---- the entry point ---------------------------------------------------- */
+
+function parseJobDescription(text) {
+  const empty = {
+    company: null, role: null, location: null, contactEmail: null,
+    sourceUrl: null, truncated: false, chars: 0,
+  };
+  try {
+    if (typeof text !== "string" || !text.trim()) return empty;
+
+    let src = text;
+    let truncated = false;
+    if (src.length > PJ_LIMIT) { src = src.slice(0, PJ_LIMIT); truncated = true; }
+
+    const lines = pjLines(src);
+    const joined = lines.join("  ");
+    const pair = pjPair(lines);
+
+    const role = pjRole(lines, pair);
+    const company = pjCompany(lines, pair);
+
+    /* The structural pair is one guess, not two. If both fell back to
+       position and landed on the same string, the posting had one line worth
+       reading — keep the role and drop the company rather than asserting
+       both. */
+    const positional = company && (company.matchedBy === "second-line" || company.matchedBy === "first-line");
+    const clash = positional && role && pjFold(company.value) === pjFold(role.value);
+
+    return {
+      company: clash ? null : company,
+      role: role,
+      location: pjLocation(lines, joined),
+      contactEmail: pjEmail(src),
+      sourceUrl: pjUrl(src),
+      truncated: truncated,
+      chars: text.length,
+    };
+  } catch (e) {
+    /* Never propagate. The paste box is reached from the header of a working
+       app; a thrown parse would take the page down over a bad paste. */
+    return empty;
+  }
+}
+
+/* ---- duplicate detection ------------------------------------------------
+   Forgiving on purpose: case, accents, punctuation and legal form are noise
+   when a human asks "have I already applied here?". Warn only — two roles at
+   one company is normal, and the user knows better than the parser. */
+
+function pjCompanyKey(name) {
+  /* Full stops are deleted, not turned into spaces, so an initialism closes
+     up into the word it abbreviates: "L.P." -> "lp" and "S.p.A." -> "spa",
+     both of which the suffix list then recognises. Turning them into spaces
+     instead left "bloomberg l p", which matched nothing. Other punctuation
+     does become a space — "Smith&Jones" is two words. */
+  let k = pjFold(name)
+    .replace(/\./g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  /* Strip trailing legal forms repeatedly: "Foo Holdings Ltd" -> "foo". */
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const parts = k.split(" ");
+    if (parts.length > 1 && PJ_SUFFIX.indexOf(parts[parts.length - 1]) !== -1) {
+      parts.pop();
+      k = parts.join(" ");
+      changed = true;
+    }
+  }
+  return k;
+}
+
+function findDuplicateCompany(name, rows) {
+  const key = pjCompanyKey(name || "");
+  if (key.length < 2 || !rows) return null;
+  for (let i = 0; i < rows.length; i++) {
+    const other = pjCompanyKey(rows[i].company || "");
+    if (!other) continue;
+    if (other === key) return rows[i];
+    /* One name starting with the other catches "Bloomberg" against
+       "Bloomberg Intelligence" without the false positives a similarity
+       score brings. Guarded at 4 characters so "BP" does not match
+       "BP Chemicals" on a two-letter prefix. */
+    const shorter = key.length < other.length ? key : other;
+    const longer = key.length < other.length ? other : key;
+    if (shorter.length >= 4 && longer.indexOf(shorter + " ") === 0) return rows[i];
+  }
+  return null;
+}
+
+/* ==== paste-to-create parser: END ==== */
 </script>
 
 <script type="text/babel">
@@ -1479,7 +2145,6 @@ const SEED = [
    to be told. */
 const isExample = (row) =>
   SEED.some((s) => s.company === row.company && s.role === row.role);
-
 
 /* ---------------------------------- shell --------------------------------- */
 
@@ -2692,7 +3357,6 @@ function SyncChip({ status }) {
     </span>
   );
 }
-
 
 function StatusCell({ row, onAdvance, cell }) {
   const s = stageOf(row.status);
@@ -4171,6 +4835,260 @@ function MobileCard({
 
 /* --------------------------------- tracker -------------------------------- */
 
+/* Which rule fired, in words a person can act on. The parser's matchedBy is
+   for whoever improves the heuristics; this is for whoever has to decide
+   whether to trust a guess. Naming the evidence is what turns a wrong field
+   into a one-second correction instead of a puzzle (§4.2 — expose reasoning,
+   show provenance, let users intervene). */
+const PJ_WHY = {
+  "label": "an explicit label in the text",
+  "is-hiring": "an “X is hiring” line",
+  "at-construction": "an “X at Y” line",
+  "join-about": "an “About X” line",
+  "hiring-for": "a “looking for…” sentence",
+  "first-line": "the first line — worth a look",
+  "second-line": "the second line — worth a look",
+  "label+city": "an explicit label",
+  "label+cities": "an explicit label",
+  "city": "a city named near the top",
+  "cities": "the cities named near the top",
+  "city-in-body": "a city named in the body — worth a look",
+  "remote": "the word “remote”",
+  "hybrid": "the word “hybrid”",
+  "email-near-apply": "an address beside “apply” or “contact”",
+  "email": "an address in the text",
+  "job-url": "a job-board link",
+  "url": "a link in the text",
+};
+
+const PASTE_FIELDS = [
+  { key: "role", label: "Role", placeholder: "Job title" },
+  { key: "company", label: "Company", placeholder: "Employer" },
+  { key: "location", label: "Location", placeholder: "City, or Remote" },
+  { key: "contactEmail", label: "Contact email", placeholder: "name@company.com", type: "email" },
+  { key: "sourceUrl", label: "Source link", placeholder: "https://…", type: "url" },
+];
+
+/* Paste a job description, correct what was guessed, then create the row.
+   The review step is not a courtesy — heuristic extraction is wrong a
+   meaningful share of the time, and the difference between showing the guess
+   and not showing it is the difference between one edit now and bad data
+   discovered in three weeks. Nothing here writes to the database; the parent
+   owns that, and only on confirm. */
+function PasteCreate({ onClose, onCreate, existing, busy }) {
+  const [text, setText] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [values, setValues] = useState({
+    role: "", company: "", location: "", contactEmail: "", sourceUrl: "",
+  });
+  /* Once a field has been typed in, it is the user's and no later parse may
+     overwrite it — otherwise correcting a field and then fixing a typo in the
+     source text silently throws the correction away. */
+  const edited = useRef({});
+  const fromPaste = useRef(false);
+  const timer = useRef(null);
+  const card = useRef(null);
+  const box = useRef(null);
+  const returnTo = useRef(null);
+
+  useEffect(() => {
+    returnTo.current = document.activeElement;
+    if (box.current) box.current.focus();
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      /* Focus goes back where it came from. Leaving it on <body> after a
+         dialog closes strands keyboard and screen-reader users at the top of
+         the document (§1.1 — the re-orientation tax). */
+      const el = returnTo.current;
+      if (el && el.focus) el.focus();
+    };
+  }, []);
+
+  const runParse = (v) => {
+    const r = parseJobDescription(v);
+    setParsed(r);
+    setValues((prev) => {
+      const next = { ...prev };
+      for (let i = 0; i < PASTE_FIELDS.length; i++) {
+        const k = PASTE_FIELDS[i].key;
+        if (edited.current[k]) continue;
+        next[k] = r[k] ? r[k].value : "";
+      }
+      return next;
+    });
+  };
+
+  const onChange = (e) => {
+    const v = e.target.value;
+    setText(v);
+    if (timer.current) clearTimeout(timer.current);
+    if (fromPaste.current) {
+      /* A paste parses on the spot, with no timer in the way. Measured at
+         4.4ms for a 5,000-word posting and 22.7ms at the 50,000-character
+         cap — inside the 100ms instant tier either way (§3.2), so debouncing
+         the paste would only add latency it does not need.
+         Typing is debounced instead: re-parsing a long description on every
+         keystroke is work nobody asked for, and 200ms is below the point at
+         which the result feels like a response to what you typed. */
+      fromPaste.current = false;
+      runParse(v);
+    } else {
+      timer.current = setTimeout(() => runParse(v), 200);
+    }
+  };
+
+  const setField = (k, v) => {
+    edited.current[k] = true;
+    setValues((prev) => ({ ...prev, [k]: v }));
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+    if (e.key !== "Tab" || !card.current) return;
+    const list = [].slice
+      .call(card.current.querySelectorAll("button,input,textarea,a[href]"))
+      .filter((n) => !n.disabled && n.offsetParent !== null);
+    if (!list.length) return;
+    const first = list[0];
+    const last = list[list.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
+  const dupe = values.company ? findDuplicateCompany(values.company, existing) : null;
+  const reviewing = text.trim().length > 0 && parsed !== null;
+  const anything = PASTE_FIELDS.some((f) => (values[f.key] || "").trim());
+
+  const submit = () => {
+    if (!anything || busy) return;
+    onCreate({
+      role: values.role.trim(),
+      company: values.company.trim(),
+      location: values.location.trim(),
+      contactEmail: values.contactEmail.trim(),
+      /* No schema change was on the table for this feature, so a source link
+         goes where free text already lives, on its own first line with a
+         fixed prefix so it can be read past or deleted in one stroke. */
+      notes: values.sourceUrl.trim() ? "Source: " + values.sourceUrl.trim() : "",
+    });
+  };
+
+  return (
+    <div
+      className="tk-pastewrap tk-noprint"
+      onKeyDown={onKeyDown}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={card}
+        className="tk-pastecard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tk-paste-title"
+      >
+        <div className="px-4 py-4 sm:px-8 sm:py-12">
+          <h2 id="tk-paste-title" className="tk-title">Paste a job description</h2>
+          <p className="mt-1 tk-cap leading-relaxed tk-secondary">
+            Everything is read in your browser. Nothing is uploaded, and no row is
+            created until you confirm.
+          </p>
+
+          <label className="mt-4 block">
+            <span className={LABEL}>Job description</span>
+            <textarea
+              ref={box}
+              rows={reviewing ? 4 : 10}
+              value={text}
+              onPaste={() => { fromPaste.current = true; }}
+              onChange={onChange}
+              placeholder={"Paste the advert here — nav text, footers and cookie banners and all."}
+              className="tk-pastebox mt-1"
+              aria-describedby="tk-paste-cap"
+            />
+          </label>
+          <p id="tk-paste-cap" className="mt-1 tk-cap tk-tertiary">
+            {parsed && parsed.truncated
+              ? "Only the first 50,000 characters were read — that is well past the end of any real posting."
+              : "Up to 50,000 characters."}
+          </p>
+
+          {reviewing && (
+            <div className="mt-6">
+              <h3 className="tk-micro tk-secondary">Check before creating</h3>
+              <div className="mt-3 space-y-3">
+                {PASTE_FIELDS.map((f) => {
+                  const hit = parsed[f.key];
+                  const mine = edited.current[f.key];
+                  const missing = !hit && !values[f.key];
+                  const why = hit && !mine && hit.confidence !== "high"
+                    ? "Guessed from " + (PJ_WHY[hit.matchedBy] || hit.matchedBy)
+                    : missing
+                      ? "Not found — add it if you want it"
+                      : null;
+                  return (
+                    <label className={"block" + (missing ? " tk-miss" : "")} key={f.key}>
+                      <span className={LABEL}>{f.label}</span>
+                      <input
+                        type={f.type || "text"}
+                        value={values[f.key]}
+                        placeholder={f.placeholder}
+                        onChange={(e) => setField(f.key, e.target.value)}
+                        aria-describedby={why ? "tk-why-" + f.key : undefined}
+                        className="tk-input tk-pastefield tk-focus mt-1 w-full tk-r2 px-2 py-2 tk-body"
+                      />
+                      {why && (
+                        <span id={"tk-why-" + f.key} className="tk-guess tk-cap tk-tertiary">
+                          {why}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+
+              {dupe && (
+                <p className="tk-dupe mt-4 px-3 py-2 tk-cap leading-relaxed">
+                  You already have <strong>{dupe.company || "an application"}</strong>
+                  {dupe.role ? " — " + dupe.role : ""} on this page. Two roles at one
+                  company is perfectly normal; this is only a heads-up.
+                </p>
+              )}
+
+              <div className="mt-5">
+                <span className={LABEL}>What you pasted</span>
+                <div className="tk-pastesrc mt-1" tabIndex={0} aria-label="The text you pasted">
+                  {text}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="tk-btn tk-focus tk-control-h tk-r2 px-4 tk-micro transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submit}
+              disabled={!anything || busy}
+              className="tk-btn tk-focus tk-control-h tk-r2 px-4 tk-micro transition-colors"
+              style={
+                anything && !busy
+                  ? { background: "var(--accent)", borderColor: "var(--accent)", color: "var(--on-accent)" }
+                  : undefined
+              }
+            >
+              Create application
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Tracker({ session }) {
   const userId = session.user.id;
   const [all, setAll] = useState([]);
@@ -4210,6 +5128,7 @@ function Tracker({ session }) {
   const [renamingPage, setRenamingPage] = useState(null);
   const [deletingPage, setDeletingPage] = useState(null);
   const [creatingPage, setCreatingPage] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const pending = useRef(0);
   const [purging, setPurging] = useState(null);
   const [bulkTrash, setBulkTrash] = useState(null); // "restore" | "purge"
@@ -4704,19 +5623,33 @@ function Tracker({ session }) {
     ],
   };
 
-  const addRow = async () => {
+  /* One insert path for both ways of creating a row. `seed` is what the paste
+     flow confirmed; with no seed this is the blank row the header button has
+     always made. Sharing it is what guarantees the two agree about the page,
+     the stage, the sort order and which filters get cleared — the brief asked
+     for "exactly matching existing add behaviour", and the only way to keep
+     that true a year from now is for there to be one behaviour. */
+  const addRow = async (seed) => {
+    const s = seed || {};
     const sortOrder = all.reduce((m, r) => Math.max(m, r.sortOrder), -1) + 1;
     mark(1);
     const { data, error } = await sb
       .from("applications")
       .insert({
         user_id: userId,
-        company: "",
-        role_title: "",
-        location: "",
+        company: s.company || "",
+        role_title: s.role || "",
+        location: s.location || "",
+        notes: s.notes || "",
         status: "to-apply",
         sort_order: sortOrder,
         stage_history: [{ to: "to-apply", at: new Date().toISOString() }],
+        /* Same reasoning as page_id below: contact_email arrives with the
+           inbound-email migration, and naming a column that is not there
+           fails the whole insert. On an old schema the address is simply not
+           seeded — the row is still created, and the field can be typed in
+           later once the migration is run. */
+        ...(needsMigration ? {} : { contact_email: s.contactEmail || "" }),
         /* Lands on the page you are looking at. Omitted entirely on an
            unmigrated database, where the column does not exist and naming it
            would fail the insert. */
@@ -5553,8 +6486,30 @@ function Tracker({ session }) {
             what gives the one emphasis its force). */}
         <div className="tk-headbar tk-noprint flex items-center gap-3">
           <SyncChip status={sync} />
+          {/* Paste sits WITH the primary action, not in the overflow menu.
+              Both are the same intent — create an application — differing only
+              in whether you already have the advert on your clipboard, and
+              §2.1 puts related controls in one fixation zone rather than
+              splitting one decision across two places. The overflow menu holds
+              configuration (theme, export, sign out); a creation action filed
+              under settings is a category error, and undiscoverable besides.
+
+              It stays subordinate by having no accent fill. That is the whole
+              mechanism: the single filled control is what makes the primary
+              action unambiguous (§1.2), so anything unfilled beside it reads
+              as secondary without needing to be smaller or greyer — contrast
+              doing compositional work rather than decorative (§2.3).
+              An arrow function, not a bare reference: addRow now takes a seed,
+              and handing it a click event would pass the event as the seed. */}
           <button
-            onClick={addRow}
+            onClick={() => setPasting(true)}
+            title="Paste a job description and create an application from it"
+            className="tk-btn tk-focus tk-control-h tk-r2 px-4 tk-micro transition-colors"
+          >
+            Paste
+          </button>
+          <button
+            onClick={() => addRow()}
             className="tk-btn tk-focus tk-control-h tk-r2 px-4 tk-micro transition-colors"
             style={{
               background: "var(--accent)",
@@ -5644,6 +6599,22 @@ function Tracker({ session }) {
 
       {needsMigration && (
         <MigrationNotice onDismiss={() => setNeedsMigration(false)} />
+      )}
+
+      {/* `rows` is already "not deleted, on the page you are looking at",
+          which is exactly the population the duplicate warning is asked
+          about — before the stage filter and score floor narrow it, so a
+          duplicate cannot hide behind an active filter. */}
+      {pasting && (
+        <PasteCreate
+          existing={rows}
+          busy={sync === "saving"}
+          onClose={() => setPasting(false)}
+          onCreate={async (seed) => {
+            setPasting(false);
+            await addRow(seed);
+          }}
+        />
       )}
 
       {deletingPage && pages.find((p) => p.id === deletingPage) && (
@@ -5839,9 +6810,9 @@ function Tracker({ session }) {
               <p className="mx-auto tk-lead" style={{ maxWidth: "48ch" }}>
                 Nothing on this page yet.
               </p>
-              <div className="mt-4">
+              <div className="mt-4 flex items-center justify-center gap-3">
                 <button
-                  onClick={addRow}
+                  onClick={() => addRow()}
                   className="tk-btn tk-focus tk-rfull px-4 py-2 tk-micro transition-colors"
                   style={{
                     background: "var(--accent)",
@@ -5850,6 +6821,12 @@ function Tracker({ session }) {
                   }}
                 >
                   + Add application
+                </button>
+                <button
+                  onClick={() => setPasting(true)}
+                  className="tk-btn tk-focus tk-rfull px-4 py-2 tk-micro transition-colors"
+                >
+                  Paste a description
                 </button>
               </div>
             </>
@@ -5865,9 +6842,13 @@ function Tracker({ session }) {
                 Add your first application. Every cell is editable — click one
                 and type.
               </p>
-              <div className="mt-4">
+              {/* The empty state is the best onboarding surface there is
+                  (§3.3), and it is the one place where showing both creation
+                  paths costs nothing — there is no pipeline here for them to
+                  compete with. */}
+              <div className="mt-4 flex items-center justify-center gap-3">
                 <button
-                  onClick={addRow}
+                  onClick={() => addRow()}
                   className="tk-btn tk-focus tk-rfull px-4 py-2 tk-micro transition-colors"
                   style={{
                     background: "var(--accent)",
@@ -5876,6 +6857,12 @@ function Tracker({ session }) {
                   }}
                 >
                   + Add application
+                </button>
+                <button
+                  onClick={() => setPasting(true)}
+                  className="tk-btn tk-focus tk-rfull px-4 py-2 tk-micro transition-colors"
+                >
+                  Paste a description
                 </button>
               </div>
               <div className="tk-grid tk-grid--fluid mt-6 hidden lg:block" aria-hidden="true">

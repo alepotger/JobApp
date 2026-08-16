@@ -28,6 +28,75 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
         body: fs.readFileSync(`${CACHE}/${CDN_MAP[r.request().url().split("?")[0]]}`) }));
   };
 
+  /* Checks 9 and 10 exercise the running grid, and the grid needs a signed-in
+     session and a database behind it. These contexts used to set
+     tracker.config and nothing else — so the app did exactly the right thing,
+     showed the sign-in screen, and the harness sat waiting out a 30s timeout
+     for a .tk-grid that could never appear. Two of the ten behaviours were
+     not being verified at all, and the run died before reporting it.
+
+     The store below is deliberately tiny but real: it holds inserted rows, so
+     the seeding path runs, PATCH mutates what GET returns, and the filter and
+     soft-delete checks operate on state that actually changes. */
+  const UID = "00000000-0000-4000-8000-000000000001";
+  const PAGE_ID = "aaaaaaaa-0000-4000-8000-000000000001";
+  const USER = { id: UID, email: "t@e.com", aud: "authenticated", role: "authenticated",
+    app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+
+  const signedIn = async (ctx) => {
+    const rows = []; let n = 0;
+    await ctx.route("https://stub.supabase.co/**", async (route) => {
+      const q = route.request(), u = q.url(), m = q.method();
+      const j = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.includes("/auth/v1/user")) return j(USER);
+      if (u.includes("/auth/v1/")) return j({ user: USER });
+      if (u.includes("/rest/v1/tracker_pages"))
+        return j(m === "GET" ? [{ id: PAGE_ID, name: "Applications", sort_order: 0, user_id: UID }] : []);
+      if (u.includes("/rest/v1/applications")) {
+        if (m === "GET") return j(rows);
+        if (m === "POST") {
+          const body = JSON.parse(q.postData() || "{}");
+          const made = (Array.isArray(body) ? body : [body]).map((r) => Object.assign({
+            id: "r" + (++n), company: "", role_title: "", location: "", status: "to-apply",
+            replies: "", next_steps: "", notes: "", contact_email: "", salary: "", equity: "",
+            start_date: null, benefits_score: 0, score_salary: 0, score_growth: 0,
+            score_culture: 0, score_location: 0, deleted: false, sort_order: 0,
+            activity: new Date().toISOString(), stage_history: [], page_id: null,
+          }, r));
+          made.forEach((r) => rows.push(r));
+          return j(made);
+        }
+        if (m === "PATCH") {
+          const body = JSON.parse(q.postData() || "{}");
+          const id = /id=eq\.([^&]+)/.exec(u);
+          const hit = id ? rows.filter((r) => r.id === decodeURIComponent(id[1])) : [];
+          hit.forEach((r) => Object.assign(r, body));
+          return j(hit);
+        }
+        if (m === "DELETE") {
+          const id = /id=eq\.([^&]+)/.exec(u);
+          if (id) {
+            const i = rows.findIndex((r) => r.id === decodeURIComponent(id[1]));
+            if (i >= 0) rows.splice(i, 1);
+          }
+          return j([]);
+        }
+      }
+      return j([]);
+    });
+    await ctx.addInitScript(() => {
+      localStorage.setItem("tracker.config",
+        JSON.stringify({ url: "https://stub.supabase.co", key: "x".repeat(40) }));
+      localStorage.setItem("sb-stub-auth-token", JSON.stringify({
+        access_token: "s", token_type: "bearer", expires_in: 86400,
+        expires_at: Math.floor(Date.now() / 1000) + 86400, refresh_token: "s",
+        user: { id: "00000000-0000-4000-8000-000000000001", email: "t@e.com",
+          aud: "authenticated", role: "authenticated", app_metadata: {},
+          user_metadata: {}, created_at: new Date().toISOString() },
+      }));
+    });
+  };
+
   /* 1 — user_id on every insert AND defaulted in the database */
   const inserts=[...SRC.matchAll(/\.from\("applications"\)\s*\n?\s*\.insert\(/g)]
     .map(m=>SRC.slice(Math.max(0,m.index-700), m.index+80));
@@ -124,26 +193,33 @@ const out=[]; const t=(n,ok,d)=>{out.push({n,ok});console.log((ok?"PASS  ":"FAIL
     seeds.join(", "));
 
   /* 9 — adding a row clears an active stage filter (exercised) */
-  const ctx2=await b.newContext(); await routeCdn(ctx2); const r=await ctx2.newPage();
-  await r.addInitScript(()=>localStorage.setItem("tracker.config",
-    JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
+  const ctx2=await b.newContext(); await routeCdn(ctx2); await signedIn(ctx2); const r=await ctx2.newPage();
   await r.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
   await r.waitForSelector(".tk-grid");
-  await r.getByRole("button",{name:/^Offer 1$/}).click().catch(async()=>{
-    await r.evaluate(()=>{[...document.querySelectorAll("button")].find(b=>/Offer/.test(b.textContent)).click();});});
+  /* Pick whichever stage chip actually holds exactly one row rather than
+     naming one. The seed is applied/to-apply/interview and has no Offer, so
+     the old /^Offer 1$/ target could never match — the check filtered to zero
+     rows and then "passed the add" for the wrong reason. Deriving the target
+     from the rendered counts keeps this honest when the seed changes. */
+  const picked = await r.evaluate(() => {
+    const chip = [].slice.call(document.querySelectorAll("button"))
+      .find((b) => /^(To apply|Applied|Replied|Interview|Offer|Closed)\s*1$/.test(b.textContent.replace(/\s+/g, " ").trim()));
+    if (!chip) return null;
+    chip.click();
+    return chip.textContent.replace(/\s+/g, " ").trim();
+  });
   await r.waitForTimeout(250);
   const filtered=await r.locator(".tk-grid .tk-rowcard").count();
   await r.getByRole("button",{name:/Add application/}).click();
   await r.waitForTimeout(500);
   const after=await r.locator(".tk-grid .tk-rowcard").count();
   t("9. adding a row clears any active stage filter, so the new row is visible",
-    filtered===1 && after>filtered, `filtered to ${filtered}, after add ${after} rows visible`);
+    picked!==null && filtered===1 && after>filtered,
+    `filtered by "${picked}" to ${filtered}, after add ${after} rows visible`);
   await ctx2.close();
 
   /* 10 — soft delete restores to position; hard delete separately confirmed */
-  const ctx3=await b.newContext(); await routeCdn(ctx3); const d=await ctx3.newPage();
-  await d.addInitScript(()=>localStorage.setItem("tracker.config",
-    JSON.stringify({url:"https://stub.supabase.co",key:"x".repeat(40)})));
+  const ctx3=await b.newContext(); await routeCdn(ctx3); await signedIn(ctx3); const d=await ctx3.newPage();
   await d.goto("http://127.0.0.1:8777/index.html",{waitUntil:"networkidle"});
   await d.waitForSelector(".tk-grid");
   const order0=await d.evaluate(()=>[...document.querySelectorAll('[data-c="0"]')].map(e=>e.textContent.trim()));
