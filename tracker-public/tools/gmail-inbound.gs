@@ -86,30 +86,63 @@ function fileLabelledReplies() {
     return;
   }
 
+  let failed = 0;
+
   for (const thread of threads) {
-    /* Every message in the thread is posted, not just the newest. Ones already
-       filed come back as {"status":"duplicate"} from the function's ledger and
-       cost nothing, which is what makes re-running this safe. */
-    let allAccepted = true;
+    /* Held outside the try so the catch can name the thread even when the
+       failure was getId() itself. */
+    let which = '(thread)';
 
-    for (const message of thread.getMessages()) {
-      const result = post(url, secret, token, message);
-      Logger.log(message.getId() + ' → ' + result.code + ' ' + result.body);
+    try {
+      which = thread.getId();
 
-      /* 200 filed it, 202 means it arrived and matched nothing — both are the
-         function having dealt with the message. Anything else is a failure
-         worth retrying, so the labels stay as they are and the next run picks
-         the thread up again. */
-      if (result.code !== 200 && result.code !== 202) allAccepted = false;
+      /* Every message in the thread is posted, not just the newest. Ones already
+         filed come back as {"status":"duplicate"} from the function's ledger and
+         cost nothing, which is what makes re-running this safe. */
+      let allAccepted = true;
+
+      for (const message of thread.getMessages()) {
+        const result = post(url, secret, token, message);
+        Logger.log(message.getId() + ' → ' + result.code + ' ' + result.body);
+
+        /* 200 filed it, 202 means it arrived and matched nothing — both are the
+           function having dealt with the message. Anything else is a failure
+           worth retrying, so the labels stay as they are and the next run picks
+           the thread up again. */
+        if (result.code !== 200 && result.code !== 202) allAccepted = false;
+      }
+
+      if (allAccepted) {
+        /* DONE_LABEL is bookkeeping, not decoration: the automatic search
+           excludes it, so this is what stops a thread being posted every fifteen
+           minutes for the next fortnight. */
+        thread.addLabel(done);
+        thread.removeLabel(source);
+      }
+    } catch (err) {
+      /* One thread must not take the batch down with it.
+         Gmail throws "We're sorry, a server error occurred" out of
+         getMessages(), getPlainBody() and the label writes. Usually it is
+         transient and the next run clears it, because the labels are only
+         moved after every message was accepted — a thread that failed here
+         still carries SOURCE_LABEL and gets picked up again.
+         Without this catch, though, a thread that throws *every* time is a
+         poison pill: the run dies at the same place on every trigger, forever,
+         and every thread queued behind it is never filed. Skipping the bad one
+         costs a single thread; not skipping it costs all of them. */
+      failed++;
+      Logger.log('SKIPPED after error: ' + which + ' — ' + err);
     }
+  }
 
-    if (allAccepted) {
-      /* DONE_LABEL is bookkeeping, not decoration: the automatic search
-         excludes it, so this is what stops a thread being posted every fifteen
-         minutes for the next fortnight. */
-      thread.addLabel(done);
-      thread.removeLabel(source);
-    }
+  /* Rethrown so Apps Script records a failed execution and sends its failure
+     summary. Swallowing it would report a clean run that filed nothing, which
+     is the invisible-forever failure this catch exists to prevent. */
+  if (failed) {
+    throw new Error(
+      failed + ' of ' + threads.length + ' thread(s) failed — see the log above. ' +
+      'Their labels were left alone, so the next run retries them.'
+    );
   }
 }
 
