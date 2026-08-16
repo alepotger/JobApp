@@ -3780,3 +3780,199 @@ re-run.
   behaviour for a vocabulary it does not have.
 - On an unmigrated database `contact_email` is not seeded, because naming a
   column that is not there fails the whole insert. The row is still created.
+
+---
+
+# Paste to create, round 2 — evidence instead of position
+
+The parser failed on anything that does not begin at line 1. A university
+portal, a recruitment agency and a job board all wrap the employer's text in
+their own, and the wrapper is written in the same register as the posting —
+headings, prose, capitals — so a chrome blocklist never touches it.
+
+## Root cause, confirmed by running it
+
+Diagnostic case: a careers-portal posting with ten lines of advisory preamble.
+Output was `role: "Job or Opportunity details"`, `company: null`.
+
+**It took the first surviving line as the role.** `matchedBy: "first-line"`.
+There was no notion of whether the document had started.
+
+**Rules returned the first match — but the real fault was narrower and worse.**
+The ordering was strongest-first, so a weak rule never outranked a strong one
+on equal footing. What actually happened is that *every strong company rule was
+scoped to `lines.slice(0, 6)`*. With a ten-line preamble, `About Novabook` sat
+at surviving-line 15 and was **never examined**. The strong rules did not lose;
+they never ran. The unscoped positional fallback was the only rule left
+standing. (`pjLabelled` was unscoped, which is precisely why Location was the
+one field that worked.)
+
+**There was a notion of boilerplate, and it was the wrong kind.** `PJ_NOISE`
+held 30 patterns and correctly removed "Back to search results" and "Share this
+job". But it is a blocklist of known site chrome, not a model of document
+structure: no pattern for second-person advisory prose, none for disclaimers,
+none for intermediary references, and no concept of where the posting begins.
+
+**And the strongest available signal was not implemented at all.** "Novabook"
+appears nine times in the body. There was no frequency rule anywhere. Even a
+perfect preamble strip would not have found it.
+
+## The architecture now
+
+Every applicable rule proposes a candidate with a score, over the whole
+document. Nothing short-circuits. Candidates are merged by normalised value,
+the distinct rules that proposed each are summed, and every additional
+independent rule pays a corroboration bonus. Then rejections and penalties, and
+the highest survivor wins.
+
+`chrome` is discarded and says nothing. `wrapper` — a third party addressing
+the applicant, or disclaiming the content below — is discarded **and counted**,
+because it is the signal that licenses distrusting the top of the document.
+Positional rules and the frequency count then run on the body only; everything
+else reads the whole thing.
+
+The gate matters as much as the detection. Discarding a preamble is dangerous:
+on an ordinary posting the role and company *are* the first two lines, and a
+section heading three lines down would throw them away. So the preamble is only
+distrusted when a wrapper was actually detected, or when there is simply too
+much above the first structural signal for it to be a headline.
+
+## Before and after
+
+| field | before (tuned) | before (holdout) | after (tuned) | after (holdout) |
+|---|---|---|---|---|
+| role | 14/14 · 100% | 10/14 · 71% | 14/14 · 100% | 20/20 · 100% |
+| company | 14/14 · 100% | 9/14 · 64% | 14/14 · 100% | 20/20 · 100% |
+| location | 15/15 · 100% | 13/14 · 93% | 15/15 · 100% | 20/20 · 100% |
+| contact email | 15/15 · 100% | 5/5 · 100% | 15/15 · 100% | 5/5 · 100% |
+| salary | — | 0/5 · 0% | — | 8/8 · 100% |
+| **overall** | **59/59** | **38/53 · 72%** | **59/59** | **74/74 · 100%** |
+
+**Nothing regressed.** Every one of the 23 pre-existing fixtures passed before
+and passed after; all fifteen misses were in the six new wrapper fixtures.
+
+## The honest number is 81%, not 100%
+
+The table above is not a generalisation estimate — those fixtures were tuned
+against. So after the rewrite was passing everything, six genuinely new
+wrapper-class postings were written and run **once**, before anything was
+looked at:
+
+| field | round-2 holdout, first contact |
+|---|---|
+| role | 4/6 · 67% |
+| company | 5/6 · 83% |
+| location | 5/6 · 83% |
+| salary | 3/3 · 100% |
+| **overall** | **17/21 · 81%** |
+
+**81% is the number to quote.** The four misses were then diagnosed and fixed,
+which took that set to 21/21 — and burned it as a holdout. It is kept in the
+fixture file as regression cover, not as evidence.
+
+Three of the four shared one root cause worth naming: **postings hard-wrap
+mid-sentence.** "is looking for a Property / Manager" captured `"Property"`,
+and "We are hiring Machine / Learning Engineers" captured `"Machine"`. Reading
+one line at a time is wrong for prose. Consecutive content lines are now joined
+into paragraphs and split into sentences before the prose rules see them —
+joined only when a line runs to near the wrap width and does not end in
+terminal punctuation, because gluing a *headline block* together produced
+`"Zalando Berlin We"`.
+
+The fourth: a job board printed the department next to the company, and
+`"Engineering"` beat `"Ravenwood"` by two points on position. Department names
+are now posting vocabulary. Separately, `"Back to Ravenwood jobs"` — the
+breadcrumb every applicant-tracking system prints — was being discarded as
+chrome while naming the employer; it is now read before being discarded.
+
+## The diagnostic case, scored
+
+```
+--- company candidates ---
+  1.  357  "Novabook"     about-heading, is-a, founded, at-construction, repetition
+  2.   -1  "and customer operations over your first year"   REJECTED (penalty -30)
+
+--- role candidates ---
+  1.   65  "Startup Operations Graduate"   hiring-for
+  2.   -1  "with the operations group"     REJECTED
+  3.   -1  "vacancies"                     REJECTED
+```
+
+Novabook scores 70 + 45 + 50 + 32 + 60 = 257, plus 25 × 4 corroboration = 357.
+
+Worth noting what is *absent*: `"Job or Opportunity details"` is not in the
+candidate list at all. It never reaches scoring — it is classified as a section
+heading, and headings are never proposed as names. The scoring mechanism is
+what makes Novabook win; classification is what makes the wrapper text lose.
+
+## Rejection rules
+
+Applied after merging, so a value cannot be rescued by being proposed twice.
+Hard rejections: meta-language about the document itself; a verb phrase
+addressed to the reader; a pronoun or placeholder ("We", "Our client, a leading
+asset manager"); for company, anything that is only a place; and anything with
+no proper noun once posting vocabulary is subtracted.
+
+Word ceilings, stated: **company 6 words, role 8.** Beyond that, 30 points per
+excess word.
+
+One rejection had to be split. `pjHasProperNoun` originally subtracted job
+nouns as well as stopwords, which is right for a company — "Barista wanted"
+names no employer — and rejects **every job title there is**. It now subtracts
+job nouns only when judging a company. Symmetrically, `"Engineering"` must lose
+as a standalone company and must still be allowed to complete `"Ferrowick
+Engineering"`: a word that means nothing in isolation can be half a name.
+
+## Confidence, and when null wins
+
+High is an explicit label, or two or more independent rules agreeing above 90.
+Medium is one strong rule uncorroborated. Low is position or weak inference.
+Below 12, or low with any penalty attached, the field reports **not found** —
+an empty field gets filled in, a plausible wrong one gets skimmed and accepted.
+
+In the review step, low confidence now gets the **same dashed edge as a field
+that was not found**, and its caption reads "Check this — guessed only from
+the second line" rather than a bare "Guessed from". Medium keeps the caption
+without the dashes; high says nothing at all. Corroboration is reported in
+words: "an 'About …' section heading, and 4 other rules agreeing".
+
+## Salary
+
+Captured only from an explicit label — a number in prose is as likely to be a
+headcount as a wage. `salary` already exists from migration 001; **no schema
+change**. Written under the same `needsMigration` guard as `contact_email`, so
+an old schema simply does not get it rather than failing the whole insert.
+
+## Not overfitted
+
+No institution, company or job board is named in any rule. Nothing keys on the
+diagnostic document's structure. The rules that fixed it are: wrapper detection
+by register (second-person advice, disclaimers, intermediary self-reference),
+document-start detection by structural signal, repetition, About-headings,
+sentence reconstruction, and meta-language rejection. Every one recurs across
+portals, agencies, boards and company pages, which is why the six round-2
+fixtures — none of which resembles the diagnostic case — moved from 0 to 81%
+on first contact.
+
+## What still fails, and why
+
+- **A company named after a common word** is invisible to the frequency rule,
+  because the stoplist that stops "Since" and "Please" also stops it. A label
+  or an About heading still finds it; repetition alone will not.
+- **A wrapper that repeats the intermediary's name through the body** is only
+  beaten because the employer is named more often. An agency that mentions
+  itself more than its client would win, and nothing here prevents that.
+- **`The Daily Grind, Shoreditch`** still keeps its comma clause. Splitting on
+  commas would break `Smith, Jones & Partners`.
+- **Non-Latin scripts** get low-confidence positional guesses and nothing else.
+  The stoplist, job nouns and city list are all Latin-script vocabulary.
+- **A posting with no wrapper, no labels, no About heading and a company named
+  once** has no evidence to work with, and will return null rather than guess.
+
+## Regression
+
+10/10 inviolable · 48/48 paste · 13/13 drag · 8/8 touch · 15/15 animation ·
+8/8 reorder sync · 7/7 realtime · 133/133 parser assertions across 35 fixtures.
+
+Latency 6.1ms for a 5,000-word posting, 17.4ms at the 50,000-character cap —
+still inside the instant tier despite the parser roughly doubling in size.

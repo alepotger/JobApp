@@ -940,61 +940,132 @@ textarea{resize:vertical}
  * against the fixtures, so everything between them must stay plain ES2015+
  * with no JSX and no reference to anything outside the block.
  *
- * The contract that matters: parseJobDescription NEVER throws. Malformed,
- * empty, enormous or non-Latin input returns nulls. A parser that can break
- * the page is worse than no parser, because the paste box is reached from the
- * header of a working app.
+ * ARCHITECTURE: candidates and evidence, not first match.
+ *
+ * The first version returned the first rule that fired, with the strong rules
+ * scoped to a six-line window at the top of the document. That works on a
+ * posting that begins at line 1 and fails completely on one that does not —
+ * a university portal or an agency wraps the employer's text in ten lines of
+ * its own, and the strong rules never even ran. The weak positional fallback
+ * was the only rule left standing, so "Job or Opportunity details" became the
+ * job title.
+ *
+ * Now every applicable rule proposes a candidate with a score, over the whole
+ * document, and the highest total wins. Nothing short-circuits. A value
+ * proposed by several independent rules beats one proposed by a single weak
+ * rule, which is the mechanism that makes wrapper text lose: an employer is
+ * named by its About heading, by a founding sentence, and forty times in the
+ * body; a portal is named once, at the top, by position alone.
+ *
+ * parseJobDescription NEVER throws. Malformed, empty, enormous or non-Latin
+ * input returns nulls. A parser that can break the page is worse than no
+ * parser, because the paste box is reached from the header of a working app.
  */
 
 /* Someone will paste an entire careers page. 50,000 characters is roughly
    8,000 words — several times the longest real posting — and is truncated
-   rather than refused, because the top of a paste is where the company, role
-   and location live. Refusing would throw away a parse about to succeed. */
+   rather than refused, because the top of a paste is where the labelled
+   fields live. */
 const PJ_LIMIT = 50000;
 
-/* Page furniture, matched against a whole trimmed line. This list is the
-   single biggest lever on accuracy: a LinkedIn or Greenhouse paste carries
-   more chrome than posting, and every line of chrome is a chance for a
-   structural rule to grab the wrong thing. English and Italian. */
-const PJ_NOISE = [
-  /^(skip|jump) to\b/i,
-  /^(sign|log) ?(in|up|out)\b/i,
-  /^(join now|get started|create account|new to \w+)\b/i,
-  /^(accedi|registrati|esci|iscriviti)\b/i,
-  /^(share|save|report|print|flag|follow)( this)?( job| post| posting| offer| company)?$/i,
-  /^(condividi|salva|segnala|segui)( questo)?( annuncio| lavoro| offerta)?$/i,
-  /^(apply|apply now|easy apply|quick apply|apply for this job|apply on \w+|submit application|submit your application)$/i,
-  /^(candidati|candidati ora|invia (la tua )?candidatura|candidatura rapida)$/i,
-  /^(back to|return to|view all|see all|browse|more jobs|similar jobs)\b/i,
-  /^(torna a|vedi tutt|altre offerte|annunci simili)/i,
-  /^(home|jobs|careers|company|companies|about|contact|search|menu|login|blog|news|press|team|products?|pricing|help|support|legal|overview)$/i,
-  /^(lavoro|lavora con noi|chi siamo|contatti|cerca|carriere)$/i,
-  /* Job-board branding pasted as a bare nav line. A company genuinely called
-     one of these still parses, because "X is hiring" and "Company:" both rank
-     above the structural rules that this protects. */
-  /^(linkedin|indeed|glassdoor|greenhouse|lever|workday|smartrecruiters|monster|reed|totaljobs|infojobs|wellfound|angellist|otta)$/i,
-  /^(cookies?|cookie policy|privacy policy|terms( of (use|service))?|accept all|manage preferences|reject all|we use cookies)\b/i,
-  /^(informativa|preferenze|accetta tutt|rifiuta tutt|utilizziamo i cookie)/i,
-  /^(powered by|posted by|posted on|posted|published|first posted|date posted)\b/i,
-  /^(pubblicato|data di pubblicazione)\b/i,
-  /^\d+\+? (applicants?|candidati|people clicked apply)\b/i,
-  /^(be (among|an early)|your profile|see who|see how you compare|show (more|less)|read more|mostra (altro|meno))\b/i,
-  /^(seniority level|employment type|job function|industries|livello di esperienza|tipo di impiego|settori)$/i,
-  /^\d+ (second|minute|hour|day|week|month)s? ago\b/i,
-  /^\d+ (second|minut|or|giorn|settiman|mes)\w* fa\b/i,
-  /^(attach|dropbox|google drive|enter manually|autofill with|resume\/cv|cover letter|linkedin profile|website|portfolio)\b/i,
-  /^(required|optional|\*|—|–|-{2,}|_{2,}|={2,})$/,
-  /^(equal opportunity|we are an equal|all qualified applicants|regardless of race|without regard to)\b/i,
-  /^(siamo un datore di lavoro|indipendentemente da)/i,
-  /* Section headings. Without these, "About the job" becomes the company via
-     the join/about rule and "The role" becomes the role by position. */
-  /^(about (the|this|our) (job|role|position|company|team)|about us|job description|role description|the role|the opportunity|responsibilities|key responsibilities|requirements|what you'?ll do|what you'?ll bring|what we offer|who you are|qualifications|benefits|perks|how to apply)\b/i,
-  /^(descrizione|il ruolo|la posizione|responsabilit[àa]|requisiti|cosa offriamo|competenze|profilo|come candidarsi)\b/i,
-];
+/* Rule strengths. Named rather than sprinkled, because the whole behaviour of
+   the parser is in the relative size of these numbers and they should be
+   arguable in one place. */
+const PJ_W = {
+  label: 100,          // "Company:" — the author said so outright
+  aboutHeading: 70,    // "About Novabook" as a section heading
+  isHiring: 65,        // "<X> is hiring", "<X> is looking for"
+  hiringFor: 65,       // "we're hiring <X>"
+  titleLine: 55,       // a short title-case line carrying a job noun
+  founded: 50,         // "<X> was founded", "we started <X>"
+  isA: 45,             // "<X> is a company that…"
+  joinAt: 32,          // "Join <X>", "at <X>"
+  freqMax: 60,         // repetition, scaled by count
+  position: 12,        // first/second line — the weakest evidence there is
+  corroborate: 25,     // per additional independent rule agreeing
+  suffix: 15,          // a legal form on the end corroborates a name
+};
 
-/* Cities worth recognising: UK, Italy, and the European hubs this user's
-   applications actually reach. Left side is matched case- and accent-
-   insensitively; right side is what gets written into the row. */
+/* Score thresholds for the three confidence bands, and the floor below which
+   a field is reported as not found. */
+const PJ_CONF = { high: 90, medium: 45, low: 12 };
+
+/* Word ceilings. A company name longer than six words, or a job title longer
+   than eight, is a sentence fragment that a rule mis-sliced. */
+const PJ_CEIL = { company: 6, role: 8 };
+
+/* Words that can never, alone, be a name. Sentence-initial capitalisation
+   makes almost any word look like a proper noun, so this list is what stops
+   the frequency rule proposing "Since" or "Please" — and what stops a
+   candidate made entirely of posting vocabulary ("Full-time, permanent")
+   surviving the rejection pass. English and Italian. */
+const PJ_STOPSET = (function () {
+  const words = (
+    "a about above across after all also am an and any are as at be because been before being " +
+    "below between both but by can cannot could did do does doing down during each either else " +
+    "every few for from further had has have having he her here hers him his how however i if in " +
+    "into is it its itself just may me might more most must my no nor not of off on once only or " +
+    "other our ours out over own per please same she should since so some such than that the " +
+    "their theirs them then there these they this those through to too under until up us very was " +
+    "we were what when where which while who whom why will with within without would you your " +
+    "yours " +
+    "job jobs role roles position positions title titles vacancy vacancies opportunity " +
+    "opportunities details detail description descriptions overview summary apply applying " +
+    "application applications candidate candidates employer employers company companies " +
+    "organisation organization team teams department departments division sector industry " +
+    "salary compensation pay package benefits perks location locations office offices remote " +
+    "hybrid onsite start date dates employment contract permanent temporary full part time hours " +
+    "shift experience requirements responsibilities qualifications skills education visa " +
+    "sponsorship closing deadline reports reporting manager duties working work works worked " +
+    "series stage seed founded founder founders people person year years month months week weeks " +
+    "day days new senior junior lead head chief group client clients customer customers " +
+    "service services careers career recruitment agency portal register upload cv resume " +
+    "engineering sales marketing finance operations product design legal people data " +
+    "research support technology technical commercial corporate general administration " +
+    "ingegneria vendite finanza operazioni prodotto progettazione amministrazione " +
+    "interview sponsored save share report back search results redirected sign log now " +
+    "january february march april may june july august september october november december " +
+    "monday tuesday wednesday thursday friday saturday sunday " +
+    "il lo la i gli le un uno una di da del dello della dei degli delle in con su per tra fra e o " +
+    "ma se non che chi cosa come dove quando perche sono e essere stato stata stati siamo siete " +
+    "hanno ha ho hai questo questa questi queste nostro nostra nostri nostre tuo tua vostro loro " +
+    "lavoro lavori posizione posizioni ruolo ruoli offerta offerte annuncio annunci dettagli " +
+    "descrizione azienda aziende societa sede sedi stipendio retribuzione contratto tempo " +
+    "indeterminato determinato requisiti responsabilita competenze esperienza candidatura " +
+    "candidarsi candidati servizio placement universita agenzia informazioni cerchiamo cerca " +
+    "stiamo alla ricerca inserire team gennaio febbraio marzo aprile maggio giugno luglio " +
+    "agosto settembre ottobre novembre dicembre"
+  ).split(/\s+/);
+  const set = {};
+  for (let i = 0; i < words.length; i++) set[words[i]] = true;
+  return set;
+})();
+
+/* Job-title nouns. Used three ways: to orient an unlabelled two-line header,
+   to recognise a title-case line as a role, and to decide whether a trailing
+   plural should be singularised. */
+const PJ_JOBWORDS = (
+  "analyst analista engineer engineers ingegnere developer developers sviluppatore designer " +
+  "manager responsabile director direttore associate associates assistant assistente " +
+  "consultant consultants consulente specialist specialista coordinator coordinatore advisor " +
+  "scientist researcher ricercatore intern interns internship stagista tirocinante trainee " +
+  "graduate graduates laureato officer executive lead principal chief accountant contabile " +
+  "controller auditor revisore technician tecnico writer editor recruiter architect " +
+  "administrator amministratore teacher docente solicitor lawyer avvocato paralegal banker " +
+  "trader broker actuary attuario strategist planner buyer representative agente supervisor " +
+  "apprentice apprendista barista chef cuoco waiter cameriere driver autista receptionist " +
+  "secretary segretaria nurse infermiere operative operator programmer tester architect " +
+  "clerk steward technologist statistician economist paralegal surveyor"
+).split(/\s+/);
+const PJ_JOBSET = (function () {
+  const set = {};
+  for (let i = 0; i < PJ_JOBWORDS.length; i++) set[PJ_JOBWORDS[i]] = true;
+  return set;
+})();
+const PJ_JOBRE = new RegExp("\\b(" + PJ_JOBWORDS.join("|") + ")s?\\b", "i");
+
+/* Cities: UK, Italy and the European hubs these applications reach. Left side
+   matched case- and accent-insensitively; right side is what gets written. */
 const PJ_CITIES = [
   ["london", "London"], ["manchester", "Manchester"], ["birmingham", "Birmingham"],
   ["edinburgh", "Edinburgh"], ["glasgow", "Glasgow"], ["bristol", "Bristol"],
@@ -1011,7 +1082,7 @@ const PJ_CITIES = [
   ["trieste", "Trieste"], ["bari", "Bari"], ["catania", "Catania"],
   ["palermo", "Palermo"], ["modena", "Modena"], ["parma", "Parma"],
   ["pisa", "Pisa"], ["trento", "Trento"], ["cagliari", "Cagliari"],
-  ["biella", "Biella"], ["varese", "Varese"], ["como", "Como"],
+  ["biella", "Biella"], ["varese", "Varese"], ["como", "Como"], ["alba", "Alba"],
   ["paris", "Paris"], ["berlin", "Berlin"], ["munich", "Munich"],
   ["munchen", "München"], ["frankfurt", "Frankfurt"], ["hamburg", "Hamburg"],
   ["cologne", "Cologne"], ["amsterdam", "Amsterdam"], ["rotterdam", "Rotterdam"],
@@ -1028,17 +1099,15 @@ const PJ_CITIES = [
   ["riga", "Riga"], ["vilnius", "Vilnius"], ["new york", "New York"],
   ["san francisco", "San Francisco"], ["singapore", "Singapore"],
   ["hong kong", "Hong Kong"], ["dubai", "Dubai"], ["sydney", "Sydney"],
-  ["toronto", "Toronto"], ["zug", "Zug"],
+  ["toronto", "Toronto"], ["zug", "Zug"], ["victoria", "Victoria"],
 ];
 
-/* Words that mark a line as a job title rather than a company name. Used only
-   to decide which way round an unlabelled two-line header runs — some
-   postings lead with the role, some with the employer, and getting it
-   backwards writes both fields wrong at once. */
-const PJ_ROLEWORD = /\b(analyst|analista|engineer|ingegner\w*|developer|sviluppator\w*|designer|manager|responsabile|director|direttor\w*|associate|assistant|assistente|consultant|consulente|specialist|specialista|coordinator|coordinatore|advisor|scientist|researcher|ricercator\w*|intern|internship|stage|stagista|tirocin\w*|trainee|graduate|officer|executive|lead|principal|head of|chief|accountant|contabile|controller|auditor|revisore|technician|tecnico|writer|editor|recruiter|architect|administrator|amministrat\w*|teacher|docente|solicitor|lawyer|avvocato|paralegal|banker|trader|broker|actuary|attuario|strategist|planner|buyer|representative|agente|supervisor|apprentice|apprendista|barista|chef|cuoco|waiter|cameriere|driver|autista|receptionist|secretary|segretari\w*|nurse|infermier\w*|junior|senior|apprenticeship|wanted|cercasi)\b/i;
+/* Trailing country and region words, dropped from a labelled location so
+   "London, UK" reads as "London" while "Victoria, London" keeps both parts. */
+const PJ_COUNTRY = /^(uk|u\.k\.|united kingdom|england|scotland|wales|northern ireland|ireland|italy|italia|germany|deutschland|france|francia|spain|espana|españa|spagna|portugal|netherlands|holland|belgium|belgio|switzerland|svizzera|austria|poland|polska|czechia|sweden|norway|denmark|finland|greece|romania|bulgaria|hungary|luxembourg|europe|europa|eu|emea|usa|u\.s\.a\.|us|united states|canada|uae|australia)$/i;
 
-/* Legal-form suffixes stripped before two company names are compared. Used by
-   the duplicate check only — the row keeps whatever the posting called it. */
+/* Legal forms, stripped when two company names are compared and used as
+   corroboration when one appears on the end of a candidate. */
 const PJ_SUFFIX = [
   "ltd", "limited", "inc", "incorporated", "llc", "llp", "lp", "plc", "corp",
   "corporation", "co", "company", "gmbh", "mbh", "ag", "kg", "ug", "sa", "sas",
@@ -1047,7 +1116,6 @@ const PJ_SUFFIX = [
   "holding", "international", "global",
 ];
 
-/* Addresses that are never a human you can write to. */
 const PJ_BAD_MAIL = [
   /^(no-?reply|do-?not-?reply|donotreply)/i,
   /^(unsubscribe|bounce|mailer-daemon|postmaster|abuse|webmaster|admin|root)@/i,
@@ -1055,6 +1123,86 @@ const PJ_BAD_MAIL = [
   /\.(png|jpe?g|gif|svg|webp|css|js)$/i,
   /^[0-9a-f]{16,}@/i,
 ];
+
+/* ---------- line classification -------------------------------------------
+   Three categories are removed outright, and the difference between two of
+   them decides whether the top of the document can be trusted.
+
+   CHROME is site furniture: navigation, buttons, cookie notices. Every source
+   has some. Its presence says nothing about whether a wrapper is in play.
+
+   WRAPPER is a third party talking: a careers service, an agency or a job
+   board addressing the applicant about the applicant, or disclaiming the
+   content below. This is the signal that the posting does not begin at line 1,
+   and it is what licenses discarding the top of the document. Matched
+   unanchored, because wrapper prose runs across line breaks. */
+
+const PJ_CHROME = [
+  /^(skip|jump) to\b/i,
+  /^(sign|log) ?(in|up|out)\b/i,
+  /^(join now|get started|create account|new to \w+)\b/i,
+  /^(accedi|registrati|esci|iscriviti)\b/i,
+  /^(share|save|report|print|flag|follow)( this)?( job| post| posting| offer| company)?$/i,
+  /^(condividi|salva|segnala|segui)( questo)?( annuncio| lavoro| offerta)?$/i,
+  /^(apply|apply now|easy apply|quick apply|apply for this job|apply on \w+|submit application|submit your application)$/i,
+  /^(candidati|candidati ora|invia (la tua )?candidatura|candidatura rapida)$/i,
+  /^(back to|return to|view all|see all|browse|more jobs|similar jobs)\b/i,
+  /^(torna a|torna ai|vedi tutt|altre offerte|annunci simili)/i,
+  /^(home|jobs|careers|company|companies|about|contact|search|menu|login|blog|news|press|team|products?|pricing|help|support|legal|overview|sponsored|promoted|featured)$/i,
+  /^(lavoro|lavora con noi|contatti|cerca|carriere|in evidenza)$/i,
+  /^(linkedin|indeed|glassdoor|greenhouse|lever|workday|smartrecruiters|monster|reed|totaljobs|infojobs|wellfound|angellist|otta)$/i,
+  /^(cookies?|cookie policy|privacy policy|terms( of (use|service))?|accept all|manage preferences|reject all|we use cookies)\b/i,
+  /^(informativa|preferenze|accetta tutt|rifiuta tutt|utilizziamo i cookie)/i,
+  /^(powered by|posted by|posted on|posted|published|first posted|date posted)\b/i,
+  /^(pubblicato|data di pubblicazione)\b/i,
+  /^\d+\+? (applicants?|candidati|people clicked apply)\b/i,
+  /^(be (among|an early)|your profile|see who|see how you compare|show (more|less)|read more|mostra (altro|meno))\b/i,
+  /^(seniority level|employment type|job function|industries|livello di esperienza|tipo di impiego|settori)$/i,
+  /^\d+ (second|minute|hour|day|week|month)s? ago\b/i,
+  /^\d+ (second|minut|or|giorn|settiman|mes)\w* fa\b/i,
+  /^(attach|dropbox|google drive|enter manually|autofill with|resume\/cv|cover letter|linkedin profile|website|portfolio)\b/i,
+  /^(required|optional|\*|—|–|-{2,}|_{2,}|={2,})$/,
+  /^(equal opportunity|we are an equal|all qualified applicants|regardless of race|without regard to)\b/i,
+  /^(siamo un datore di lavoro|indipendentemente da)/i,
+];
+
+const PJ_WRAPPER = [
+  /* Second-person advice about the act of applying. A posting tells you what
+     the job is; a wrapper tells you what you must do about the wrapper. */
+  /\b(it is your responsibility|we recommend that you|we advise you to|please ensure that you|you are advised|before applying,? you should|make sure you have read|please read our guidance)\b/i,
+  /\b(e tua responsabilita|è tua responsabilità|ti consigliamo di|ti invitiamo a|assicurati di|prima di candidarti)\b/i,
+  /* The intermediary describing itself rather than the employer. */
+  /\b(careers service|careers centre|careers team|university careers|placement (service|office|team)|recruitment agency|employment agency|acts as an (employment )?agency|acts as a recruitment|our consultants|register with us|upload your cv|cv check|mock interview|psychometric test|how did you find out about|specialist recruiters)\b/i,
+  /\b(servizio placement|ufficio placement|agenzia per il lavoro|agenzia di reclutamento|carica il tuo cv|registrati con noi|i nostri consulenti)\b/i,
+  /* Disclaimers about the content below. */
+  /\b(in good faith|may already have been filled|cannot take responsibility|takes no responsibility|not responsible for the content|no liability for)\b/i,
+  /\b(in buona fede|gia stata ricoperta|già stata ricoperta|non si assume alcuna responsabilita|non si assume alcuna responsabilità|declina ogni responsabilita|declina ogni responsabilità)\b/i,
+  /* Handover to the real application. */
+  /\b(you will be redirected|redirected to the employer|complete your application on)\b/i,
+];
+
+/* Section headings. Never a candidate in their own right, but they are the
+   clearest signal that the posting proper has started, and "About <X>" is the
+   second-strongest company rule there is. */
+const PJ_HEADING = /^(about\b.{0,40}|job (description|details|or opportunity details)|role description|position details|the (role|opportunity|company|team|job)|our client|what you'?ll (do|be doing|bring)|what we offer|who you are|responsibilities|key responsibilities|requirements|qualifications|benefits|perks|how to apply|why .{2,30}|full job description|informazioni.{0,30}|descrizione.{0,30}|il ruolo|la posizione|chi siamo|chi e .{2,40}|chi è .{2,40}|cosa farai|cosa offriamo|requisiti|responsabilita|responsabilità|come candidarsi|profilo)$/i;
+
+/* A labelled non-name field. Never a candidate by position, and its presence
+   marks the start of the structured part of a posting. */
+const PJ_FIELDLINE = /^(?:salary|compensation|pay|package|contract|contract type|employment type|job type|grade|band|hours|closing date|deadline|start date|department|division|reference|ref|req|job id|apply by|type|category|industry|function|experience|education|languages?|visa|sponsorship|reports to|contact|email|e-mail|telephone|phone|location|based in|office|work location|place of work|city|company|employer|organisation|organization|role|position|job title|title|vacancy|stipendio|retribuzione|ral|contratto|tipo di contratto|scadenza|data di inizio|dipartimento|settore|orario|livello|esperienza|contatto|telefono|sede|luogo|localita|località|sede di lavoro|citta|città|azienda|societa|società|ruolo|posizione|mansione|qualifica)\s*[:\-–—]\s/i;
+
+/* Meta-language: the document describing itself. Never a company, never a
+   role. This single rejection would have prevented the diagnostic failure. */
+const PJ_META = /^(job|role|position|opportunity|vacancy|posting)?\s*(description|details|overview|summary|specification|spec|profile)$|^(job or opportunity details|about this (role|job|position)|about (us|the (role|job|company|team)))$|^(descrizione|dettagli|informazioni|panoramica)(\s|$)/i;
+
+/* Pronouns and placeholders the sentence rules will happily capture:
+   "We are looking for…" yields "We", a recruiter's "Our client, a leading
+   asset manager…" yields the whole apposition. Neither is an employer. */
+const PJ_NOT_A_COMPANY = /^(we|us|our (client|team|customer|partner)|the (team|company|client|role|position|successful candidate|organisation)|you|they|i|this (company|role|client)|a (leading|growing|global|fast))\b/i;
+
+/* A verb phrase addressed to the reader — always wrapper or instruction. */
+const PJ_ADDRESSED = /\b(you|your|yours|please|ensure|recommend|advise|apply|register|upload|submit|contact us|read our)\b/i;
+
+/* ---------- small helpers -------------------------------------------------- */
 
 /* Accent- and case-insensitive comparison key. normalize("NFD") splits é into
    e + a combining mark, which the range then removes. */
@@ -1067,8 +1215,7 @@ function pjTidy(s) {
     .replace(/^[\s"'`([{<*·•\-–—|:]+/, "")
     .replace(/[\s"'`>*·•\-–—|,;:]+$/, "");
   /* A closing bracket is only junk when it closes nothing. Stripping it
-     unconditionally turned "Alba (CN)" into "Alba (CN", which is worse than
-     leaving the bracket alone. */
+     unconditionally turned "Alba (CN)" into "Alba (CN". */
   while (/[)\]}]$/.test(v)) {
     const open = (v.match(/[([{]/g) || []).length;
     const close = (v.match(/[)\]}]/g) || []).length;
@@ -1076,237 +1223,542 @@ function pjTidy(s) {
     v = v.slice(0, -1).replace(/[\s,;:]+$/, "");
   }
   /* Strip a trailing full stop, but not the one closing an initialism —
-     "S.p.A." must survive intact while "Based in Leeds." loses its stop. */
+     "S.p.A." survives intact while "Based in Leeds." loses its stop. */
   if (/\.$/.test(v) && !/\b[A-Z]\.$/.test(v)) v = v.replace(/\.+$/, "").trim();
   return v;
 }
 
-/* Pronouns and placeholders that the sentence rules will happily capture:
-   "We are looking for…" yields "We", and a recruiter's "Our client, a leading
-   asset manager, is seeking…" yields the whole apposition. Neither is an
-   employer, and writing one into the row is worse than leaving it blank —
-   the review step can show "not found", but it cannot know that "We" is
-   wrong. */
-const PJ_NOT_A_COMPANY = /^(we|us|our (client|team|customer|partner)|the (team|company|client|role|position|successful candidate)|you|they|i|this (company|role|client)|a (leading|growing|global|fast))\b/i;
-
 /* Postings separate a headline's parts with pipes, bullets and dashes:
-   "Bloomberg · London, United Kingdom", "Analyst | Full-time". Only the first
-   part is the name. */
+   "Bloomberg · London, United Kingdom". Only the first part is the name. */
 function pjChunk(s) {
   return pjTidy(String(s).split(/\s*[·•|]\s*|\s+[—–]\s+/)[0]);
 }
 
-/* A candidate has to look like a name, not a sentence or a clause. This is
-   what stops the structural rules writing a paragraph into the company field
-   when a posting opens with prose. */
 function pjPlausible(value, maxLen) {
   const v = pjTidy(value);
   if (v.length < 2 || v.length > (maxLen || 80)) return null;
   if (!/[A-Za-zÀ-ÿ]/.test(v)) return null;
   if (/[.!?]\s+\S/.test(v)) return null;          // more than one sentence
-  if (v.split(" ").length > 10) return null;      // a clause, not a name
   return v;
 }
 
-/* Company names start with a capital (or a digit — 3M, 23andMe). Guessing
-   rules that capture mid-sentence text produce "a team of twelve analysts";
-   this is what rejects it. Deliberately not applied to labelled values, where
-   the user's own posting said what the company was. */
-function pjNamey(v) {
-  if (PJ_NOT_A_COMPANY.test(String(v))) return false;
-  return /^[A-Z0-9ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝ]/.test(String(v));
+function pjWords(v) {
+  return String(v).split(/\s+/).filter(Boolean);
 }
 
-function pjNoise(line) {
-  /* Long lines are prose, and prose is content. Only short lines are tested
-     against the furniture list, so a body paragraph opening with "About" is
-     not thrown away. */
-  if (line.length > 160) return false;
-  for (let i = 0; i < PJ_NOISE.length; i++) if (PJ_NOISE[i].test(line)) return true;
-  /* A bare URL or bare email on its own line is a link, not a heading, and
-     must not become the role by position. Both are still harvested from the
-     raw text by their own rules. */
-  if (/^https?:\/\/\S+$/i.test(line)) return true;
-  if (/^\S+@\S+\.\S+$/.test(line)) return true;
+/* Does this string contain a token that is a proper noun rather than posting
+   vocabulary? "Full-time, permanent" does not; "Marchmont Foods" does. */
+function pjHasProperNoun(v, field) {
+  const toks = String(v).split(/[^A-Za-zÀ-ÿ0-9&']+/).filter(Boolean);
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (!/^[A-ZÀ-Þ0-9]/.test(t)) continue;
+    if (PJ_STOPSET[pjFold(t)]) continue;
+    /* A job noun is not a proper noun for a COMPANY — "Barista wanted" names
+       no employer. For a role it is the entire point, so this exclusion runs
+       one way only. Applying it to both rejected every job title there is. */
+    if (field === "company" && PJ_JOBSET[pjFold(t)]) continue;
+    return true;
+  }
   return false;
 }
 
-function pjLines(src) {
-  const raw = src.replace(/\r\n?/g, "\n").split("\n");
-  const kept = [];
-  for (let i = 0; i < raw.length; i++) {
-    const t = pjTidy(raw[i].replace(/\s+/g, " "));
-    if (!t) continue;
-    if (pjNoise(t)) continue;
-    kept.push(t);
-  }
-  return kept;
-}
-
-function pjHit(value, confidence, matchedBy, maxLen) {
-  const v = pjPlausible(value, maxLen);
-  return v ? { value: v, confidence: confidence, matchedBy: matchedBy } : null;
-}
-
-/* ---- field rules -------------------------------------------------------- */
-
-const PJ_LABEL = {
-  company: /^(?:company|employer|organisation|organization|hiring company|azienda|societ[àa]|datore di lavoro|impresa)\s*[:\-–—]\s*(.+)$/i,
-  role: /^(?:role|position|job title|title|vacancy|posizione|ruolo|mansione|qualifica)\s*[:\-–—]\s*(.+)$/i,
-  location: /^(?:location|based in|office|work location|place of work|city|sede|luogo|localit[àa]|sede di lavoro|citt[àa])\s*[:\-–—]\s*(.+)$/i,
-};
-
-function pjLabelled(lines, field) {
-  const re = PJ_LABEL[field];
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(re);
-    if (m) {
-      const hit = pjHit(m[1], "high", "label", field === "role" ? 90 : 70);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
-
-/* "Salary: competitive", "Closing date: 12 September" — a labelled field is
-   never the name of anything, so it must not be picked up by position. */
-const PJ_FIELDLINE = /^(?:salary|compensation|pay|contract|contract type|grade|band|hours|closing date|deadline|start date|department|division|team|reference|ref|req|job id|apply by|type|category|industry|function|experience|education|languages?|visa|contact|email|e-mail|telephone|phone|stipendio|retribuzione|contratto|scadenza|dipartimento|settore|orario|livello|esperienza|contatto|telefono)\s*[:\-–—]\s/i;
-
-/* Is this string nothing but a place? "Manchester, UK" is — and a posting
-   that opens with its location would otherwise hand that line to the company
-   field. "University of Edinburgh" is not, even though a city is inside it,
-   which is why this subtracts the city and asks what is left rather than
-   just testing whether a city appears. */
-function pjOnlyPlace(v) {
-  const cities = pjCityIn(v);
-  if (!cities.length) return false;
-  let rest = pjFold(v);
-  for (let i = 0; i < cities.length; i++) rest = rest.split(pjFold(cities[i])).join(" ");
-  rest = rest.replace(
-    /\b(uk|united kingdom|england|scotland|wales|ireland|italy|italia|germany|deutschland|france|francia|spain|espana|spagna|netherlands|belgium|belgio|switzerland|svizzera|austria|portugal|poland|sweden|norway|denmark|finland|greece|europe|europa|eu|usa|us|united states|canada|remote|hybrid|ibrido|onsite|area|region|regione|metropolitan|greater|city of|provincia|prov|and|or|e|o)\b/g, " "
-  );
-  rest = rest.replace(/[^a-z0-9]+/g, " ").trim();
-  return rest.length === 0;
-}
-
-/* Which way round is the unlabelled header? Decided once and shared, so role
-   and company can never disagree about it. Lines that are labelled fields or
-   bare locations are stepped over rather than counted, so a posting that
-   opens with "Manchester, UK" still yields the two lines that carry names. */
-function pjPair(lines) {
-  const cand = [];
-  for (let i = 0; i < lines.length && cand.length < 2; i++) {
-    if (PJ_FIELDLINE.test(lines[i])) continue;
-    if (PJ_LABEL.company.test(lines[i]) || PJ_LABEL.role.test(lines[i]) ||
-        PJ_LABEL.location.test(lines[i])) continue;
-    const c = pjChunk(lines[i]);
-    if (!c || pjOnlyPlace(c)) continue;
-    cand.push(c);
-  }
-  const a = cand[0] || "";
-  const b = cand[1] || "";
-  if (!a) return { role: "", company: "", flipped: false };
-  if (!b) return { role: a, company: "", flipped: false };
-  if (PJ_ROLEWORD.test(b) && !PJ_ROLEWORD.test(a)) {
-    return { role: b, company: a, flipped: true };
-  }
-  return { role: a, company: b, flipped: false };
-}
-
-function pjCompany(lines, pair) {
-  const labelled = pjLabelled(lines, "company");
-  if (labelled) return labelled;
-
-  const head = lines.slice(0, 6);
-
-  /* "Bloomberg is hiring", "Intesa Sanpaolo cerca" — the subject of that
-     sentence is the employer, and this pattern is almost never wrong. */
-  for (let i = 0; i < head.length; i++) {
-    const m = head[i].match(
-      /^(.{2,60}?)\s+(?:is hiring|are hiring|is looking for|are looking for|is seeking|are seeking|is recruiting|cerca|ricerca|assume)\b/i
-    );
-    if (m && pjNamey(pjTidy(m[1]))) {
-      const hit = pjHit(m[1], "high", "is-hiring", 60);
-      if (hit) return hit;
-    }
-  }
-
-  /* "Analyst at Bloomberg", "Analista presso Intesa Sanpaolo". Restricted to
-     the head: "at" is one of the commonest words in English and in body prose
-     it means nothing. */
-  for (let i = 0; i < head.length; i++) {
-    const m = head[i].match(/\s(?:at|@|presso)\s+(.{2,60})$/i);
-    if (m) {
-      const cut = pjChunk(m[1].split(/\s+(?:in|located|based|for)\s+/i)[0]);
-      if (pjNamey(cut)) {
-        const hit = pjHit(cut, "medium", "at-construction", 60);
-        if (hit) return hit;
-      }
-    }
-  }
-
-  /* "Join Bloomberg", "About Bloomberg", "Lavora con Intesa". */
-  for (let i = 0; i < head.length; i++) {
-    const m = head[i].match(/^(?:join|about|welcome to|work at|unisciti a|lavora (?:con|in))\s+(.{2,60})$/i);
-    if (m && pjNamey(pjTidy(m[1]))) {
-      const hit = pjHit(m[1], "medium", "join-about", 60);
-      if (hit) return hit;
-    }
-  }
-
-  if (pair.company && pjNamey(pair.company)) {
-    const hit = pjHit(pair.company, "low", pair.flipped ? "first-line" : "second-line", 60);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 /* "Research Assistant (Ref: RA-2291)" is a job title with an applicant
-   tracking number stapled to it. The number is real and belongs to the
-   posting, but nobody types it into a tracker as part of the role. */
+   tracking number stapled to it. */
 function pjDeRef(s) {
   return pjTidy(String(s).replace(
     /\s*[([]\s*(?:ref|req|reference|requisition|id|job\s?id|vacancy|posting|codice|rif)\b[^)\]]*[)\]]\s*$/i, ""
   ));
 }
 
-function pjRole(lines, pair) {
-  const labelled = pjLabelled(lines, "role");
-  if (labelled) return { value: pjDeRef(labelled.value), confidence: "high", matchedBy: "label" };
+/* Postings advertise several openings of one title: "We're hiring Startup
+   Operations Graduates". The tracker holds one application, so the row wants
+   the singular. Only the final word is touched, and only when its singular is
+   a recognised job noun — so "Head of Operations" is left alone. */
+function pjSingular(s) {
+  const parts = pjWords(s);
+  if (!parts.length) return s;
+  const last = parts[parts.length - 1];
+  if (!/[a-z]s$/.test(last)) return s;
+  const sing = /ies$/i.test(last) ? last.replace(/ies$/i, "y") : last.replace(/s$/, "");
+  if (PJ_JOBSET[pjFold(sing)]) {
+    parts[parts.length - 1] = sing;
+    return parts.join(" ");
+  }
+  return s;
+}
 
-  const head = lines.slice(0, 6);
+function pjLineKind(text) {
+  for (let i = 0; i < PJ_CHROME.length; i++) if (PJ_CHROME[i].test(text)) return "chrome";
+  for (let i = 0; i < PJ_WRAPPER.length; i++) if (PJ_WRAPPER[i].test(text)) return "wrapper";
+  /* A bare URL or bare email on its own line is a link, not a heading, and
+     must not become the role by position. Both are still harvested from the
+     raw text by their own rules. */
+  if (/^https?:\/\/\S+$/i.test(text)) return "chrome";
+  if (/^\S+@\S+\.\S+$/.test(text)) return "chrome";
+  if (PJ_HEADING.test(text)) return "heading";
+  if (PJ_FIELDLINE.test(text)) return "field";
+  return "content";
+}
 
-  /* "... is hiring a Senior Analyst", "Cerchiamo un Analista".
-     The capture stops at sentence punctuation rather than at end-of-line.
-     Anchoring it to $ only worked when the role happened to be the last
-     thing on the line, which silently lost every posting that announces the
-     role mid-paragraph — the commonest shape in prose-heavy descriptions. */
-  for (let i = 0; i < head.length; i++) {
-    const m = head[i].match(
-      /(?:is hiring|are hiring|is looking for|are looking for|is seeking|are seeking|we seek|cerchiamo|ricerchiamo|selezioniamo|stiamo cercando|cerca|ricerca|assume)\s+(?:an?|the|un[ao']?|il|la|lo)?\s*([^.,;:!?()\n]{2,70})/i
-    );
-    if (m) {
-      const cut = m[1].split(/\s+(?:to \w+|in our|at our|for our|da inserire|da assumere|per |presso )/i)[0];
-      const hit = pjHit(pjChunk(cut), "medium", "hiring-for", 90);
-      if (hit) return hit;
+/* ---------- pass 1: classify lines, then find where the posting starts ----- */
+
+function pjScan(src) {
+  const raw = src.replace(/\r\n?/g, "\n").split("\n");
+  const lines = [];
+  let wrapperHits = 0;
+  let breadcrumb = null;
+
+  for (let i = 0; i < raw.length; i++) {
+    const t = pjTidy(raw[i].replace(/\s+/g, " "));
+    if (!t) continue;
+    /* Long lines are prose, and prose is content — except for wrapper prose,
+       which is long by nature and is tested for regardless of length. */
+    let kind = "content";
+    let wrapped = false;
+    for (let k = 0; k < PJ_WRAPPER.length; k++) {
+      if (PJ_WRAPPER[k].test(t)) { wrapped = true; break; }
+    }
+    if (wrapped) { wrapperHits++; continue; }
+    if (t.length <= 160) {
+      kind = pjLineKind(t);
+      if (kind === "chrome") {
+        /* Chrome, but chrome that names the employer on its way past. */
+        const c = t.match(/^back to\s+(.{2,40}?)(?:'s)?\s+(?:jobs|openings|careers|roles)$/i);
+        if (c && !breadcrumb) breadcrumb = pjTidy(c[1]);
+        continue;
+      }
+    } else if (PJ_FIELDLINE.test(t)) {
+      kind = "field";
+    }
+    lines.push({ text: t, kind: kind });
+  }
+
+  /* Where does the posting actually begin? The earliest structural signal:
+     a labelled field block, a section heading, or a hiring construction. */
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.kind === "field" || l.kind === "heading" ||
+        /\b(we are hiring|we're hiring|we are looking for|we're looking for|we are seeking|join our team|stiamo cercando|siamo alla ricerca|cerchiamo)\b/i.test(l.text)) {
+      start = i;
+      break;
     }
   }
 
-  /* "Analyst at Bloomberg" — everything before the preposition. */
-  for (let i = 0; i < Math.min(2, head.length); i++) {
-    const m = head[i].match(/^(.{2,70}?)\s+(?:at|@|presso)\s+\S/i);
-    if (m) {
-      const hit = pjHit(m[1], "medium", "at-construction", 90);
-      if (hit) return hit;
-    }
-  }
+  /* Discarding the top of a document is dangerous: on an ordinary posting the
+     role and company ARE the first two lines, and a section heading three
+     lines down would throw them away. So the preamble is only distrusted when
+     it actually looks like a wrapper — a third party was talking, or there is
+     simply too much above the first structural signal for it to be a headline.
+     Otherwise the whole document is body and position is honoured. */
+  const bodyStart = start > 0 && (wrapperHits >= 1 || start > 6) ? start : 0;
 
-  if (pair.role) {
-    const hit = pjHit(pjDeRef(pair.role), "low", pair.flipped ? "second-line" : "first-line", 90);
-    if (hit) return hit;
+  return { lines: lines, bodyStart: bodyStart, wrapperHits: wrapperHits, breadcrumb: breadcrumb };
+}
+
+/* Consecutive content lines are one hard-wrapped paragraph, and prose rules
+   have to read them that way. Reading line by line captured "Property" from
+   "is looking for a Property / Manager to oversee" — the line break fell in
+   the middle of the job title, which is where line breaks usually fall. */
+function pjSentences(lines) {
+  const paras = [];
+  let buf = [];
+  const flush = function () { if (buf.length) { paras.push(buf.join(" ")); buf = []; } };
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].kind !== "content") { flush(); continue; }
+    const t = lines[i].text;
+    buf.push(t);
+    /* A hard-wrapped prose line runs to near the wrap width and stops
+       mid-sentence; a headline is short and complete. Joining everything
+       glued "Data Engineer at Zalando" to "Berlin" to "We are rebuilding"
+       and handed the company field "Zalando Berlin We". */
+    if (t.length < 45 || /[.!?:;]$/.test(t)) flush();
+  }
+  flush();
+
+  const out = [];
+  for (let i = 0; i < paras.length; i++) {
+    /* Split on terminal punctuation without a lookbehind, which Safari only
+       learned in 16.4 and this file has no build step to polyfill. */
+    const parts = paras[i].split(/([.!?])\s+/);
+    let cur = "";
+    for (let k = 0; k < parts.length; k++) {
+      cur += parts[k];
+      if (/^[.!?]$/.test(parts[k])) { out.push(cur.trim()); cur = ""; }
+    }
+    if (cur.trim()) out.push(cur.trim());
+  }
+  return out;
+}
+
+/* ---------- candidate machinery ------------------------------------------- */
+
+function pjAdd(list, value, score, matchedBy, maxLen) {
+  const v = pjPlausible(value, maxLen);
+  if (!v) return;
+  list.push({ value: v, score: score, matchedBy: matchedBy });
+}
+
+/* Group proposals by normalised value, sum the distinct rules that proposed
+   it, and pay a bonus per additional rule. Corroboration is the whole point:
+   one weak rule proposing wrapper text loses to three rules agreeing on a
+   name, regardless of where in the document they fired. */
+function pjMerge(list) {
+  const by = {};
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    const key = pjFold(c.value).replace(/[^a-z0-9]+/g, " ").trim();
+    if (!key) continue;
+    if (!by[key]) by[key] = { rules: {}, best: { score: -1, value: c.value } };
+    const g = by[key];
+    if (!g.rules[c.matchedBy] || g.rules[c.matchedBy] < c.score) g.rules[c.matchedBy] = c.score;
+    if (c.score > g.best.score) g.best = { score: c.score, value: c.value };
+  }
+  const out = [];
+  for (const key in by) {
+    if (!Object.prototype.hasOwnProperty.call(by, key)) continue;
+    const g = by[key];
+    const names = Object.keys(g.rules);
+    let sum = 0, top = -1, topRule = names[0];
+    for (let i = 0; i < names.length; i++) {
+      sum += g.rules[names[i]];
+      if (g.rules[names[i]] > top) { top = g.rules[names[i]]; topRule = names[i]; }
+    }
+    out.push({
+      value: g.best.value,
+      score: sum + PJ_W.corroborate * (names.length - 1),
+      matchedBy: names.length > 1 ? topRule + "+" + (names.length - 1) : topRule,
+      rules: names,
+      distinct: names.length,
+    });
+  }
+  return out;
+}
+
+/* Hard rejections and penalties. Applied after merging so a value cannot be
+   rescued by being proposed twice — meta-language stays rejected however many
+   rules liked it. */
+function pjJudge(cands, field) {
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i];
+    const v = c.value;
+    let penalty = 0;
+    let rejected = false;
+
+    if (PJ_META.test(v)) rejected = true;
+    if (PJ_ADDRESSED.test(v)) rejected = true;
+    if (field === "company" && PJ_NOT_A_COMPANY.test(v)) rejected = true;
+    if (field === "company" && pjOnlyPlace(v)) rejected = true;
+    if (!pjHasProperNoun(v, field)) rejected = true;
+
+    const n = pjWords(v).length;
+    const ceiling = PJ_CEIL[field] || 8;
+    if (n > ceiling) penalty += 30 * (n - ceiling);
+
+    /* A candidate that is only job-title vocabulary is a role, not an
+       employer, and vice versa is not true — plenty of companies are named
+       after a person. So this penalty runs one way only. */
+    if (field === "company" && PJ_JOBRE.test(v) && !/[A-ZÀ-Þ]/.test(v.replace(PJ_JOBRE, ""))) {
+      penalty += 40;
+    }
+
+    /* A legal form on the end is corroboration that this is a company name. */
+    if (field === "company") {
+      const last = pjFold(pjWords(v)[pjWords(v).length - 1] || "").replace(/[^a-z]/g, "");
+      if (PJ_SUFFIX.indexOf(last) !== -1) c.score += PJ_W.suffix;
+    }
+
+    c.penalty = penalty;
+    c.rejected = rejected;
+    c.score = rejected ? -1 : c.score - penalty;
+  }
+  cands.sort(function (a, b) { return b.score - a.score; });
+  return cands;
+}
+
+/* Confidence has to mean something, because it decides what the review step
+   emphasises. And a low-confidence guess that scraped past a penalty is worse
+   than nothing: an empty field gets filled in, a plausible wrong one gets
+   skimmed and accepted. */
+function pjPick(cands, field) {
+  const judged = pjJudge(pjMerge(cands), field);
+  const live = judged.filter(function (c) { return !c.rejected && c.score >= PJ_CONF.low; });
+  const debug = judged.slice(0, 12).map(function (c) {
+    return { value: c.value, score: c.score, matchedBy: c.matchedBy,
+      rules: c.rules ? c.rules.slice() : [], rejected: !!c.rejected,
+      penalty: c.penalty || 0 };
+  });
+  if (!live.length) return { hit: null, candidates: debug };
+
+  const top = live[0];
+  let confidence;
+  if (top.rules.indexOf("label") !== -1) confidence = "high";
+  else if (top.distinct >= 2 && top.score >= PJ_CONF.high) confidence = "high";
+  else if (top.score >= PJ_CONF.medium) confidence = "medium";
+  else confidence = "low";
+
+  /* Close to a rejection threshold and weak: report nothing. */
+  if (confidence === "low" && top.penalty > 0) return { hit: null, candidates: debug };
+
+  return {
+    hit: { value: top.value, confidence: confidence, matchedBy: top.matchedBy, candidates: debug },
+    candidates: debug,
+  };
+}
+
+/* ---------- field labels --------------------------------------------------- */
+
+const PJ_LABEL = {
+  company: /^(?:company|employer|organisation|organization|hiring company|azienda|societ[àa]|datore di lavoro|impresa)\s*[:\-–—]\s*(.+)$/i,
+  role: /^(?:role|position|job title|title|vacancy|posizione|ruolo|mansione|qualifica)\s*[:\-–—]\s*(.+)$/i,
+  location: /^(?:location|based in|office|work location|place of work|city|sede|luogo|localit[àa]|sede di lavoro|citt[àa])\s*[:\-–—]\s*(.+)$/i,
+  salary: /^(?:salary|compensation|pay|package|salary range|stipendio|retribuzione|ral)\s*[:\-–—]\s*(.+)$/i,
+};
+
+function pjLabelValue(lines, field) {
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].text.match(PJ_LABEL[field]);
+    if (m) return pjTidy(m[1]);
   }
   return null;
 }
+
+/* ---------- repetition ----------------------------------------------------
+   The most transferable signal in the parser. It is language-agnostic,
+   layout-agnostic, and it survives any amount of wrapper text, because an
+   intermediary is named once or twice at the top while the employer is named
+   throughout. Counted over the BODY only, which is what makes it the
+   discriminator between the two. */
+
+function pjFrequency(bodyLines) {
+  const counts = {};
+  const spelling = {};
+
+  for (let i = 0; i < bodyLines.length; i++) {
+    const toks = bodyLines[i].text.split(/[^A-Za-zÀ-ÿ0-9&'’.\-]+/);
+    let run = [];
+    for (let k = 0; k <= toks.length; k++) {
+      const w = k < toks.length ? toks[k].replace(/[.,]+$/, "") : "";
+      const folded = pjFold(w);
+      const capped = /^[A-ZÀ-Þ]/.test(w) && w.length > 1;
+      const joiner = run.length > 0 && /^(of|and|&|de|di|del|della|the)$/i.test(w);
+      if (w && ((capped && !PJ_STOPSET[folded]) || joiner)) {
+        run.push(w);
+        if (run.length < 5) continue;
+      }
+      if (run.length) {
+        /* Trim a trailing joiner: "Farnese Digitale e" is not a name. */
+        while (run.length && /^(of|and|&|de|di|del|della|the)$/i.test(run[run.length - 1])) run.pop();
+        if (run.length) {
+          const phrase = run.join(" ");
+          const key = pjFold(phrase);
+          counts[key] = (counts[key] || 0) + 1;
+          if (!spelling[key]) spelling[key] = phrase;
+        }
+        run = [];
+      }
+    }
+  }
+
+  const out = [];
+  for (const key in counts) {
+    if (!Object.prototype.hasOwnProperty.call(counts, key)) continue;
+    const n = counts[key];
+    /* Once is noise. A name has to recur to mean anything. */
+    if (n < 2) continue;
+    const phrase = spelling[key];
+    /* A place name is not an employer, however often the posting says it. */
+    if (pjCityIn(phrase).length && pjWords(phrase).length === 1) continue;
+    out.push({ value: phrase, count: n, score: Math.min(PJ_W.freqMax, 10 * (n - 1)) });
+  }
+  out.sort(function (a, b) { return b.count - a.count; });
+  return out;
+}
+
+/* ---------- company ------------------------------------------------------- */
+
+function pjCompanyCands(lines, sentences, body, whole, breadcrumb) {
+  const cands = [];
+
+  const labelled = pjLabelValue(lines, "company");
+  if (labelled) pjAdd(cands, labelled, PJ_W.label, "label", 70);
+
+  /* "Back to Ravenwood jobs" — the breadcrumb every applicant-tracking system
+     puts above a posting. It was being discarded as navigation chrome, which
+     it is, but it names the employer while doing so. */
+  if (breadcrumb) pjAdd(cands, breadcrumb, PJ_W.joinAt, "breadcrumb", 60);
+
+  /* Rules that name a company run over the WHOLE document, not the body. An
+     agency posting puts "Marchmont Foods Ltd" in the header it wrapped, and
+     that spelling — with its legal form — is the one a person would type. */
+  /* Section headings are line-level by nature. */
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].kind !== "heading") continue;
+    const m = lines[i].text.match(/^(?:about|chi\s+[eè]|su)\s+(.{2,50})$/i);
+    if (!m) continue;
+    const v = pjTidy(m[1]);
+    if (!PJ_META.test(v) && !/^(the|this|our|us|el|la|il)\b/i.test(v)) {
+      pjAdd(cands, v, PJ_W.aboutHeading, "about-heading", 60);
+    }
+  }
+
+  /* Everything below reads sentences, so a job title or a company name split
+     across a hard line break is still one string by the time a rule sees it. */
+  for (let i = 0; i < sentences.length; i++) {
+    const text = sentences[i];
+    let m;
+
+    /* "<X> is hiring", "<X> is looking for". Deliberately NOT including the
+       bare Italian "assume": it matches inside "non si assume alcuna
+       responsabilità", which handed a disclaimer the company field at high
+       confidence. */
+    m = text.match(/^(.{2,60}?)\s+(?:is hiring|are hiring|is looking for|are looking for|is seeking|are seeking|is recruiting|sta cercando|sta assumendo)\b/i);
+    if (m) pjAdd(cands, m[1], PJ_W.isHiring, "is-hiring", 60);
+
+    /* "<X> was founded", "we started <X>". */
+    m = text.match(/^(.{2,60}?)\s+(?:was founded|were founded|is founded|has been building|è stata fondata|e stata fondata|è stata fondato)\b/i);
+    if (m) pjAdd(cands, m[1], PJ_W.founded, "founded", 60);
+    m = text.match(/\bwe (?:started|founded|launched|built)\s+(.{2,50}?)\s+(?:to|in|because|so)\b/i);
+    if (m) pjAdd(cands, m[1], PJ_W.founded, "founded", 60);
+
+    /* "<X> is a company that…", "<X> è un'agenzia che…" */
+    m = text.match(/^(.{2,60}?)\s+(?:is|are)\s+(?:a|an|the|one of)\b/i);
+    if (m) pjAdd(cands, m[1], PJ_W.isA, "is-a", 60);
+    m = text.match(/^(.{2,60}?)\s+[eè]\s+(?:un|una|un'|il|la|lo)\b/i);
+    if (m) pjAdd(cands, m[1], PJ_W.isA, "is-a", 60);
+
+    /* "Join Novabook", "at Novabook", "presso Intesa", "In Farnese Digitale". */
+    m = text.match(/^(?:join|welcome to|work at|unisciti a|lavora (?:con|in))\s+(.{2,50})$/i);
+    if (m) pjAdd(cands, m[1], PJ_W.joinAt, "join", 60);
+    m = text.match(/\s(?:at|@|presso|in)\s+([A-ZÀ-Þ][^\s,.;:]{1,30}(?:\s+[A-ZÀ-Þ][^\s,.;:]{1,30}){0,3})/);
+    if (m) pjAdd(cands, m[1], PJ_W.joinAt, "at-construction", 60);
+  }
+
+  /* Repetition, over the body only. */
+  const freq = pjFrequency(body);
+  for (let i = 0; i < Math.min(freq.length, 12); i++) {
+    pjAdd(cands, freq[i].value, freq[i].score, "repetition", 60);
+  }
+
+  /* Position — the weakest evidence available, and scored to say so. Only on
+     content lines of the body: a heading or a labelled field is never a name. */
+  const pos = pjPositional(body);
+  if (pos.company) pjAdd(cands, pos.company, PJ_W.position, pos.flipped ? "first-line" : "second-line", 60);
+
+  const picked = pjPick(cands, "company");
+  if (picked.hit) picked.hit.value = pjFullName(picked.hit.value, whole);
+  return picked;
+}
+
+/* The name a person would type is the longest form the document writes it
+   under. Repetition finds the token that recurs — "Ferrowick" a dozen times —
+   but the employer is spelled out in full at least once, and a legal form may
+   sit only in a header the body never repeats. Both are recovered here. */
+function pjFullName(name, whole) {
+  const esc = function (x) { return String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  let out = String(name);
+
+  /* Extend by one capitalised word that is not posting vocabulary, a job
+     noun, a legal form or a city. Same line only — [^\S\n] rather than \s —
+     because across a line break "Why Novabook / Novabook offers equity" would
+     happily extend the name to itself. */
+  if (pjWords(out).length < 4) {
+    const m = whole.match(new RegExp("\\b" + esc(out) + "[^\\S\\n]+([A-ZÀ-Þ][A-Za-zÀ-ÿ&'\\-]{1,24})"));
+    if (m) {
+      const f = pjFold(m[1]);
+      /* Deliberately NOT checking the stoplist here. "Engineering" must lose
+         as a company on its own and must still be allowed to complete
+         "Ferrowick Engineering" — a word that means nothing in isolation can
+         be half a name. A job noun, a legal form or a city still cannot. */
+      if (!PJ_JOBSET[f] && PJ_SUFFIX.indexOf(f) === -1 && !pjCityIn(m[1]).length) {
+        out = out + " " + m[1];
+      }
+    }
+  }
+
+  /* A legal form attached anywhere completes it: the body says "Marchmont
+     Foods", the header the wrapper swallowed said "Marchmont Foods Ltd". */
+  for (let i = 0; i < PJ_SUFFIX.length; i++) {
+    const spaced = PJ_SUFFIX[i].split("").join("\\.?");
+    const m = whole.match(new RegExp("\\b" + esc(out) + "[^\\S\\n]+(" + spaced + "\\.?)\\b", "i"));
+    if (m) return pjTidy(out + " " + m[1]);
+  }
+  return out;
+}
+
+/* ---------- role ----------------------------------------------------------- */
+
+function pjRoleCands(lines, sentences, body) {
+  const cands = [];
+
+  const labelled = pjLabelValue(lines, "role");
+  if (labelled) pjAdd(cands, pjSingular(pjDeRef(labelled)), PJ_W.label, "label", 90);
+
+  /* Read sentences: "is looking for a Property / Manager" is one sentence
+     wearing a line break, and reading lines captured "Property". */
+  for (let i = 0; i < sentences.length; i++) {
+    const m = sentences[i].match(
+      /\b(?:we(?:'re| are)? hiring|we(?:'re| are)? looking for|we(?:'re| are)? seeking|we seek|(?:is|are) (?:looking for|seeking|hiring|recruiting)|applications? for|now recruiting|stiamo cercando|cerchiamo|ricerchiamo|selezioniamo|siamo alla ricerca di)\s+(?:an?|the|un[ao']?|il|la|lo|di)?\s*([^.,;:!?()\n]{2,70})/i
+    );
+    if (m) {
+      const cut = m[1].split(/\s+(?:across|to \w+|in our|at our|for our|within|who |that |da inserire|da assumere|per |presso )/i)[0];
+      pjAdd(cands, pjSingular(pjDeRef(pjChunk(cut))), PJ_W.hiringFor, "hiring-for", 90);
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i].text;
+    /* A short title-case line carrying a job noun. This is what recognises a
+       headline as a headline without relying on it being at the top. */
+    if (lines[i].kind === "content" && text.length <= 60 && PJ_JOBRE.test(text)) {
+      const w = pjWords(text);
+      if (w.length <= 8) {
+        let capped = 0;
+        for (let k = 0; k < w.length; k++) if (/^[A-ZÀ-Þ0-9]/.test(w[k])) capped++;
+        if (capped >= Math.ceil(w.length / 2)) {
+          /* Same cut the at-construction rule takes, so a headline written
+             "Data Engineer at Zalando" does not propose the employer as part
+             of the job title. */
+          const bare = text.split(/\s+(?:at|@|presso)\s+[A-ZÀ-Þ]/)[0];
+          pjAdd(cands, pjSingular(pjDeRef(pjChunk(bare))), PJ_W.titleLine, "title-line", 90);
+        }
+      }
+    }
+
+    /* "Analyst at Bloomberg" — everything before the preposition. */
+    const at = text.match(/^(.{2,70}?)\s+(?:at|@|presso)\s+[A-ZÀ-Þ]/);
+    if (at && lines[i].kind === "content") {
+      pjAdd(cands, pjSingular(pjDeRef(at[1])), PJ_W.joinAt, "at-construction", 90);
+    }
+  }
+
+  const pos = pjPositional(body);
+  if (pos.role) pjAdd(cands, pjSingular(pjDeRef(pos.role)), PJ_W.position, pos.flipped ? "second-line" : "first-line", 90);
+
+  return pjPick(cands, "role");
+}
+
+/* Which way round is an unlabelled two-line header? Decided once so role and
+   company cannot disagree, and only ever over body content lines. */
+function pjPositional(body) {
+  const picks = [];
+  for (let i = 0; i < body.length && picks.length < 2; i++) {
+    if (body[i].kind !== "content") continue;
+    const c = pjChunk(body[i].text);
+    if (!c || pjWords(c).length > 8) continue;
+    if (pjOnlyPlace(c)) continue;
+    picks.push(c);
+  }
+  const a = picks[0] || "";
+  const b = picks[1] || "";
+  if (!a) return { role: "", company: "", flipped: false };
+  if (!b) return { role: a, company: "", flipped: false };
+  if (PJ_JOBRE.test(b) && !PJ_JOBRE.test(a)) return { role: b, company: a, flipped: true };
+  return { role: a, company: b, flipped: false };
+}
+
+/* ---------- location ------------------------------------------------------- */
 
 function pjCityIn(text) {
   const folded = pjFold(text);
@@ -1317,78 +1769,112 @@ function pjCityIn(text) {
     if (at === -1) continue;
     const before = at === 0 ? " " : folded[at - 1];
     const after = folded[at + needle.length] === undefined ? " " : folded[at + needle.length];
-    if (/[a-z0-9]/.test(before) || /[a-z0-9]/.test(after)) continue;   // word boundary
+    if (/[a-z0-9]/.test(before) || /[a-z0-9]/.test(after)) continue;
     let seen = false;
     for (let k = 0; k < found.length; k++) if (found[k].name === PJ_CITIES[i][1]) seen = true;
     if (!seen) found.push({ name: PJ_CITIES[i][1], at: at });
   }
-  /* Reading order, not list order. "Dublin or Amsterdam" must come back as
-     "Dublin / Amsterdam" — a location that reorders what the posting said
-     reads as a parser error even when both cities are right. */
+  /* Reading order, not list order: "Dublin or Amsterdam" must not come back
+     as "Amsterdam / Dublin". */
   found.sort(function (x, y) { return x.at - y.at; });
   const names = [];
   for (let i = 0; i < found.length; i++) names.push(found[i].name);
   return names;
 }
 
+function pjOnlyPlace(v) {
+  const cities = pjCityIn(v);
+  if (!cities.length) return false;
+  let rest = pjFold(v);
+  for (let i = 0; i < cities.length; i++) rest = rest.split(pjFold(cities[i])).join(" ");
+  rest = rest.replace(/\b(uk|united kingdom|england|scotland|wales|ireland|italy|italia|germany|deutschland|france|francia|spain|espana|spagna|netherlands|belgium|belgio|switzerland|svizzera|austria|portugal|poland|sweden|norway|denmark|finland|greece|europe|europa|eu|usa|us|united states|canada|remote|hybrid|ibrido|onsite|area|region|regione|metropolitan|greater|city of|provincia|prov|and|or|e|o)\b/g, " ");
+  rest = rest.replace(/[^a-z0-9]+/g, " ").trim();
+  return rest.length === 0;
+}
+
 const PJ_REMOTE = /\b(fully remote|remote[- ]first|remote|da remoto|full remote|smart working|telelavoro)\b/i;
 const PJ_HYBRID = /\b(hybrid|ibrido|part[- ]remote)\b/i;
 
-function pjLocation(lines, joined) {
-  const head = lines.slice(0, 8).join("  ");
+/* A labelled location is the author's own words and is kept, minus two things:
+   a commentary parenthetical, and a trailing country. "Victoria, London
+   (5 days onsite)" is a location wrapped in a working pattern; "London, UK"
+   is a city wearing a country nobody types into a tracker. A SHORT all-caps
+   bracket is kept, because "(CN)" is part of an Italian address, not a note. */
+function pjPlaceValue(raw) {
+  let v = pjTidy(raw).replace(/\s*\(([^)]*)\)\s*$/, function (_all, inner) {
+    const t = inner.trim();
+    return /^[A-Z]{2,4}$/.test(t) ? " (" + t + ")" : "";
+  });
+  v = pjTidy(v);
+  const parts = v.split(/\s*,\s*/);
+  while (parts.length > 1 && PJ_COUNTRY.test(parts[parts.length - 1])) parts.pop();
+  return pjTidy(parts.join(", "));
+}
 
-  const labelled = pjLabelled(lines, "location");
+function pjLocation(lines, body) {
+  /* Every surviving line, not just the body: a job board prints the city in
+     its listing header, which sits above the heading that marks where the
+     prose starts. Wrapper lines are already gone, so there is nothing here
+     for a careers service's own address to contaminate. */
+  const head = [];
+  for (let i = 0; i < Math.min(lines.length, 14); i++) head.push(lines[i].text);
+  const near = head.join("  ");
+
+  const labelled = pjLabelValue(lines, "location");
   if (labelled) {
-    /* A labelled location is still worth tidying: "London, UK (Hybrid — 3
-       days in office)" is a location wrapped in commentary. When no known
-       city is inside it the label is trusted verbatim, which is what keeps
-       cities missing from the list — Biella, Shoreditch — working. */
-    const cities = pjCityIn(labelled.value);
-    if (cities.length > 1) {
-      return { value: cities.join(" / "), confidence: "high", matchedBy: "label+cities" };
+    let v = pjPlaceValue(labelled);
+    const marker = PJ_HYBRID.test(labelled) ? " (Hybrid)"
+      : PJ_REMOTE.test(labelled) ? " (Remote)" : "";
+    /* The label wins on wording; cities only corroborate. Replacing the
+       label's text with the city list turned "Victoria, London" into
+       "London" and threw away the half the author bothered to write. */
+    if (!v || pjOnlyPlace(v) === false && !pjCityIn(v).length && v.length > 40) {
+      v = pjCityIn(labelled).join(" / ") || v;
     }
-    if (cities.length === 1) {
-      const suffix = PJ_HYBRID.test(labelled.value) ? " (Hybrid)"
-        : PJ_REMOTE.test(labelled.value) ? " (Remote)" : "";
-      return { value: cities[0] + suffix, confidence: "high", matchedBy: "label+city" };
-    }
-    return labelled;
+    if (!v) return null;
+    return { value: pjTidy(v + marker), confidence: "high", matchedBy: "label", candidates: [] };
   }
 
-  const cities = pjCityIn(head);
+  const cities = pjCityIn(near);
   if (cities.length > 1) {
-    return { value: cities.slice(0, 3).join(" / "), confidence: "medium", matchedBy: "cities" };
+    return { value: cities.slice(0, 3).join(" / "), confidence: "medium", matchedBy: "cities", candidates: [] };
   }
   if (cities.length === 1) {
-    const suffix = PJ_HYBRID.test(head) ? " (Hybrid)" : PJ_REMOTE.test(head) ? " (Remote)" : "";
-    return { value: cities[0] + suffix, confidence: "medium", matchedBy: "city" };
+    const marker = PJ_HYBRID.test(near) ? " (Hybrid)" : PJ_REMOTE.test(near) ? " (Remote)" : "";
+    return { value: cities[0] + marker, confidence: "medium", matchedBy: "city", candidates: [] };
   }
+  if (PJ_REMOTE.test(near)) return { value: "Remote", confidence: "high", matchedBy: "remote", candidates: [] };
+  if (PJ_HYBRID.test(near)) return { value: "Hybrid", confidence: "medium", matchedBy: "hybrid", candidates: [] };
 
-  /* No city, but the posting says remote — that IS the location, stated
-     outright rather than inferred, so it is not a low-confidence guess. */
-  if (PJ_REMOTE.test(head)) return { value: "Remote", confidence: "high", matchedBy: "remote" };
-  if (PJ_HYBRID.test(head)) return { value: "Hybrid", confidence: "medium", matchedBy: "hybrid" };
-
-  const anywhere = pjCityIn(joined);
+  const all = [];
+  for (let i = 0; i < body.length; i++) all.push(body[i].text);
+  const anywhere = pjCityIn(all.join("  "));
   if (anywhere.length === 1) {
-    return { value: anywhere[0], confidence: "low", matchedBy: "city-in-body" };
+    return { value: anywhere[0], confidence: "low", matchedBy: "city-in-body", candidates: [] };
   }
   return null;
 }
 
+/* ---------- salary, email, url --------------------------------------------- */
+
+/* The salary column arrives with migration 001 and already exists in the
+   schema — nothing new is added here. Captured only when explicitly labelled,
+   because a number in prose is as likely to be a headcount as a wage. */
+function pjSalary(lines) {
+  const labelled = pjLabelValue(lines, "salary");
+  if (!labelled) return null;
+  const v = pjTidy(labelled.replace(/\s*\([^)]*\)\s*$/, ""));
+  if (!v || !/[0-9]/.test(v)) return null;
+  return { value: v, confidence: "high", matchedBy: "label", candidates: [] };
+}
+
 function pjEmail(src) {
-  /* Every quantifier here is bounded, and that is load-bearing rather than
-     tidiness. The unbounded form — [A-Za-z0-9._%+-]+@ — is quadratic on input
-     containing no spaces: the run matches to the end of the line, fails to
-     find an @, backtracks a character at a time, and repeats from every start
-     position. 50,000 characters of one long word cost 3.3 seconds of blocked
-     main thread, which is a frozen page on a paste nobody would think twice
-     about. The bounds are RFC 5321's: 64 for the local part, 255 for the
-     domain, so nothing legitimate is excluded. */
+  /* Every quantifier bounded, and that is load-bearing. The unbounded form is
+     quadratic on input with no spaces: 50,000 characters of one long word
+     cost 3.3 seconds of blocked main thread. Bounds are RFC 5321's. */
   const re = /[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}(?:\.[A-Za-z0-9\-]{1,63}){0,8}\.[A-Za-z]{2,24}/g;
   const lines = src.replace(/\r\n?/g, "\n").split("\n");
   const clean = [];
-
   for (let i = 0; i < lines.length; i++) {
     const found = lines[i].match(re);
     if (!found) continue;
@@ -1401,14 +1887,11 @@ function pjEmail(src) {
       clean.push({ addr: addr, near: near });
     }
   }
-
   if (!clean.length) return null;
   for (let i = 0; i < clean.length; i++) {
-    if (clean[i].near) {
-      return { value: clean[i].addr, confidence: "high", matchedBy: "email-near-apply" };
-    }
+    if (clean[i].near) return { value: clean[i].addr, confidence: "high", matchedBy: "email-near-apply", candidates: [] };
   }
-  return { value: clean[0].addr, confidence: "medium", matchedBy: "email" };
+  return { value: clean[0].addr, confidence: "medium", matchedBy: "email", candidates: [] };
 }
 
 function pjUrl(src) {
@@ -1423,22 +1906,20 @@ function pjUrl(src) {
     if (cleaned.indexOf(u) === -1) cleaned.push(u);
   }
   if (!cleaned.length) return null;
-  /* Prefer something that looks like the posting itself over a company
-     homepage that happened to sit in a footer. */
   for (let i = 0; i < cleaned.length; i++) {
     if (/(greenhouse\.io|lever\.co|workday|smartrecruiters|ashbyhq|teamtailor|personio|linkedin\.com\/jobs|indeed\.|glassdoor\.|\/jobs?\/|\/careers?\/|\/vacanc|\/position|\/offerta|\/lavoro)/i.test(cleaned[i])) {
-      return { value: cleaned[i], confidence: "high", matchedBy: "job-url" };
+      return { value: cleaned[i], confidence: "high", matchedBy: "job-url", candidates: [] };
     }
   }
-  return { value: cleaned[0], confidence: "medium", matchedBy: "url" };
+  return { value: cleaned[0], confidence: "medium", matchedBy: "url", candidates: [] };
 }
 
-/* ---- the entry point ---------------------------------------------------- */
+/* ---------- the entry point ------------------------------------------------ */
 
 function parseJobDescription(text) {
   const empty = {
     company: null, role: null, location: null, contactEmail: null,
-    sourceUrl: null, truncated: false, chars: 0,
+    salary: null, sourceUrl: null, truncated: false, chars: 0, bodyStart: 0,
   };
   try {
     if (typeof text !== "string" || !text.trim()) return empty;
@@ -1447,28 +1928,34 @@ function parseJobDescription(text) {
     let truncated = false;
     if (src.length > PJ_LIMIT) { src = src.slice(0, PJ_LIMIT); truncated = true; }
 
-    const lines = pjLines(src);
-    const joined = lines.join("  ");
-    const pair = pjPair(lines);
+    const scan = pjScan(src);
+    const body = scan.lines.slice(scan.bodyStart);
+    const whole = scan.lines.map(function (l) { return l.text; }).join("\n");
 
-    const role = pjRole(lines, pair);
-    const company = pjCompany(lines, pair);
+    const sentences = pjSentences(scan.lines);
+    const company = pjCompanyCands(scan.lines, sentences, body, whole, scan.breadcrumb);
+    const role = pjRoleCands(scan.lines, sentences, body);
 
-    /* The structural pair is one guess, not two. If both fell back to
-       position and landed on the same string, the posting had one line worth
-       reading — keep the role and drop the company rather than asserting
-       both. */
-    const positional = company && (company.matchedBy === "second-line" || company.matchedBy === "first-line");
-    const clash = positional && role && pjFold(company.value) === pjFold(role.value);
+    /* The positional pair is one guess, not two. If both fell back to
+       position and landed on the same string, keep the role and drop the
+       company rather than asserting both. */
+    let companyHit = company.hit;
+    if (companyHit && role.hit &&
+        /line$/.test(companyHit.matchedBy) &&
+        pjFold(companyHit.value) === pjFold(role.hit.value)) {
+      companyHit = null;
+    }
 
     return {
-      company: clash ? null : company,
-      role: role,
-      location: pjLocation(lines, joined),
+      company: companyHit,
+      role: role.hit,
+      location: pjLocation(scan.lines, body),
       contactEmail: pjEmail(src),
+      salary: pjSalary(scan.lines),
       sourceUrl: pjUrl(src),
       truncated: truncated,
       chars: text.length,
+      bodyStart: scan.bodyStart,
     };
   } catch (e) {
     /* Never propagate. The paste box is reached from the header of a working
@@ -1477,23 +1964,19 @@ function parseJobDescription(text) {
   }
 }
 
-/* ---- duplicate detection ------------------------------------------------
+/* ---------- duplicate detection --------------------------------------------
    Forgiving on purpose: case, accents, punctuation and legal form are noise
-   when a human asks "have I already applied here?". Warn only — two roles at
-   one company is normal, and the user knows better than the parser. */
+   when a human asks "have I already applied here?". Warn only. */
 
 function pjCompanyKey(name) {
-  /* Full stops are deleted, not turned into spaces, so an initialism closes
-     up into the word it abbreviates: "L.P." -> "lp" and "S.p.A." -> "spa",
-     both of which the suffix list then recognises. Turning them into spaces
-     instead left "bloomberg l p", which matched nothing. Other punctuation
-     does become a space — "Smith&Jones" is two words. */
+  /* Full stops are deleted, not turned into spaces, so an initialism closes up
+     into the word it abbreviates: "L.P." -> "lp", "S.p.A." -> "spa", both of
+     which the suffix list then recognises. */
   let k = pjFold(name)
     .replace(/\./g, "")
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  /* Strip trailing legal forms repeatedly: "Foo Holdings Ltd" -> "foo". */
   let changed = true;
   while (changed) {
     changed = false;
@@ -1514,10 +1997,8 @@ function findDuplicateCompany(name, rows) {
     const other = pjCompanyKey(rows[i].company || "");
     if (!other) continue;
     if (other === key) return rows[i];
-    /* One name starting with the other catches "Bloomberg" against
-       "Bloomberg Intelligence" without the false positives a similarity
-       score brings. Guarded at 4 characters so "BP" does not match
-       "BP Chemicals" on a two-letter prefix. */
+    /* Containment catches "Bloomberg" against "Bloomberg Intelligence",
+       guarded at four characters so "BP" does not match "BP Chemicals". */
     const shorter = key.length < other.length ? key : other;
     const longer = key.length < other.length ? other : key;
     if (shorter.length >= 4 && longer.indexOf(shorter + " ") === 0) return rows[i];
@@ -4842,31 +5323,49 @@ function MobileCard({
    show provenance, let users intervene). */
 const PJ_WHY = {
   "label": "an explicit label in the text",
-  "is-hiring": "an “X is hiring” line",
-  "at-construction": "an “X at Y” line",
-  "join-about": "an “About X” line",
-  "hiring-for": "a “looking for…” sentence",
-  "first-line": "the first line — worth a look",
-  "second-line": "the second line — worth a look",
-  "label+city": "an explicit label",
-  "label+cities": "an explicit label",
+  "about-heading": "an \u201cAbout \u2026\u201d section heading",
+  "is-hiring": "an \u201cX is hiring\u201d sentence",
+  "hiring-for": "a \u201clooking for\u2026\u201d sentence",
+  "is-a": "a sentence describing the company",
+  "founded": "a sentence about who founded it",
+  "repetition": "the same name repeating through the posting",
+  "breadcrumb": "the \u201cback to \u2026 jobs\u201d link",
+  "title-line": "a short title-style line",
+  "at-construction": "an \u201cX at Y\u201d construction",
+  "join": "a \u201cJoin X\u201d line",
+  "first-line": "the first line",
+  "second-line": "the second line",
   "city": "a city named near the top",
   "cities": "the cities named near the top",
-  "city-in-body": "a city named in the body — worth a look",
-  "remote": "the word “remote”",
-  "hybrid": "the word “hybrid”",
-  "email-near-apply": "an address beside “apply” or “contact”",
+  "city-in-body": "a city named in the body",
+  "remote": "the word \u201cremote\u201d",
+  "hybrid": "the word \u201chybrid\u201d",
+  "email-near-apply": "an address beside \u201capply\u201d or \u201ccontact\u201d",
   "email": "an address in the text",
   "job-url": "a job-board link",
   "url": "a link in the text",
 };
 
+/* matchedBy carries corroboration as a suffix — "about-heading+4" means the
+   About heading plus four other rules landed on the same answer. Saying so is
+   the most useful thing the review step can tell you: several independent
+   rules agreeing is exactly why a name buried in the body beats one sitting
+   at the top of a wrapper. */
+function pjWhyText(matchedBy) {
+  const parts = String(matchedBy || "").split("+");
+  const base = PJ_WHY[parts[0]] || parts[0];
+  const extra = parts.length > 1 ? Number(parts[1]) : 0;
+  if (!extra) return base;
+  return base + ", and " + extra + " other rule" + (extra > 1 ? "s" : "") + " agreeing";
+}
+
 const PASTE_FIELDS = [
   { key: "role", label: "Role", placeholder: "Job title" },
   { key: "company", label: "Company", placeholder: "Employer" },
   { key: "location", label: "Location", placeholder: "City, or Remote" },
+  { key: "salary", label: "Salary", placeholder: "e.g. \u00a330,000 \u2013 \u00a340,000" },
   { key: "contactEmail", label: "Contact email", placeholder: "name@company.com", type: "email" },
-  { key: "sourceUrl", label: "Source link", placeholder: "https://…", type: "url" },
+  { key: "sourceUrl", label: "Source link", placeholder: "https://\u2026", type: "url" },
 ];
 
 /* Paste a job description, correct what was guessed, then create the row.
@@ -4879,7 +5378,7 @@ function PasteCreate({ onClose, onCreate, existing, busy }) {
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState(null);
   const [values, setValues] = useState({
-    role: "", company: "", location: "", contactEmail: "", sourceUrl: "",
+    role: "", company: "", location: "", salary: "", contactEmail: "", sourceUrl: "",
   });
   /* Once a field has been typed in, it is the user's and no later parse may
      overwrite it — otherwise correcting a field and then fixing a typo in the
@@ -4965,6 +5464,7 @@ function PasteCreate({ onClose, onCreate, existing, busy }) {
       role: values.role.trim(),
       company: values.company.trim(),
       location: values.location.trim(),
+      salary: values.salary.trim(),
       contactEmail: values.contactEmail.trim(),
       /* No schema change was on the table for this feature, so a source link
          goes where free text already lives, on its own first line with a
@@ -5020,13 +5520,24 @@ function PasteCreate({ onClose, onCreate, existing, busy }) {
                   const hit = parsed[f.key];
                   const mine = edited.current[f.key];
                   const missing = !hit && !values[f.key];
-                  const why = hit && !mine && hit.confidence !== "high"
-                    ? "Guessed from " + (PJ_WHY[hit.matchedBy] || hit.matchedBy)
+                  /* A low-confidence guess gets the SAME dashed treatment as a
+                     field that was not found. That is deliberate: position and
+                     weak inference are close enough to nothing that a reader
+                     skimming the panel must not be able to accept one by
+                     default (§7). Medium keeps its caption but not the dashes;
+                     high says nothing at all. */
+                  const weak = hit && !mine && hit.confidence === "low";
+                  const why = mine
+                    ? null
                     : missing
                       ? "Not found — add it if you want it"
-                      : null;
+                      : hit && hit.confidence === "low"
+                        ? "Check this — guessed only from " + pjWhyText(hit.matchedBy)
+                        : hit && hit.confidence === "medium"
+                          ? "Guessed from " + pjWhyText(hit.matchedBy)
+                          : null;
                   return (
-                    <label className={"block" + (missing ? " tk-miss" : "")} key={f.key}>
+                    <label className={"block" + (missing || weak ? " tk-miss" : "")} key={f.key}>
                       <span className={LABEL}>{f.label}</span>
                       <input
                         type={f.type || "text"}
@@ -5649,7 +6160,13 @@ function Tracker({ session }) {
            fails the whole insert. On an old schema the address is simply not
            seeded — the row is still created, and the field can be typed in
            later once the migration is run. */
-        ...(needsMigration ? {} : { contact_email: s.contactEmail || "" }),
+        ...(needsMigration ? {} : {
+          contact_email: s.contactEmail || "",
+          /* salary arrives with migration 001 and is already in the schema —
+             nothing new is added for this. Same guard as above: naming a
+             column that is not there fails the whole insert. */
+          salary: s.salary || "",
+        }),
         /* Lands on the page you are looking at. Omitted entirely on an
            unmigrated database, where the column does not exist and naming it
            would fail the insert. */

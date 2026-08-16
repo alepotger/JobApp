@@ -285,6 +285,85 @@ function serve(port) {
   t("a hand-corrected field is not overwritten by a later parse",
     r.Location && r.Location.value === "Shoreditch", r.Location && r.Location.value);
 
+  /* ---- the wrapper class, end to end in the browser ----
+     A fresh dialog: the checks above deliberately hand-edited Location, and
+     that edit correctly survives any later parse, so reusing this dialog
+     would measure the edit-guard rather than the parser. */
+  await pg.keyboard.press("Escape");
+  await pg.waitForTimeout(150);
+  await trigger.click();
+  await pg.waitForSelector('[role="dialog"]');
+
+  const PORTAL = `Job or Opportunity details
+Back to search results
+It is your responsibility to research the organisation before applying.
+This vacancy was advertised in good faith and may already have been filled.
+The Careers Service cannot take responsibility for the content of external
+vacancies.
+Book a CV check or a mock interview with the Careers Service.
+Share this job
+About this role
+Location: Victoria, London (5 days onsite)
+Salary: £30,000-£40,000
+Employment Type: Full-time, Permanent
+About Novabook
+Novabook is a Series A company building accounting software for small
+businesses. Novabook was founded by two former accountants. Since launch,
+Novabook has grown to sixty people.
+What you'll be doing
+We're hiring Startup Operations Graduates across several teams. You will sit
+with the operations group at Novabook.
+Why Novabook
+Novabook offers equity to every employee.`;
+
+  await pg.evaluate((text) => {
+    const ta = document.querySelector(".tk-pastebox");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(ta, text);
+    ta.dispatchEvent(new Event("paste", { bubbles: true }));
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  }, PORTAL);
+  await pg.waitForTimeout(350);
+  r = await review();
+  t("portal wrapper: the role comes from mid-document prose, not line 1",
+    r.Role && r.Role.value === "Startup Operations Graduate", r.Role && r.Role.value);
+  t("portal wrapper: the company comes from evidence, not position",
+    r.Company && r.Company.value === "Novabook", r.Company && r.Company.value);
+  t("portal wrapper: a labelled location keeps its own wording",
+    r.Location && r.Location.value === "Victoria, London", r.Location && r.Location.value);
+  t("portal wrapper: a labelled salary is captured",
+    r.Salary && r.Salary.value === "£30,000-£40,000", r.Salary && r.Salary.value);
+  t("portal wrapper: corroboration is reported to the reader",
+    !!(r.Company && r.Company.why === null) ||
+    !!(r.Company && /other rules? agreeing/.test(r.Company.why || "")),
+    r.Company && r.Company.why);
+
+  /* ---- a low-confidence guess must not be skimmable ---- */
+  await pg.evaluate(() => {
+    const ta = document.querySelector(".tk-pastebox");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(ta, "Ferrier Group\nSomething Or Other\nNo other information here at all.");
+    ta.dispatchEvent(new Event("paste", { bubbles: true }));
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await pg.waitForTimeout(350);
+  const weak = await pg.evaluate(() => {
+    const labels = [].slice.call(document.querySelectorAll('[role="dialog"] label'));
+    const out = [];
+    for (const l of labels) {
+      const i = l.querySelector("input");
+      const w = l.querySelector(".tk-guess");
+      if (!i || !w) continue;
+      out.push({ why: w.textContent.trim(), dashed: getComputedStyle(i).borderStyle === "dashed" });
+    }
+    return out;
+  });
+  const checks = weak.filter((x) => /^Check this/.test(x.why));
+  t("a low-confidence field says 'Check this' rather than a bare guess",
+    checks.length > 0, JSON.stringify(weak.map((x) => x.why)));
+  t("a low-confidence field carries the same dashed edge as a missing one",
+    checks.length > 0 && checks.every((x) => x.dashed), JSON.stringify(checks));
+
   /* ---- Escape discards ---- */
   await pg.keyboard.press("Escape");
   await pg.waitForTimeout(200);
@@ -323,6 +402,7 @@ function serve(port) {
     ins.company === "Bloomberg" && ins.role_title === "Investment Analyst" && ins.location === "London (Hybrid)",
     JSON.stringify({ c: ins.company, r: ins.role_title, l: ins.location }));
   t("the contact email is written to its own column", ins.contact_email === "careers@bloomberg.example.com", ins.contact_email);
+  t("the salary is written to its own column", ins.salary === "", "expected empty for this posting, got " + JSON.stringify(ins.salary));
   t("the source URL is written into notes, prefixed and on its own line",
     typeof ins.notes === "string" && /^Source: https:\/\/boards\.greenhouse\.io/.test(ins.notes), ins.notes);
   t("the row lands on the current page", ins.page_id === PAGE, ins.page_id);

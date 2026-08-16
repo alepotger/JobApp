@@ -352,4 +352,285 @@ Apply via https://careers.vodafone.com/job/12345`,
       sourceUrl: "https://careers.vodafone.com/job/12345",
     },
   },
+  /* ---- wrapper class: the failure this round exists to fix -------------
+     A posting does not begin at line 1. Portals, agencies and job boards
+     wrap the employer's text in their own, and the wrapper is written in
+     the same register as the posting — headings, prose, capitals — so a
+     chrome blocklist does not touch it. */
+
+  {
+    name: "portal: university careers wrapper with an advisory preamble",
+    holdout: true,
+    text: `Job or Opportunity details
+Back to search results
+It is your responsibility to research the organisation before applying. We
+recommend that you read our guidance on researching employers.
+Please ensure that you have read the job description in full before applying.
+This vacancy was advertised in good faith and may already have been filled.
+The Careers Service cannot take responsibility for the content of external
+vacancies.
+Book a CV check or a mock interview with the Careers Service.
+How did you find out about this opportunity?
+Share this job
+About this role
+Location: Victoria, London (5 days onsite)
+Salary: £30,000-£40,000
+Employment Type: Full-time, Permanent
+Start date: September 2026
+About Novabook
+Novabook is a Series A company building accounting software for small
+businesses. Novabook was founded by two former accountants who were tired of
+spreadsheets. Since launch, Novabook has grown to sixty people.
+What you'll be doing
+We're hiring Startup Operations Graduates across several teams. You will sit
+with the operations group at Novabook and rotate through finance, partnerships
+and customer operations over your first year.
+Novabook works in person five days a week because we believe early-career
+people learn faster in a room together.
+Why Novabook
+Novabook offers equity to every employee. Novabook has been profitable since
+2024.`,
+    expect: {
+      role: "Startup Operations Graduate",
+      company: "Novabook",
+      location: "Victoria, London",
+      salary: "£30,000-£40,000",
+      contactEmail: null,
+    },
+  },
+
+  {
+    name: "portal: recruitment agency branding above the employer",
+    holdout: true,
+    text: `Hartwell Recruitment
+Specialist recruiters in finance and professional services since 1994.
+Register with us
+Upload your CV
+Our consultants will contact you within 48 hours of applying.
+Hartwell Recruitment acts as an employment agency for permanent recruitment.
+Job Details
+Location: Bristol
+Salary: £42,000 per annum
+Our client
+Ferrowick Engineering designs and manufactures pressure vessels for the energy
+sector. Ferrowick has operated from the same site for forty years and now
+employs three hundred people. Ferrowick is investing heavily in automation.
+The opportunity
+We are looking for a Quality Engineer to join the Ferrowick team. You will own
+inspection planning and supplier audits.`,
+    expect: {
+      role: "Quality Engineer",
+      company: "Ferrowick Engineering",
+      location: "Bristol",
+      salary: "£42,000 per annum",
+    },
+  },
+
+  {
+    name: "portal: Indeed paste with sponsored and apply furniture",
+    holdout: true,
+    text: `Indeed
+Sponsored
+Apply now
+Save this job
+Report this job
+You will be redirected to the employer's site to complete your application.
+Junior Accountant
+Marchmont Foods Ltd
+Leeds
+£26,000 - £29,000 a year
+Full-time
+Apply now
+Job details
+Location: Leeds
+Salary: £26,000 - £29,000 a year
+Full job description
+Marchmont Foods is a family-owned producer supplying supermarkets across the
+north of England. Marchmont Foods is looking for a Junior Accountant to join
+the finance team.`,
+    expect: {
+      role: "Junior Accountant",
+      company: "Marchmont Foods Ltd",
+      location: "Leeds",
+      salary: "£26,000 - £29,000 a year",
+    },
+  },
+
+  {
+    name: "no wrapper: a company careers page",
+    holdout: true,
+    text: `Senior Platform Engineer
+Location: Amsterdam
+Salary: €75,000 - €95,000
+About Tessellate
+Tessellate builds observability tooling for Kubernetes operators. We are a
+team of thirty and we have been profitable since 2023.
+The role
+You will own the query engine that backs our dashboards.`,
+    expect: {
+      role: "Senior Platform Engineer",
+      company: "Tessellate",
+      location: "Amsterdam",
+      salary: "€75,000 - €95,000",
+    },
+  },
+
+  {
+    name: "no label anywhere: the employer must come from repetition alone",
+    holdout: true,
+    text: `Data Engineer
+Full-time, permanent
+We are rebuilding the ingestion layer at Kestrel. Kestrel processes forty
+billion events a day for broadcasters across Europe. You will join the platform
+group, which owns everything from the edge collectors through to the warehouse.
+Kestrel runs a four-day week and has done since 2021.
+Kestrel was founded in 2019 by three engineers from the broadcast industry.
+Working at Kestrel means owning what you ship.`,
+    expect: { role: "Data Engineer", company: "Kestrel", location: null },
+  },
+
+  {
+    name: "portal: Italian posting inside an Italian-language wrapper",
+    holdout: true,
+    text: `Dettagli dell'offerta
+Torna ai risultati della ricerca
+È tua responsabilità verificare l'affidabilità dell'azienda prima di
+candidarti. Ti consigliamo di leggere la nostra guida.
+Il servizio placement non si assume alcuna responsabilità per il contenuto
+degli annunci pubblicati da terzi.
+Questo annuncio è stato pubblicato in buona fede e la posizione potrebbe essere
+già stata ricoperta.
+Condividi questo annuncio
+Informazioni sulla posizione
+Sede: Bologna
+Stipendio: €28.000 - €32.000
+Tipo di contratto: Tempo indeterminato
+Chi è Farnese Digitale
+Farnese Digitale è un'agenzia che progetta esperienze digitali per il settore
+culturale. Farnese Digitale è stata fondata nel 2016 e conta quaranta persone.
+Cosa farai
+Stiamo cercando un Front-end Developer da inserire nel team di sviluppo.
+In Farnese Digitale lavorerai su progetti per musei e fondazioni.`,
+    expect: {
+      role: "Front-end Developer",
+      company: "Farnese Digitale",
+      location: "Bologna",
+      salary: "€28.000 - €32.000",
+    },
+  },
+
+  /* ---- round-2 holdout ------------------------------------------------
+     Written after the scored rewrite was already passing everything above,
+     and run once before any of them was looked at: 81% (role 67%, company
+     83%, location 83%). The four misses are recorded in design/PROPOSAL.md
+     along with the fixes. They are kept here as regression cover, but they
+     are tuned-against now and no longer measure generalisation. */
+
+  {
+    holdout: true,
+    name: "H2: job board with heavy furniture, employer only in the body",
+  text: `Otta
+Discover
+Saved
+Profile
+Sign in
+Matched to your preferences
+Apply
+Not interested
+Product Analyst
+£55,000 – £65,000
+London · Hybrid
+Employees: 51-200
+Funding: Series B
+About the role
+Curveline is a payments infrastructure company. Curveline processes card
+transactions for marketplaces across Europe. You will join the analytics team
+and own the merchant reporting suite. Curveline has raised $40m to date and
+the analytics function is three people today.`,
+    expect: { role: "Product Analyst", company: "Curveline", location: "London (Hybrid)" },
+  },
+  {
+    holdout: true,
+    name: "H2: agency whose own name repeats through the body",
+  text: `Kestenbridge Associates
+Contact Kestenbridge Associates
+Kestenbridge Associates is a specialist recruiter for the legal sector.
+Register your CV with Kestenbridge Associates today.
+Our consultants will be in touch within 48 hours.
+Kestenbridge Associates acts as an employment agency.
+Job Details
+Location: Manchester
+Salary: £38,000 - £45,000
+The opportunity
+Our client, Halloway Trust, is a regional charity managing forty properties.
+Halloway Trust was founded in 1978. Halloway Trust is looking for a Property
+Manager to oversee its residential portfolio.`,
+    expect: { role: "Property Manager", company: "Halloway Trust", location: "Manchester", salary: "£38,000 - £45,000" },
+  },
+  {
+    holdout: true,
+    name: "H2: public sector posting, heavily labelled",
+  text: `Job Details
+Employer: Southmoor NHS Foundation Trust
+Job Title: Clinical Audit Officer
+Location: Sheffield
+Salary: £29,970 - £36,483 per annum
+Contract: Permanent
+Hours: 37.5 per week
+Closing date: 14 October 2026
+Job overview
+The post holder will support the clinical audit programme across all
+directorates.`,
+    expect: { role: "Clinical Audit Officer", company: "Southmoor NHS Foundation Trust",
+            location: "Sheffield", salary: "£29,970 - £36,483 per annum" },
+  },
+  {
+    holdout: true,
+    name: "H2: Italian careers page, no wrapper, company via About heading",
+  text: `Sviluppatore Backend
+Sede: Torino
+Contratto: tempo indeterminato
+Chi siamo
+Vertico è una software house che realizza piattaforme per la logistica.
+Vertico nasce nel 2014 e oggi conta ottanta persone.
+Cosa farai
+Lavorerai sul motore di calcolo delle rotte insieme a un team di sei persone.`,
+    expect: { role: "Sviluppatore Backend", company: "Vertico", location: "Torino" },
+  },
+  {
+    holdout: true,
+    name: "H2: long preamble, role only in a label, company only by repetition",
+  text: `Opportunity details
+Back to search results
+Please note that this vacancy is advertised on behalf of an external employer.
+It is your responsibility to check the terms offered before accepting any role.
+The university takes no responsibility for the content of external vacancies.
+We recommend that you read our guidance on evaluating graduate schemes.
+How did you find out about this opportunity?
+Print this page
+Position: Commercial Graduate Scheme
+Location: Reading
+Salary: £32,000
+About the scheme
+Thornhaugh runs a two-year rotation across pricing, supply and category
+management. Thornhaugh places graduates in a different business unit every six
+months. Thornhaugh has run the scheme since 2009 and most participants stay
+with Thornhaugh afterwards.`,
+    expect: { role: "Commercial Graduate Scheme", company: "Thornhaugh",
+            location: "Reading", salary: "£32,000" },
+  },
+  {
+    holdout: true,
+    name: "H2: Lever posting with a breadcrumb and a plural title",
+  text: `Back to Ravenwood jobs
+Ravenwood
+Engineering
+Machine Learning Engineers
+Amsterdam
+Full-time
+Apply for this job
+Ravenwood builds forecasting tools for energy traders. We are hiring Machine
+Learning Engineers to work on our short-term price models.`,
+    expect: { role: "Machine Learning Engineer", company: "Ravenwood", location: "Amsterdam" },
+  },
 ];

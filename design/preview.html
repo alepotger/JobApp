@@ -1005,6 +1005,73 @@ Bloomberg &middot; London</div>
   assumed.</p>
 </section>
 
+
+<!-- ─────────────────────────────────── wrapper-class parsing -->
+<section class="pv-sec">
+  <p class="pv-n">Round 2</p>
+  <h2 class="pv-t">When the posting does not begin at line&nbsp;1</h2>
+  <p class="pv-note">A university portal, an agency and a job board all wrap the
+  employer's text in their own &mdash; and the wrapper is written in the same
+  register as the posting, so a chrome blocklist never touches it. Reading
+  position instead of evidence produced this:</p>
+  <div class="stage">
+    <div class="pcard">
+      <p class="k">Before</p>
+      <div class="pflds">
+        <label><span class="k">Role</span><span class="pfield">Job or Opportunity details</span>
+          <span class="pguess">Guessed from the first line</span></label>
+        <label class="pmiss"><span class="k">Company</span><span class="pfield">Employer</span>
+          <span class="pguess">Not found</span></label>
+      </div>
+    </div>
+  </div>
+  <p class="pv-note">Every rule now proposes a scored candidate over the whole
+  document and the highest total wins, so a name buried in the body beats one
+  sitting at the top of a wrapper. <strong>Novabook</strong> is proposed by its
+  About heading, by a founding sentence, by a describing sentence, by an
+  &ldquo;at&nbsp;X&rdquo; construction and by appearing nine times &mdash; 357
+  points against a single positional guess.</p>
+  <div class="stage">
+    <div class="pcard">
+      <p class="k">After</p>
+      <div class="pflds">
+        <label><span class="k">Role</span><span class="pfield">Startup Operations Graduate</span>
+          <span class="pguess">Guessed from a &ldquo;looking for&hellip;&rdquo; sentence</span></label>
+        <label><span class="k">Company</span><span class="pfield">Novabook</span></label>
+        <label><span class="k">Location</span><span class="pfield">Victoria, London</span></label>
+        <label><span class="k">Salary</span><span class="pfield">&pound;30,000-&pound;40,000</span></label>
+      </div>
+    </div>
+  </div>
+  <p class="pv-note">Company carries no caption because five independent rules
+  agreed &mdash; that is what <em>high</em> now means. Role carries one because
+  a single strong rule found it. The labelled location keeps the author's own
+  wording rather than being reduced to the city inside it.</p>
+
+  <p class="pv-n" style="margin-top:32px">Confidence</p>
+  <h2 class="pv-t">Low confidence must not be skimmable</h2>
+  <p class="pv-note">A guess from position is close enough to nothing that a
+  reader skimming the panel must not be able to accept it by default. So low
+  confidence now takes the <strong>same dashed edge as a field that was not
+  found</strong>, and says <em>Check this</em> rather than a neutral
+  &ldquo;Guessed from&rdquo;. Medium keeps the caption without the dashes. High
+  says nothing at all &mdash; three visibly different states, carried by
+  information rather than colour.</p>
+  <div class="stage">
+    <div class="pcard">
+      <div class="pflds">
+        <label><span class="k">Company &mdash; high</span><span class="pfield">Novabook</span></label>
+        <label><span class="k">Role &mdash; medium</span><span class="pfield">Startup Operations Graduate</span>
+          <span class="pguess">Guessed from a &ldquo;looking for&hellip;&rdquo; sentence</span></label>
+        <label class="pmiss"><span class="k">Company &mdash; low</span><span class="pfield">Ferrier Group</span>
+          <span class="pguess">Check this &mdash; guessed only from the first line</span></label>
+        <label class="pmiss"><span class="k">Salary &mdash; not found</span><span class="pfield">e.g. &pound;30,000 &ndash; &pound;40,000</span>
+          <span class="pguess">Not found &mdash; add it if you want it</span></label>
+      </div>
+    </div>
+  </div>
+</section>
+
 </div>
 
 <script>
