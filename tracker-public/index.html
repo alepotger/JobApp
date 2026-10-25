@@ -342,6 +342,35 @@ textarea{resize:vertical}
   box-shadow:var(--shadow-rest),inset 0 0 0 1px var(--line)}
 .tk-rowcard:hover{background:var(--hover);
   box-shadow:var(--shadow-raise),inset 0 0 0 1px var(--line)}
+/* Selection rides the same one-element contract as everything else here: the
+   card already owns background, radius and shadow, so selection recolours the
+   background and thickens the existing inset ring rather than adding a border
+   that would round at a different radius and split the corner. */
+.tk-rowcard[data-selected]{background:var(--accent-wash);
+  box-shadow:var(--shadow-rest),inset 0 0 0 2px var(--accent)}
+.tk-rowcard[data-selected]:hover{background:var(--accent-wash);
+  box-shadow:var(--shadow-raise),inset 0 0 0 2px var(--accent)}
+.tk-mcard[data-selected]{background:var(--accent-wash);
+  box-shadow:var(--shadow-rest),inset 0 0 0 2px var(--accent)}
+
+/* The selection bar. Destinations are BUTTONS, one per page, not a menu:
+   with a handful of pages a menu hides the only thing the bar is for behind
+   an extra click, and the whole point of this bar is that moving rows between
+   pages stops being something you go looking for. */
+.tk-selbar{display:flex;align-items:center;gap:var(--space-cosy);
+  flex-wrap:wrap;background:var(--accent-wash);
+  border-radius:var(--r-3);box-shadow:inset 0 0 0 1px var(--accent);
+  padding:var(--space-base) var(--space-cosy)}
+.tk-selbar-sep{flex:1 1 auto;min-width:0}
+.tk-selpage{background:var(--surface);border:1px solid var(--accent);
+  color:var(--accent-ink);border-radius:var(--r-2);padding:0 12px;
+  height:var(--control-h);display:inline-flex;align-items:center;
+  font-size:var(--t--2);font-weight:var(--w-semibold);
+  text-transform:uppercase;letter-spacing:var(--ls-caps);cursor:pointer;
+  max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-selpage:hover{background:var(--accent);color:var(--on-accent)}
+.tk-selpage:disabled{opacity:.5;cursor:default}
+@media (max-width:640px){.tk-selbar{gap:var(--space-base)}}
 /* The hairline is an inset ring, not four cell borders: a ring follows a
    radius and four borders never did. */
 .tk-rowcard>[role="row"]{grid-column:1/-1;display:grid;
@@ -2009,7 +2038,14 @@ function findDuplicateCompany(name, rows) {
 /* ==== paste-to-create parser: END ==== */
 </script>
 
-<script type="text/babel">
+<!-- data-presets="react" is load-bearing, not tidiness. With no presets
+     attribute Babel Standalone also runs preset-env, which transpiles every
+     arrow function, const, template literal and spread in this file down to
+     ES5 — on the user's machine, on every single page load. The app already
+     requires a browser with OKLCH and container queries, so none of that work
+     buys anything. Measured on a 25-row pipeline: time to first row 1887ms ->
+     1293ms, and on a 4x-throttled CPU 9423ms -> 4659ms. -->
+<script type="text/babel" data-presets="react">
 /* Nothing in this file needs editing. Connection details are entered
    on screen the first time you open it, and kept in this browser. */
 
@@ -5086,6 +5122,8 @@ function ScoreCell({ row, open, onToggle, cell }) {
 
 function MobileCard({
   row,
+  selected,
+  onPick,
   open,
   onToggle,
   onEdit,
@@ -5123,6 +5161,8 @@ function MobileCard({
     <div
       className="tk-card tk-r3 p-4 tk-mcard"
       data-row-card={row.id}
+      data-selected={selected ? "1" : undefined}
+      onClickCapture={(e) => onPick(row.id, e)}
       data-drag={lifted ? "lift" : undefined}
     >
       {/* The handle the desktop table has, on the card, where a phone can
@@ -5640,6 +5680,17 @@ function Tracker({ session }) {
   const [deletingPage, setDeletingPage] = useState(null);
   const [creatingPage, setCreatingPage] = useState(false);
   const [pasting, setPasting] = useState(false);
+  /* Selected row ids, in no particular order. An array rather than a Set so
+     each row can be handed a plain boolean — React.memo compares props by
+     identity, and a Set would be a new object on every render, undoing the
+     memoisation the rows now depend on. */
+  const [selected, setSelected] = useState([]);
+  /* The last row picked WITHOUT shift, which is what a shift-click extends
+     from. Native list selection on both platforms works this way. */
+  const selAnchor = useRef(null);
+  /* Visible order, refreshed each render, so a range selection can be read at
+     event time without the callbacks depending on it. */
+  const orderRef = useRef([]);
   const pending = useRef(0);
   const [purging, setPurging] = useState(null);
   const [bulkTrash, setBulkTrash] = useState(null); // "restore" | "purge"
@@ -5652,7 +5703,14 @@ function Tracker({ session }) {
   const inFlight = useRef(new Map());
   const allRef = useRef([]);
 
-  const report = (label, error) => {
+  /* useCallback on everything handed to a memoised row. DesktopRow is wrapped
+     in React.memo, but memo compares props by identity: four handlers
+     rebuilt on every render meant every row re-rendered on every parent state
+     change — including the two the sync chip fires on each save. The memo was
+     decorative. These close over refs rather than state so the dependency
+     lists can stay empty without going stale, which is the trap that broke
+     "undo move to page" once already. */
+  const report = useCallback((label, error) => {
     if (!error) return false;
     if (isMissingColumn(error)) {
       setNeedsMigration(true);
@@ -5666,7 +5724,7 @@ function Tracker({ session }) {
         (error.code ? "\n\nCode: " + error.code : "")
     );
     return true;
-  };
+  }, []);
 
   useEffect(() => { allRef.current = all; }, [all]);
 
@@ -5676,7 +5734,10 @@ function Tracker({ session }) {
     return () => clearTimeout(t);
   }, [loading]);
 
-  const toggleExpanded = (id) => setExpanded((cur) => (cur === id ? null : id));
+  const toggleExpanded = useCallback(
+    (id) => setExpanded((cur) => (cur === id ? null : id)),
+    []
+  );
 
   const [undo, setUndo] = useState(null);
   const undoTimer = useRef(null);
@@ -5947,7 +6008,7 @@ function Tracker({ session }) {
      this a slow first response could roll the row back over a newer value the
      user can see. A response that is not the latest for its key is dropped
      entirely — it neither commits nor rolls back. */
-  const patch = async (id, columns, local, activityAt) => {
+  const patch = useCallback(async (id, columns, local, activityAt) => {
     const when = activityAt || Date.now();
     const key = id + "|" + Object.keys(local).sort().join(",");
     const mid = ++mutationSeq.current;
@@ -5982,16 +6043,19 @@ function Tracker({ session }) {
       }
       report("Saving that change", error);
     }
-  };
+  }, [mark, report]);
 
   /* An empty date has to reach Postgres as null, not "". */
-  const editField = (id, field, value) => {
+  const editField = useCallback((id, field, value) => {
     const stored = field === "startDate" && value === "" ? null : value;
     patch(id, { [FIELD_TO_COLUMN[field]]: stored }, { [field]: value });
-  };
+  }, [patch]);
 
-  const onAdvance = (id) => {
-    const row = all.find((r) => r.id === id);
+  const onAdvance = useCallback((id) => {
+    /* allRef, not `all`: this callback is now built once and reused across
+       renders, so a closure over `all` would freeze the pipeline as it was on
+       first paint. Same reasoning as moveRowToPage below. */
+    const row = allRef.current.find((r) => r.id === id);
     if (!row) return;
     const was = { status: row.status, history: row.history, activity: row.activity };
     const status = advance(row.status);
@@ -6015,7 +6079,7 @@ function Tracker({ session }) {
           was.activity
         )
     );
-  };
+  }, [patch, offerUndo]);
 
   const clearScores = (id) => {
     const row = all.find((r) => r.id === id);
@@ -6062,7 +6126,14 @@ function Tracker({ session }) {
      somewhere to put its input: naming the second page is the moment the strip
      becomes worth showing, so it arrives one keystroke early rather than after
      the fact. */
-  const showPages = multiPage && (pages.length > 1 || creatingPage);
+  /* Reversed on request. This used to require a second page before the strip
+     appeared, on the expertise-reversal argument that a tab strip with one tab
+     is chrome explaining a feature you are not using. True in the abstract,
+     and wrong in practice here: pages turned out to be something people want
+     to reach for, and a feature you cannot see is a feature you do not use.
+     The strip now stands in for the overflow entry as the way pages are
+     found. */
+  const showPages = multiPage;
 
   /* Live rows per page, with orphans counted against the first page so the
      tab totals add up to what is actually on screen. */
@@ -6105,34 +6176,6 @@ function Tracker({ session }) {
       : [],
   };
 
-  /* Mobile: the same actions, plus the pages themselves, in one sheet — so the
-     phone gets the whole feature rather than a reduced version of it. */
-  const mobilePageMenu = {
-    block: true,
-    label: "Pages",
-    triggerClass: "tk-pgmobile tk-focus",
-    triggerContent: activePage ? (
-      <>
-        <span className="tk-pgmobile-label">
-          {activePage.name}
-          <span className="tk-pgcount">{pageCounts[activePage.id] || 0}</span>
-        </span>
-        <span className="tk-tertiary" aria-hidden="true">▾</span>
-      </>
-    ) : null,
-    items: [
-      ...pages.map((p) => ({
-        key: p.id,
-        label: p.name,
-        plain: true,
-        note: String(pageCounts[p.id] || 0),
-        checked: activePage ? p.id === activePage.id : undefined,
-        onPick: () => switchPage(p.id),
-      })),
-      { separator: true },
-      ...pageMenu.items,
-    ],
-  };
 
   /* One insert path for both ways of creating a row. `seed` is what the paste
      flow confirmed; with no seed this is the blank row the header button has
@@ -6368,6 +6411,152 @@ function Tracker({ session }) {
       offerUndo(
         `Moved ${row.company || "application"} to ${target.name}`,
         back ? () => moveRowToPage(id, back) : undefined
+      );
+    }
+    mark(-1);
+  };
+
+  /* ---- selecting several rows ------------------------------------------
+     Cmd-click on a Mac, Ctrl-click elsewhere, which is what both platforms
+     already mean by "add this one to what I have". Shift-click extends from
+     the last unshifted pick, the other half of the same convention — it costs
+     one branch and its absence is the thing people notice.
+
+     A plain click is deliberately untouched. Every row is full of editable
+     cells, selects and buttons; hijacking the ordinary click to mean "select"
+     would put a mode in front of the app's primary action. Selection is only
+     ever entered on purpose, with a modifier held. */
+  const pickRow = useCallback((id, e) => {
+    const additive = e.metaKey || e.ctrlKey;
+    const ranged = e.shiftKey;
+    if (!additive && !ranged) return false;
+    /* Cmd-click on a link is "open in a new tab", and the cell buttons would
+       otherwise open their editors underneath the selection. */
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (ranged && selAnchor.current) {
+      const order = orderRef.current;
+      const a = order.indexOf(selAnchor.current);
+      const b = order.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const span = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+        setSelected((prev) => {
+          const merged = prev.slice();
+          span.forEach((x) => { if (merged.indexOf(x) === -1) merged.push(x); });
+          return merged;
+        });
+        return true;
+      }
+    }
+
+    selAnchor.current = id;
+    setSelected((prev) =>
+      prev.indexOf(id) === -1 ? prev.concat([id]) : prev.filter((x) => x !== id)
+    );
+    return true;
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    selAnchor.current = null;
+    setSelected([]);
+  }, []);
+
+  /* Escape is the universal "never mind" and costs nothing to honour. Ignored
+     while a field has focus, where Escape already means "abandon this edit".
+
+     Capture phase, and that is not incidental. React attaches its listeners
+     at the root and flushes discrete events synchronously, so a bubbling
+     listener on window runs AFTER the cell editor has already closed and
+     handed focus back to its button — document.activeElement reads BUTTON,
+     the guard below passes, and pressing Escape to abandon one typo silently
+     threw away the whole selection. In the capture phase the textarea still
+     has focus, which is the thing being asked about. */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      const el = document.activeElement;
+      const tag = el ? el.tagName : "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+          (el && el.isContentEditable)) return;
+      setSelected((prev) => (prev.length ? [] : prev));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  /* Rows that vanish from the page you are looking at cannot stay selected —
+     after a move, or a page switch, the selection would be invisible and the
+     bar would offer to move rows that are no longer in front of you. */
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.length) return prev;
+      const here = prev.filter((id) => {
+        const row = all.find((r) => r.id === id);
+        return row && !row.deleted && onActivePage(row);
+      });
+      return here.length === prev.length ? prev : here;
+    });
+  }, [activePageId, all]);
+
+  /* One write for the whole selection, and one undo for the whole gesture.
+     Moving six rows should not cost six toasts, and should not be undone six
+     times either. */
+  const moveSelectedToPage = async (pageId) => {
+    const target = pages.find((p) => p.id === pageId);
+    if (!target || !selected.length) return;
+    const rows = allRef.current.filter((r) => selected.indexOf(r.id) !== -1);
+    const moving = rows.filter((r) => r.pageId !== pageId);
+    if (!moving.length) { clearSelection(); return; }
+
+    /* Where each row came from, so undo can put them back where they were
+       rather than dumping the lot onto one page. */
+    const origin = moving.map((r) => [r.id, r.pageId]);
+    const ids = moving.map((r) => r.id);
+    const n = ids.length;
+
+    setAll((prev) => prev.map((r) => (ids.indexOf(r.id) !== -1 ? { ...r, pageId } : r)));
+    clearSelection();
+    setExpanded(null);
+    mark(1);
+    const { error } = await sb
+      .from("applications")
+      .update({ page_id: pageId })
+      .in("id", ids);
+
+    if (error) {
+      setAll((prev) =>
+        prev.map((r) => {
+          const was = origin.find((o) => o[0] === r.id);
+          return was ? { ...r, pageId: was[1] } : r;
+        })
+      );
+      report("Moving the applications", error);
+    } else {
+      offerUndo(
+        `Moved ${n} application${n === 1 ? "" : "s"} to ${target.name}`,
+        () => {
+          /* Grouped by where each row came from: one update per origin page
+             rather than one per row. */
+          const groups = new Map();
+          origin.forEach(([rid, from]) => {
+            const key = from || "";
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(rid);
+          });
+          setAll((prev) =>
+            prev.map((r) => {
+              const was = origin.find((o) => o[0] === r.id);
+              return was ? { ...r, pageId: was[1] } : r;
+            })
+          );
+          groups.forEach((rids, from) => {
+            sb.from("applications")
+              .update({ page_id: from || null })
+              .in("id", rids)
+              .then(({ error: e }) => { if (e) report("Undoing the move", e); });
+          });
+        }
       );
     }
     mark(-1);
@@ -6651,6 +6840,7 @@ function Tracker({ session }) {
      prefers-reduced-motion: the reorder still happens, the rows simply arrive. */
   const rowTops = useRef(new Map());
   const skipFlip = useRef(false);
+  const rowOrder = useRef("");
   useLayoutEffect(() => {
     const cards = document.querySelectorAll("[data-row-card]");
     const previous = rowTops.current;
@@ -6662,11 +6852,33 @@ function Tracker({ session }) {
     const suppressed = skipFlip.current;
     skipFlip.current = false;
 
+    /* Animate only when the ORDER changed — not merely when rows moved.
+       This effect has no dependency array, so it runs after every render, and
+       it used to animate any row whose top had shifted by a pixel. Opening a
+       drawer pushes everything below it down; committing a cell edit reflows
+       the panel above the grid. Neither is a reorder, and both were sliding
+       every row on screen through a 220ms transition. Measured: one cell edit
+       animated 25 rows, one drawer toggle animated 50. That is the glitching.
+
+       The order is read from the DOM rather than from `sections`, which is
+       declared further down this component — and the DOM is the honest
+       source anyway, since it is what the user is actually looking at.
+       Geometry is still recorded on every pass, so the next genuine reorder
+       animates from where the rows really were rather than from wherever they
+       last happened to be measured. */
+    const ids = [];
+    cards.forEach((el) => ids.push(el.getAttribute("data-row-card")));
+    const order = ids.join(",");
+    const reordered = order !== rowOrder.current;
+    rowOrder.current = order;
+
+    const animate = reordered && !still && !suppressed;
+
     cards.forEach((el) => {
       const id = el.getAttribute("data-row-card");
       const top = el.getBoundingClientRect().top;
       current.set(id, top);
-      if (still || suppressed) return;
+      if (!animate) return;
       /* The dragged row is excluded — it is already where the finger is — but
          excluding it is not enough. A row that was displaced on an earlier
          pass still carries the inline transition from that pass, so the moment
@@ -6694,14 +6906,17 @@ function Tracker({ session }) {
 
   /* Deleted rows land in a panel at the very bottom of the page, which is
      easy to miss on a long pipeline. */
-  const removeRow = (id) => {
-    const row = all.find((r) => r.id === id);
+  const removeRow = useCallback((id) => {
+    const row = allRef.current.find((r) => r.id === id);
     const clock = row ? row.activity : undefined;
-    setDeleted(id, true);
+    /* patch directly rather than through setDeleted: that helper is rebuilt
+       every render, so depending on it would undo the stable identity this
+       callback exists to have. */
+    patch(id, { deleted: true }, { deleted: true });
     offerUndo(`Deleted ${row && row.company ? row.company : "application"}`, () =>
       patch(id, { deleted: false }, { deleted: false }, clock)
     );
-  };
+  }, [patch, offerUndo]);
 
   /* Clearing the examples is one gesture, so it gets one undo rather than one
      per row — and it goes through the same soft delete as everything else, so
@@ -6857,6 +7072,10 @@ function Tracker({ session }) {
       ? [picked]
       : groups
     : [{ key: "all", label: "", items: staged }];
+  /* Updated during render, read inside event handlers — so the selection
+     callbacks can stay referentially stable without closing over `sections`. */
+  orderRef.current = sections.reduce((ids, sec) => ids.concat(sec.items.map((r) => r.id)), []);
+
   const visibleCount = sections.reduce((n, s) => n + s.items.length, 0);
 
   /* The rows on screen, in the order they appear — the list a drag reorders. */
@@ -6974,7 +7193,7 @@ function Tracker({ session }) {
                   so the strip rendered display:none at every width while
                   still being present in the DOM. `.tk-pages` is the flex
                   container; this wrapper only needs to appear. */}
-              <div className="tk-noprint hidden lg:block">
+              <div className="tk-noprint">
                 <PageStrip
                   pages={pages}
                   activeId={activePage ? activePage.id : null}
@@ -7092,15 +7311,11 @@ function Tracker({ session }) {
         </div>
       </header>
 
-      {/* Mobile. A tab strip at phone width truncates and scrolls the tab you
-          want off the screen, so below lg it becomes one full-width control
-          naming where you are — recognition rather than recall (§1.1), and the
-          largest tap target the layout allows. Same OverflowMenu underneath. */}
-      {showPages && (
-        <div className="tk-noprint mb-6 lg:hidden">
-          <OverflowMenu {...mobilePageMenu} />
-        </div>
-      )}
+      {/* The phone used to get a full-width dropdown here instead of the
+          strip, on the grounds that tabs truncate at that width. `.tk-pages`
+          wraps rather than scrolls, so they do not — they take a second line,
+          which costs less than putting the pages behind a tap. The management
+          actions (new, rename, delete) stay in the strip's own menu. */}
 
       {/* Only ever visible on paper: says what the export is and when. Prints
           the page you are looking at, which is what "print what you see" has
@@ -7216,6 +7431,43 @@ function Tracker({ session }) {
         />
       </div>
 
+      {/* The selection bar sits directly above the rows it is talking about,
+          so the count and the destinations are in the same fixation zone as
+          the highlighted cards (§2.1). It appears only when something is
+          selected — there is no empty toolbar waiting to be noticed. */}
+      {selected.length > 0 && (
+        <div className="tk-selbar tk-noprint mb-4" role="region" aria-label="Selected applications">
+          <span className="tk-cap" style={{ color: "var(--accent-ink)" }}>
+            <strong>{selected.length}</strong>{" "}
+            {selected.length === 1 ? "application" : "applications"} selected
+          </span>
+          {showPages && pages.length > 1 && (
+            <>
+              <span className="tk-cap tk-secondary">Move to</span>
+              {pages
+                .filter((pg) => !activePage || pg.id !== activePage.id)
+                .map((pg) => (
+                  <button
+                    key={pg.id}
+                    className="tk-selpage tk-focus"
+                    title={`Move ${selected.length} to ${pg.name}`}
+                    onClick={() => moveSelectedToPage(pg.id)}
+                  >
+                    {pg.name}
+                  </button>
+                ))}
+            </>
+          )}
+          <span className="tk-selbar-sep" />
+          <button
+            className="tk-btn tk-focus tk-control-h tk-r2 px-3 tk-micro transition-colors"
+            onClick={clearSelection}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Desktop table */}
       <div
         className="tk-scroll hidden overflow-x-auto lg:block"
@@ -7239,12 +7491,19 @@ function Tracker({ session }) {
               {section.items.map((row) => (
                 /* The card wraps the row AND its drawer so the pair is one
                    box. It is presentational so the rows underneath stay the
-                   table's direct children, which is what the roles require. */
+                   table's direct children, which is what the roles require.
+
+                   onClickCapture, not onClick: the editable cells inside are
+                   buttons with their own handlers, and a listener that bubbled
+                   would run only after one of them had opened an editor
+                   underneath the selection. */
                 <div
                   className="tk-rowcard"
                   role="presentation"
                   key={row.id}
                   data-row-card={row.id}
+                  data-selected={selected.indexOf(row.id) !== -1 ? "1" : undefined}
+                  onClickCapture={(e) => pickRow(row.id, e)}
                   data-drag={
                     dragId === row.id || kbdLift === row.id ? "lift" : undefined
                   }
@@ -7294,6 +7553,8 @@ function Tracker({ session }) {
               <MobileCard
                 key={row.id}
                 row={row}
+                selected={selected.indexOf(row.id) !== -1}
+                onPick={pickRow}
                 fieldsOpen={openFields.get(row.id) !== false}
                 onToggleFields={toggleFields}
                 open={expanded === row.id}

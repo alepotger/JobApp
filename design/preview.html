@@ -324,6 +324,22 @@ ul.pv-list{margin-top:var(--space-room);padding-left:1.1rem;line-height:1.8}
   letter-spacing:var(--ls-caps)}
 .pacts button.go{background:var(--accent);border-color:var(--accent);color:#fff}
 
+
+/* ── selecting several rows ── */
+.selbar{display:flex;align-items:center;gap:var(--space-cosy);flex-wrap:wrap;
+  background:var(--accent-wash);border-radius:var(--r-3);
+  box-shadow:inset 0 0 0 1px var(--accent);padding:var(--space-base) var(--space-cosy)}
+.selpage{background:var(--surface);border:1px solid var(--accent);
+  color:var(--accent-ink);border-radius:var(--r-2);padding:0 12px;height:var(--control-h);
+  display:inline-flex;align-items:center;font-size:var(--t--2);
+  font-weight:var(--w-semibold);text-transform:uppercase;letter-spacing:var(--ls-caps)}
+.selclear{background:var(--surface);border:1px solid var(--line-strong);color:var(--ink);
+  border-radius:var(--r-2);padding:0 12px;height:var(--control-h);display:inline-flex;
+  align-items:center;font-size:var(--t--2);font-weight:var(--w-semibold);
+  text-transform:uppercase;letter-spacing:var(--ls-caps);margin-left:auto}
+.rowcard[data-sel]{background:var(--accent-wash);
+  box-shadow:var(--shadow-rest),inset 0 0 0 2px var(--accent)}
+
 </style>
 </head>
 <body>
@@ -1070,6 +1086,53 @@ Bloomberg &middot; London</div>
       </div>
     </div>
   </div>
+</section>
+
+
+<!-- ─────────────────────────────────── multi-select -->
+<section class="pv-sec">
+  <p class="pv-n">Selection</p>
+  <h2 class="pv-t">Cmd-click to pick several, then move them together</h2>
+  <p class="pv-note">Cmd-click on a Mac, Ctrl-click elsewhere; Shift-click
+  extends a range from the last pick. <strong>A plain click is deliberately
+  untouched</strong> &mdash; every row is full of editable cells, selects and
+  buttons, and making an ordinary click mean &ldquo;select&rdquo; would put a
+  mode in front of the app&rsquo;s primary action. Selection is only ever
+  entered on purpose, with a modifier held.</p>
+  <p class="pv-note">A selected row recolours and thickens the inset ring it
+  already carries, rather than gaining a border &mdash; the same one-element
+  contract the cards have held since the shadow round, because a border on the
+  outside and a shadow on the inside round at two different radii and the
+  corner splits.</p>
+  <div class="stage">
+    <div class="selbar">
+      <span class="tk-cap" style="color:var(--accent-ink)"><strong>3</strong> applications selected</span>
+      <span class="tk-cap tk-secondary">Move to</span>
+      <span class="selpage">Internships</span>
+      <span class="selpage">2027</span>
+      <span class="selclear">Clear</span>
+    </div>
+    <div class="rowlist" style="margin-top:16px">
+      <div class="rowcard" data-sel><div class="cellhead">Northwind Trading</div>
+        <div class="tk-cap tk-secondary">Analyst, Strategy &middot; London</div></div>
+      <div class="rowcard"><div class="cellhead">Example Studio</div>
+        <div class="tk-cap tk-secondary">Designer &middot; Milan</div></div>
+      <div class="rowcard" data-sel><div class="cellhead">Acme Robotics</div>
+        <div class="tk-cap tk-secondary">Backend Engineer &middot; Berlin</div></div>
+      <div class="rowcard" data-sel><div class="cellhead">Meridian Capital</div>
+        <div class="tk-cap tk-secondary">Equity Research &middot; Milan</div></div>
+    </div>
+  </div>
+  <p class="pv-note">Destinations are <strong>buttons, one per page</strong>,
+  not a dropdown. With a handful of pages a menu hides the only thing the bar
+  is for behind an extra click. The bar sits directly above the rows it is
+  talking about, so the count and the destinations share a fixation zone with
+  the highlighted cards (section&nbsp;2.1), and it exists only while something
+  is selected &mdash; there is no empty toolbar waiting to be noticed.</p>
+  <p class="pv-note">One write for the whole selection, and one undo for the
+  whole gesture &mdash; which puts each row back on <em>its own</em> origin
+  page rather than dumping the lot on one. Moving six rows should not cost six
+  toasts, and should not be undone six times either.</p>
 </section>
 
 </div>

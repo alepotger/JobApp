@@ -3976,3 +3976,141 @@ on first contact.
 
 Latency 6.1ms for a 5,000-word posting, 17.4ms at the 50,000-character cap —
 still inside the instant tier despite the parser roughly doubling in size.
+
+---
+
+# The lag, and selecting several rows at once
+
+## What was actually slow — measured, not guessed
+
+Two separate faults, neither of which was the one I expected.
+
+**Every render animated every row.** The FLIP effect that animates reordering
+has no dependency array, so it runs after *every* render, and it animated any
+row whose top had shifted by a pixel. Opening a drawer pushes everything below
+it down; committing a cell edit reflows the panel above the grid. Neither is a
+reorder. Measured on a 25-row pipeline:
+
+| interaction | FLIP writes before | after |
+|---|---|---|
+| commit one cell edit | 50 (~25 rows) | **0** |
+| open and close one drawer | 100 (~50 rows) | **0** |
+| a genuine reorder | 100 | 50 — still animates |
+
+That is what "the rows all glitch" was: a 220ms transition on the whole grid
+every time anything at all changed. The effect now compares the rendered row
+order, read from the DOM, against the previous pass and animates only when it
+differs. Geometry is still recorded every time, so the next genuine reorder
+animates from where the rows really were.
+
+**Babel was transpiling the whole app to ES5 on every page load.** The script
+tag was `type="text/babel"` with no `data-presets`, which makes Babel Standalone
+run `preset-env` as well as the JSX transform — rewriting every arrow function,
+`const` and template literal in a 211 KB file, in the browser, every time. The
+app already requires OKLCH and container queries, so none of that work buys
+anything.
+
+| time to first row | before | after |
+|---|---|---|
+| normal CPU | 1,893 ms | **1,003 ms** |
+| 4× throttled CPU | 8,009 ms | **3,890 ms** |
+
+**And `React.memo` was decorative.** `DesktopRow` is memoised, but memo compares
+props by identity and all four of its handlers were rebuilt on every render — so
+every row re-rendered on every parent state change, including the two the sync
+chip fires on each save. They are now `useCallback`, reading `allRef` rather
+than `all` so the dependency lists can stay empty without going stale. That
+stale-closure trap is the one that broke "undo move to page" once already, so
+each converted handler was checked for a bare `all.find` afterwards.
+
+At 4× CPU, drawer toggling went from p90 27.3ms to 19.4ms, and dropped frames
+across the sampled interactions roughly halved.
+
+**What was NOT slow**, despite being the obvious suspects: typing in a cell
+(the editor keeps its draft local and never touches the grid — 0 layout reads),
+scrolling (0 reads, 0 animation), and dragging (already 0 dropped frames from
+the earlier round). I checked all three before changing anything.
+
+**A measurement that lied.** My first FLIP counter hooked `transform` on
+`CSSStyleDeclaration.prototype`. In Chrome the CSS longhands are not own
+accessors there, so `defineProperty` observed nothing and reported a confident
+zero — which nearly had me conclude the animation was innocent and go looking
+elsewhere. `design/verify-render-cost.js` now uses a MutationObserver on the
+style attribute, and asserts both halves: zero FLIP writes on a non-reorder,
+and more than zero on a real one. It fails 4/6 against the previous build and
+passes 6/6 against this one.
+
+## Selecting several rows
+
+Cmd-click on a Mac, Ctrl-click elsewhere. Shift-click extends from the last
+unshifted pick — the other half of the same convention, one branch to write,
+and conspicuous by its absence if left out.
+
+**A plain click is deliberately untouched.** Every row is full of editable
+cells, selects and buttons; making an ordinary click mean "select" would put a
+mode in front of the app's primary action. Selection is only ever entered on
+purpose, with a modifier held. The handler is `onClickCapture` on the row
+wrapper: the cell buttons have their own handlers, and a listener that bubbled
+would run only after one of them had already opened an editor underneath the
+selection.
+
+Selection is drawn by recolouring the card and thickening the inset ring it
+already carries — the same one-element contract as everything else here, rather
+than a border that would round at a different radius and split the corner.
+
+**Escape had to be a capture-phase listener.** React attaches at the root and
+flushes discrete events synchronously, so a bubbling listener on `window` runs
+*after* the cell editor has closed and handed focus back to its button:
+`document.activeElement` reads `BUTTON`, the "don't clear while editing" guard
+passes, and pressing Escape to abandon one typo threw away the whole selection.
+In the capture phase the textarea still has focus, which is the thing being
+asked about. Found by the harness, not by review.
+
+## Moving them, and finding the pages
+
+The selection bar offers **one button per page**, not a menu. With a handful of
+pages a dropdown hides the only thing the bar is for behind an extra click, and
+the brief was explicitly that this should stop being something you go looking
+for. The bar sits directly above the rows it is talking about, so the count and
+the destinations are in the same fixation zone as the highlighted cards (§2.1),
+and it exists only while something is selected — there is no empty toolbar
+waiting to be noticed.
+
+One write for the whole selection (`.in()` with an id list, verified as a single
+PATCH rather than one per row), and one undo for the whole gesture — which
+restores each row to **its own** origin page, grouped so it is one update per
+origin rather than one per row. Moving six rows should not cost six toasts and
+should not be undone six times.
+
+Two earlier decisions are reversed here, on request:
+
+- **The strip no longer waits for a second page.** It used to require two, on
+  the expertise-reversal argument that a tab strip with one tab is chrome
+  explaining a feature you are not using. True in the abstract and wrong here:
+  pages turned out to be something people reach for, and a feature you cannot
+  see is a feature you do not use.
+- **The phone gets the strip, not a dropdown.** The argument against was that
+  tabs truncate at phone width. `.tk-pages` wraps rather than scrolls, so they
+  do not — they take a second line. Measured at 390px: the header grows 111px →
+  153px, but removing the full-width dropdown that sat below it means the first
+  card actually starts **22px higher** than before (1017px → 995px). Desktop
+  geometry is unchanged: header 66px, first row at 730px, both before and after.
+
+## Verification
+
+`design/verify-select.js` — 25/25 in a real browser against a stub PostgREST:
+modifier-click selects without opening the editor underneath, a plain click
+still edits, shift extends a range, re-clicking deselects, every other page is
+offered as its own button and the current page is not, the move is one write,
+the selection clears, one undo restores origins, Escape clears, and the tabs
+are *visibly* on screen at both widths (the first version of that assertion
+counted DOM nodes and would have passed against the old hidden strip too).
+
+Regression: 10/10 inviolable · 25/25 select · 6/6 render cost · 48/48 paste ·
+13/13 drag · 8/8 touch · 15/15 animation · 8/8 reorder sync · 7/7 realtime ·
+133/133 parser.
+
+One harness fixed along the way: `verify-reorder-sync.js` waited a flat 1500ms
+for the phone to render. It passed three times and failed the fourth — a sleep
+tuned to yesterday's file size is a test that breaks on unrelated edits. It now
+waits for the selector.

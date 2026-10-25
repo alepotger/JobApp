@@ -106,7 +106,11 @@ const mobOrder=pg=>pg.evaluate(()=>[...document.querySelectorAll('.lg\\:hidden .
 
  // ---------- device C: a real phone ----------
  const C=await device(b,{width:390,height:844,hasTouch:true});
- await C.pg.waitForTimeout(1500);
+ /* Wait for the mobile cards, not for a guess at how long they take. Babel
+    compiles the whole file at runtime, so first paint moves whenever the file
+    grows; a flat 1500ms sleep passed three times and failed the fourth. */
+ await C.pg.waitForSelector('.tk-mcard',{timeout:25000});
+ await C.pg.waitForTimeout(250);
  console.log('    phone body:', (await C.pg.evaluate(()=>document.body.innerText)).slice(0,120).replace(/\n/g,' | '));
  console.log('    phone errs:', C.errs.slice(0,2));
  const handles=await C.pg.evaluate(()=>({
