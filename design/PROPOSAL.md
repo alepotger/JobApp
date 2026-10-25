@@ -4114,3 +4114,38 @@ One harness fixed along the way: `verify-reorder-sync.js` waited a flat 1500ms
 for the phone to render. It passed three times and failed the fourth — a sleep
 tuned to yesterday's file size is a test that breaks on unrelated edits. It now
 waits for the selector.
+
+## Follow-up: the bulk move was unreachable
+
+Two things reported after the first pass, both reproduced before being touched.
+
+**The move worked and could not be seen.** The bar was rendered once, above the
+grid. Selecting eighteen rows means scrolling down eighteen rows — measured
+with a 25-row pipeline, by the time the selection was made the bar sat
+**1,299px above the top of the viewport**, with the only "Move to Milan" button
+in it. Nothing was broken; the control had scrolled away, which is
+indistinguishable from it not existing. It is `position: sticky` now, at
+`z-10` — above a lifted row (z-5), below the menus (z-20) and the undo toast
+(z-30), so nothing it can cover is anything you would be using at that moment.
+Re-measured at the same scroll position: `top: 8px`, destinations in view.
+
+**A plain click did not drop the selection.** Every file manager on both
+platforms clears on an unmodified click, and without it, eighteen selected rows
+could only be abandoned by finding the Clear button. A document-level listener
+now clears on any click with no modifier held, excluding the bar itself —
+clicking "Milan" or "Clear" is the opposite of abandoning the selection. Bubble
+phase, so it runs after the row handlers; `pickRow` already stops a modifier
+click at React's root, and the modifier guard is the belt to those braces.
+
+**And a hint, shown at exactly one row selected:** *"Shift-click another row to
+take everything in between."* Picking eighteen rows one modifier-click at a
+time is the thing that sentence prevents, and it disappears at two —
+scaffolding that melts away as competence grows (§1.1, expertise reversal).
+
+End to end at the reported scale: eighteen rows selected with one Cmd-click and
+one Shift-click, moved with one button press, **one PATCH** carrying
+`id=in.(r0…r17)`, seven rows left behind.
+
+`design/verify-select.js` is 36/36 and now covers the scrolled case
+specifically: the bar is sticky, it is still on screen after scrolling to make
+the selection, and every destination button is inside the viewport from there.

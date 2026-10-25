@@ -357,9 +357,18 @@ textarea{resize:vertical}
    with a handful of pages a menu hides the only thing the bar is for behind
    an extra click, and the whole point of this bar is that moving rows between
    pages stops being something you go looking for. */
-.tk-selbar{display:flex;align-items:center;gap:var(--space-cosy);
+/* Sticky, and that is the whole feature rather than a refinement of it.
+   Selecting eighteen rows means scrolling down eighteen rows, and the bar was
+   rendered once above the grid — measured at 1,299px above the top of the
+   viewport by the time the selection was made. The move worked perfectly and
+   could not be reached. z-10 puts it over the rows (a lifted row is z-5) and
+   under the menus (z-20) and the undo toast (z-30), so nothing it could
+   cover is anything you would be using at the same time. */
+.tk-selbar{position:sticky;top:var(--space-base);z-index:10;
+  display:flex;align-items:center;gap:var(--space-cosy);
   flex-wrap:wrap;background:var(--accent-wash);
-  border-radius:var(--r-3);box-shadow:inset 0 0 0 1px var(--accent);
+  border-radius:var(--r-3);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--accent);
   padding:var(--space-base) var(--space-cosy)}
 .tk-selbar-sep{flex:1 1 auto;min-width:0}
 .tk-selpage{background:var(--surface);border:1px solid var(--accent);
@@ -6462,6 +6471,27 @@ function Tracker({ session }) {
     setSelected([]);
   }, []);
 
+  /* A click with no modifier drops the selection, wherever it lands — which
+     is what every file manager on both platforms does, and what was missing:
+     having selected eighteen rows there was no way to change your mind except
+     to find the Clear button. The selection bar is excluded, since clicking
+     "Milan" or "Clear" inside it is the opposite of abandoning the selection.
+
+     Bubble phase on purpose: this has to run AFTER the row handlers, so a
+     modifier click has already been dealt with by pickRow — which stops the
+     native event at React's root before it could reach here anyway. The
+     modifier guard is the belt to that pair of braces. */
+  useEffect(() => {
+    const onClick = (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const t = e.target;
+      if (t && t.closest && t.closest(".tk-selbar")) return;
+      setSelected((prev) => (prev.length ? [] : prev));
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   /* Escape is the universal "never mind" and costs nothing to honour. Ignored
      while a field has focus, where Escape already means "abandon this edit".
 
@@ -7441,6 +7471,15 @@ function Tracker({ session }) {
             <strong>{selected.length}</strong>{" "}
             {selected.length === 1 ? "application" : "applications"} selected
           </span>
+          {/* Shown only at one, and only until it has been used — scaffolding
+              that melts away as competence grows (§1.1, expertise reversal).
+              Picking eighteen rows one modifier-click at a time is the thing
+              this sentence prevents. */}
+          {selected.length === 1 && (
+            <span className="tk-cap tk-tertiary">
+              Shift-click another row to take everything in between
+            </span>
+          )}
           {showPages && pages.length > 1 && (
             <>
               <span className="tk-cap tk-secondary">Move to</span>

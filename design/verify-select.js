@@ -149,6 +149,15 @@ function serve(port) {
     (await pg.locator(".tk-grid textarea.tk-edit").count()) === 1);
   await pg.keyboard.press("Escape");
   await pg.waitForTimeout(150);
+  t("...and that plain click also dropped the selection, as a plain click now does",
+    (await selectedIds()).length === 0);
+
+  /* Re-establish a selection to go on with: the click above cleared it. */
+  await card("Alpha").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await card("Charlie").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await card("Delta").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await pg.waitForTimeout(250);
+  t("three selected again", (await selectedIds()).length === 3, JSON.stringify(await selectedIds()));
 
   /* ---- destinations are buttons, not a menu ---- */
   const dests = await pg.evaluate(() =>
@@ -193,6 +202,33 @@ function serve(port) {
   await pg.waitForTimeout(200);
   t("Escape clears the selection", (await bar().count()) === 0);
 
+  /* ---- a plain click anywhere drops the selection ---- */
+  await card("Alpha").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await card("Charlie").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await pg.waitForTimeout(200);
+  t("two selected, ready to abandon", (await selectedIds()).length === 2);
+  await pg.mouse.click(720, 260);
+  await pg.waitForTimeout(250);
+  t("a plain click anywhere drops the selection", (await selectedIds()).length === 0);
+
+  /* ...but a click INSIDE the bar is the opposite of abandoning it ---- */
+  await card("Alpha").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await pg.waitForTimeout(200);
+  const beforeBarClick = (await selectedIds()).length;
+  await pg.locator(".tk-selbar").click({ position: { x: 4, y: 4 } });
+  await pg.waitForTimeout(250);
+  t("clicking the bar itself does NOT drop the selection",
+    (await selectedIds()).length === beforeBarClick, "was " + beforeBarClick + ", now " + (await selectedIds()).length);
+
+  /* ---- the range hint appears at one and goes at two ---- */
+  const hint = async () => (await bar().innerText()).replace(/\s+/g, " ");
+  t("at one selected, the range gesture is spelled out", /Shift-click another row/.test(await hint()), await hint());
+  await card("Bravo").locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await pg.waitForTimeout(200);
+  t("...and the hint goes once it is no longer needed", !/Shift-click another row/.test(await hint()), await hint());
+  await pg.keyboard.press("Escape");
+  await pg.waitForTimeout(200);
+
   /* ---- pages are visible rather than behind a control ---- */
   const tabs = await pg.evaluate(() =>
     [...document.querySelectorAll('[role="tab"]')]
@@ -220,6 +256,38 @@ function serve(port) {
   t("nothing overflows horizontally at phone width", phone.overflowX === false);
   t("no JS faults at phone width", m.errs.length === 0, m.errs[0]);
   console.log("      phone header height: " + phone.headerH + "px");
+
+  /* ---- the bar has to be reachable from where the selection was made ----
+     This is what made bulk moving look impossible: the bar was rendered once
+     above the grid, and selecting a long run means scrolling well past it. */
+  const tall = await open({ width: 1440, height: 420 });
+  await tall.pg.waitForSelector(".tk-grid .tk-rowcard", { timeout: 25000 });
+  await tall.pg.waitForTimeout(400);
+  const tallCards = tall.pg.locator(".tk-grid .tk-rowcard");
+  await tallCards.nth(0).locator("button.tk-cell").first().click({ modifiers: ["ControlOrMeta"] });
+  await tallCards.nth(3).scrollIntoViewIfNeeded();
+  await tallCards.nth(3).locator("button.tk-cell").first().click({ modifiers: ["Shift"] });
+  await tall.pg.waitForTimeout(300);
+  const pinned = await tall.pg.evaluate(() => {
+    const el = document.querySelector(".tk-selbar");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const dest = [...el.querySelectorAll(".tk-selpage")].map((b) => {
+      const d = b.getBoundingClientRect();
+      return { name: b.textContent.trim(), inView: d.top >= 0 && d.bottom <= window.innerHeight };
+    });
+    return { top: Math.round(r.top), scrollY: Math.round(window.scrollY),
+      inView: r.bottom > 0 && r.top < window.innerHeight, dest: dest,
+      position: getComputedStyle(el).position };
+  });
+  t("the selection bar is sticky", pinned && pinned.position === "sticky", pinned && pinned.position);
+  t("it stays on screen after scrolling to make the selection",
+    !!pinned && pinned.inView && pinned.scrollY > 0,
+    JSON.stringify(pinned && { top: pinned.top, scrollY: pinned.scrollY }));
+  t("the destination buttons are reachable from there",
+    !!pinned && pinned.dest.length > 0 && pinned.dest.every((d) => d.inView),
+    JSON.stringify(pinned && pinned.dest));
+  t("no JS faults on the scrolled run", tall.errs.length === 0, tall.errs[0]);
 
   await browser.close();
   server.close();

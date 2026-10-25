@@ -1129,6 +1129,14 @@ Bloomberg &middot; London</div>
   talking about, so the count and the destinations share a fixation zone with
   the highlighted cards (section&nbsp;2.1), and it exists only while something
   is selected &mdash; there is no empty toolbar waiting to be noticed.</p>
+  <p class="pv-note">The bar is <strong>sticky</strong>. That is the feature,
+  not a refinement of it: selecting eighteen rows means scrolling down eighteen
+  rows, and rendered once above the grid the bar ended up 1,299px above the top
+  of the viewport &mdash; the move worked perfectly and could not be reached.
+  A plain click anywhere drops the selection, as it does in every file manager;
+  clicking inside the bar does not, since that is the opposite of abandoning
+  it. At exactly one row selected the bar spells out the range gesture, and
+  stops once it is no longer needed.</p>
   <p class="pv-note">One write for the whole selection, and one undo for the
   whole gesture &mdash; which puts each row back on <em>its own</em> origin
   page rather than dumping the lot on one. Moving six rows should not cost six
