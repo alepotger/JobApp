@@ -71,6 +71,8 @@
   --t-2:1.35rem; --t-3:1.617rem;
   --t-display:clamp(1.617rem,1.35rem + 1.1vw,2.074rem);
   --lh-body:1.55; --lh-prose:1.65; --lh-cell:1.4; --lh-display:1.1; --lh-caps:1.2;
+  /* One row, one height — see .tk-rowcard [role="cell"]. */
+  --row-h:82px;
   --w-regular:400; --w-semibold:600; --w-bold:700;
   --tr-display:-.025em; --tr-caps:.075em;
 
@@ -384,8 +386,37 @@ textarea{resize:vertical}
    radius and four borders never did. */
 .tk-rowcard>[role="row"]{grid-column:1/-1;display:grid;
   grid-template-columns:subgrid}
+/* Every row is the same height, whatever is written in it.
+   Before this, height was whatever the longest cell wrapped to: a five-row
+   sample measured 82, 145, 187, 166 and 82 pixels — a 105px spread — so the
+   grid read as a ragged stack rather than a table, and nothing lined up
+   across it because every row had a different middle.
+
+   --row-h is the natural height of the identity column (the company name
+   with the contact line under it) plus the cell padding, which is to say
+   today's MINIMUM. Rows do not get taller; the short ones simply stop being
+   the exception.
+
+   min-height rather than height, deliberately: a cell opened for editing
+   swaps its button for a textarea and must be free to grow, which is the one
+   case where a taller row is wanted. Column flex with justify-content:center
+   centres that stack vertically while leaving the horizontal layout exactly
+   as it was — switching the cell to a row-flex container would have made
+   every child a flex item and reflowed all eight columns. */
 .tk-rowcard [role="cell"]{padding:var(--space-cosy) var(--space-base);
-  font-size:var(--t--1);line-height:var(--lh-cell);min-width:0}
+  font-size:var(--t--1);line-height:var(--lh-cell);min-width:0;
+  display:flex;flex-direction:column;justify-content:center}
+.tk-rowcard>[role="row"]>[role="cell"]{min-height:var(--row-h)}
+/* The drawer is a cell too, and it is the one thing that SHOULD be as tall as
+   its contents. */
+.tk-rowcard>[role="row"]>.tk-detail{min-height:0;display:block}
+/* One line, then an ellipsis. This is what holds the height constant: without
+   it a long note wraps and the row grows again whatever min-height says. The
+   full text is a click away in the cell, and on the title attribute meanwhile.
+   Scoped to the grid's own cells so the drawer and the phone cards, which are
+   meant to show everything, are untouched. */
+.tk-grid .tk-rowcard>[role="row"]>[role="cell"] .tk-cell{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tk-rowcard [role="cell"]:first-child{padding-left:var(--space-cosy)}
 .tk-rowcard [role="cell"]:last-child{padding-right:var(--space-cosy)}
 /* The drawer is a block INSIDE the card, so an expanded row and its drawer
@@ -439,7 +470,13 @@ textarea{resize:vertical}
    size as the capitals beside it. `top` rather than vertical-align: the menu
    row is flex, and 0.5px down is the optical correction a round glyph needs. */
 .tk-ticon{width:1em;height:1em;flex:none;position:relative;top:.5px}
+/* vertical-align:middle, because inline-block defaults to sitting on the text
+   baseline — which put the row's caret 2px above its centre line while every
+   other element in the row was exactly on it. Inert wherever the caret is a
+   flex item, which is most of its uses, since flex items ignore
+   vertical-align entirely. */
 .tk-caret{width:12px;height:12px;flex:none;display:inline-block;
+  vertical-align:middle;
   transition:transform var(--d-out) var(--ease)}
 [aria-expanded="true"] .tk-caret,.tk-caret[data-open="true"]{
   transform:rotate(90deg);transition-duration:var(--d-in)}
@@ -540,7 +577,13 @@ textarea{resize:vertical}
    a dragged row must track the pointer with no easing between it and the
    finger, or the row lags behind the gesture (§3.1, immediately responsive). */
 .tk-rowcard{position:relative}
-.tk-drag{position:absolute;left:2px;top:var(--space-cosy);width:18px;height:22px;
+/* Centred on the ROW, not on the card: with the drawer open the card is
+   several hundred pixels tall and the card's centre is halfway down the
+   drawer. Anchoring to --row-h keeps the grip on the same line as the
+   content it drags. It used to sit at a flat 12px from the top, which read
+   as 18px too high in a short row and 70px too high in a long one. */
+.tk-drag{position:absolute;left:2px;top:calc(var(--row-h) / 2);
+  transform:translateY(-50%);width:18px;height:22px;
   display:flex;align-items:center;justify-content:center;background:none;border:0;
   border-radius:var(--r-1);color:var(--ink-3);cursor:grab;opacity:0;
   transition:opacity 120ms ease-out;touch-action:none;padding:0}
@@ -3969,6 +4012,10 @@ function EditableCell({ value, placeholder, onChange, cell, compact }) {
     <button
       ref={btn}
       onClick={open}
+      /* Rows are a fixed height now, so a long value is shown on one line and
+         ellipsed. The whole of it is one click away in the cell and in the
+         drawer; the tooltip is for the glance in between. */
+      title={current || undefined}
       {...(cell || {})}
       className={`tk-cell tk-focus w-full tk-r2 text-left leading-snug transition-colors ${
         compact ? "tk-contactline px-2 pb-1 pt-0 tk-cap" : "p-2 tk-body"
@@ -5015,7 +5062,7 @@ const DesktopRow = React.memo(function DesktopRow({ row, rowIndex, open, onToggl
   return (
     <div role="row">
       <div role="cell">
-        <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center justify-between gap-1">
           <div className="min-w-0 flex-1">
             {isExample(row) && (
               <div className="mb-1 pl-2">
@@ -5051,7 +5098,7 @@ const DesktopRow = React.memo(function DesktopRow({ row, rowIndex, open, onToggl
             onClick={() => onDelete(row.id)}
             title="Delete application"
             aria-label={`Delete ${row.company || "application"}`}
-            className="tk-del tk-focus mt-2 shrink-0 tk-r2 px-2 leading-5 transition-colors"
+            className="tk-del tk-focus shrink-0 tk-r2 px-2 leading-5 transition-colors"
           >
             ×
           </button>
@@ -5122,7 +5169,10 @@ function ScoreCell({ row, open, onToggle, cell }) {
       <span className="tk-data tk-strong">
         {mean == null ? <span className="tk-tertiary">–</span> : mean.toFixed(1)}
       </span>
-      <span aria-hidden="true" className="tk-noprint">
+      {/* flex, so the caret is a flex item and centres on the line. As an
+          inline-block it sat on the text baseline — 2px above the centre of
+          a row where everything else was exactly on it. */}
+      <span aria-hidden="true" className="tk-noprint flex">
         <Caret open={open} />
       </span>
     </button>

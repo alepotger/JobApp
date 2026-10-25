@@ -4149,3 +4149,95 @@ one Shift-click, moved with one button press, **one PATCH** carrying
 `design/verify-select.js` is 36/36 and now covers the scrolled case
 specifically: the bar is sticky, it is still on screen after scrolling to make
 the selection, and every destination button is inside the viewport from there.
+
+---
+
+# One height for every row
+
+## The measurement
+
+Row height was whatever the longest cell wrapped to. A five-row sample:
+
+| | height |
+|---|---|
+| short row | 82px |
+| long role + long note | 145px |
+| long next-steps | 187px |
+| long replies | 166px |
+| short row | 82px |
+
+**A 105px spread.** The grid read as a ragged stack rather than a table, and
+nothing lined up across it because every row had a different middle.
+
+The alignment followed from that. Measured as each element's offset from its
+own row's centre line, negative being above it:
+
+| | short row | tallest row |
+|---|---|---|
+| stage pill | −14px | −66px |
+| drag grip | −18px | −70px |
+| cell text | 0px | −52px |
+| score | −12px | −65px |
+
+Note the short row: even at the minimum, with one line of text in every cell,
+the pill sat 14px high and the grip 18px. Three separate causes — cells filled
+from the top with no vertical centring, `.tk-drag` pinned at a flat
+`top: 12px` regardless of row height, and the identity column's own
+`items-start` plus an `mt-2` on its delete button.
+
+## The fix
+
+`--row-h: 82px` — the natural height of the identity column (company name with
+the contact line under it) plus the cell padding, which is to say **today's
+minimum**. Rows do not get taller; the short ones stop being the exception.
+
+Three parts, and the second is what actually holds the height:
+
+- **`min-height`, not `height`.** A cell opened for editing swaps its button
+  for a textarea and must be free to grow — that is the one case where a taller
+  row is wanted, and a naive fixed `height` would have clipped it.
+- **One line, then an ellipsis**, on the grid's cells only. Without this a long
+  note still wraps and the row grows again whatever `min-height` says. The full
+  value is a click away in the cell, in the drawer, and on the `title`
+  attribute meanwhile. The phone cards are deliberately untouched: 0 of 5 are
+  clipped there, because the small screen is where the full text matters most.
+- **Column flex with `justify-content: center`**, which centres the cell's
+  content vertically while leaving the horizontal layout exactly as it was.
+  Switching the cell to a *row* flex container would have made every child a
+  flex item and reflowed all eight columns.
+
+The grip is now anchored to `calc(var(--row-h) / 2)` rather than the card's
+centre — with the drawer open the card is 405px tall, and its centre is halfway
+down the drawer.
+
+Result: every row 82px, zero spread, and every element in a resting row at
+**0px** from the centre line. The identity column's two lines read −11px and
++19px individually, which is correct: they are a two-line stack spanning
+−29.5px to +29.5px, and the stack is centred.
+
+## Two things this nearly broke
+
+**The score cell.** The ellipsis rule set `display: block` on `.tk-cell`, and
+`ScoreCell`'s button is also `flex` — with higher specificity, my rule won, the
+button went to `block`, and `justify-between` stopped pushing the caret to the
+edge (gap measured 0px). The `display` override was unnecessary: a button with
+`w-full` ellipses fine as an inline-block. Removed, and the caret is back at
+the right-hand edge with a 9px gap.
+
+**The caret was 2px high** — the last thing in the row not on the centre line.
+An `inline-block` SVG sits on the text baseline. `vertical-align: middle` moved
+it to +1px, because middle aligns to the x-height rather than the line centre;
+making its wrapper a flex container took it to 0.
+
+## Verification
+
+`design/verify-row-geometry.js` — 17/17, and it fails 9 of those against the
+previous build. It asserts both halves: one height for every row, every element
+on the centre line, long text ellipsed with the value on `title`, the score
+cell's flex layout intact — *and* that opening a cell for editing grows that
+row and leaves its neighbours alone, that closing it returns to one height,
+that the drawer still opens, and that the phone shows its text in full.
+
+Regression: 10/10 inviolable · 17/17 row geometry · 36/36 select · 6/6 render
+cost · 48/48 paste · 13/13 drag · 8/8 touch · 15/15 animation · 8/8 reorder
+sync · 7/7 realtime.

@@ -340,6 +340,20 @@ ul.pv-list{margin-top:var(--space-room);padding-left:1.1rem;line-height:1.8}
 .rowcard[data-sel]{background:var(--accent-wash);
   box-shadow:var(--shadow-rest),inset 0 0 0 2px var(--accent)}
 
+
+/* ── one height for every row ── */
+.rh{display:grid;grid-template-columns:1.4fr 1fr .8fr auto;gap:0;
+  align-items:center;min-height:82px;background:var(--surface);
+  border-radius:var(--r-3);box-shadow:var(--shadow-rest),inset 0 0 0 1px var(--line);
+  padding:0 12px;margin-top:10px}
+.rh > div{padding:12px 8px;min-width:0;font-size:var(--t--1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rh-ragged{align-items:start;min-height:0}
+.rh-ragged > div{white-space:normal}
+.rh-mid{position:relative}
+.rh-mid::after{content:"";position:absolute;left:0;right:0;top:50%;
+  border-top:1px dashed var(--accent);opacity:.5;pointer-events:none}
+
 </style>
 </head>
 <body>
@@ -1141,6 +1155,46 @@ Bloomberg &middot; London</div>
   whole gesture &mdash; which puts each row back on <em>its own</em> origin
   page rather than dumping the lot on one. Moving six rows should not cost six
   toasts, and should not be undone six times either.</p>
+</section>
+
+
+<!-- ─────────────────────────────────── row geometry -->
+<section class="pv-sec">
+  <p class="pv-n">Rows</p>
+  <h2 class="pv-t">One height, whatever is written in it</h2>
+  <p class="pv-note">Height used to be whatever the longest cell wrapped to.
+  A five-row sample measured <strong>82, 145, 187, 166 and 82</strong> pixels
+  &mdash; a 105px spread &mdash; so the grid read as a ragged stack rather than
+  a table, and nothing lined up across it because every row had a different
+  middle.</p>
+  <div class="stage">
+    <span class="pv-tag">before</span>
+    <div class="rh rh-ragged"><div>Northwind Trading Group Limited</div>
+      <div>Senior Analyst, Commercial Strategy and Pricing Operations</div>
+      <div><span class="pill p-applied">Applied</span></div><div>3.5</div></div>
+    <div class="rh rh-ragged"><div>Acme</div><div>Analyst</div>
+      <div><span class="pill p-interview">Interview</span></div><div>4.1</div></div>
+  </div>
+  <div class="stage">
+    <span class="pv-tag">after &mdash; dashed line is the row&rsquo;s centre</span>
+    <div class="rh rh-mid"><div>Northwind Trading Group Limited</div>
+      <div>Senior Analyst, Commercial Strategy and Pricing Operations</div>
+      <div><span class="pill p-applied">Applied</span></div><div>3.5</div></div>
+    <div class="rh rh-mid"><div>Acme</div><div>Analyst</div>
+      <div><span class="pill p-interview">Interview</span></div><div>4.1</div></div>
+  </div>
+  <p class="pv-note"><code>--row-h</code> is the natural height of the identity
+  column &mdash; the company name with the contact line under it &mdash; plus
+  the cell padding, which is to say <strong>today&rsquo;s minimum</strong>.
+  Rows do not get taller; the short ones stop being the exception. It is a
+  <code>min-height</code> rather than a <code>height</code>, deliberately: a
+  cell opened for editing swaps its button for a textarea and has to be free to
+  grow, which is the one case where a taller row is wanted.</p>
+  <p class="pv-note">What actually holds the height is the ellipsis: without it
+  a long note wraps and the row grows again whatever the minimum says. The full
+  value stays a click away in the cell, in the drawer, and on the
+  <code>title</code> attribute meanwhile &mdash; and the phone cards are
+  untouched, because the small screen is where reading it all matters most.</p>
 </section>
 
 </div>
